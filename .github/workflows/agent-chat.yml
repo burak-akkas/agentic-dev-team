@@ -14,7 +14,8 @@ jobs:
   chat:
     if: >-
       ${{ contains(github.event.comment.body || github.event.review.body, '@claude') &&
-        (github.event.comment.user.type || github.event.review.user.type) != 'Bot' }}
+        (github.event.comment.user.type || github.event.review.user.type) != 'Bot' &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association || github.event.review.author_association) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

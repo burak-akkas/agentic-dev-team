@@ -12,6 +12,7 @@ on:
 
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
+  AGENT_BOT_LOGIN: ${{ vars.AGENT_BOT_LOGIN }}
 
 jobs:
   qa:
@@ -62,7 +63,8 @@ jobs:
                 -e "s|{repo}|${GITHUB_REPOSITORY#*/}|g" -e "s|{pr}|$PR|g")
           echo "url=$url" >> "$GITHUB_OUTPUT"
           # QA rounds are counted since the latest Lead decision.
-          comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments")
+          comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+                       | jq --arg bot "$AGENT_BOT_LOGIN" '[[.[][] | select($bot == "" or .user.login == $bot)]]')
           total=$(echo "$comments" | jq '[.[][] | select(.body | contains("<!-- agent:qa -->"))] | length')
           rounds=$(echo "$comments" | jq '[.[][]] as $c
             | ([$c | to_entries[] | select(.value.body | contains("<!-- agent:lead -->")) | .key] | max // -1) as $last

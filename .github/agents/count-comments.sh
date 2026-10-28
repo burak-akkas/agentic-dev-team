@@ -9,5 +9,7 @@ n="$1"
 role="$2"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 
+bot="${AGENT_BOT_LOGIN:-}"   # only the agents' own comments count; outsiders can't forge markers
+
 gh api --paginate "repos/$repo/issues/$n/comments" \
-  --jq ".[] | select(.body | contains(\"<!-- agent:$role -->\")) | .id" | wc -l | tr -d ' '
+  --jq ".[] | select((\"$bot\" == \"\" or .user.login == \"$bot\") and (.body | contains(\"<!-- agent:$role -->\"))) | .id" | wc -l | tr -d ' '

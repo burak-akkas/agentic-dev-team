@@ -10,6 +10,9 @@ on:
   issue_comment:
     types: [created]
 
+env:
+  AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
+
 jobs:
   analyst:
     if: >-
@@ -90,6 +93,7 @@ jobs:
           OUT: ${{ steps.agent.outputs.structured_output }}
           N: ${{ github.event.issue.number }}
           BEFORE: ${{ steps.before.outputs.count }}
+          AUTONOMY: ${{ vars.AGENT_AUTONOMY }}
         run: |
           decision=$(echo "${OUT:-null}" | jq -r '.decision // "error"')
           after=$(.github/agents/count-comments.sh "$N" analyst)
@@ -99,8 +103,12 @@ jobs:
           fi
           case "$decision" in
             analyzed)     .github/agents/transition.sh "$N" agent:analyzed ;;
-            needs-info)   .github/agents/transition.sh "$N" agent:needs-info ;;
+            needs-info)   if [ "$AUTONOMY" = "full" ]; then
+                            .github/agents/transition.sh "$N" agent:needs-decision
+                          else
+                            .github/agents/transition.sh "$N" agent:needs-info
+                          fi ;;
             out-of-scope) .github/agents/transition.sh "$N" agent:out-of-scope ;;
-            *)            .github/agents/transition.sh "$N" agent:needs-human
-                          gh issue comment "$N" --body "⚠️ Analyst agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Needs a human." ;;
+            *)            .github/agents/transition.sh "$N" agent:needs-decision
+                          gh issue comment "$N" --body "⚠️ Analyst agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
           esac

@@ -20,7 +20,14 @@ label "agent:out-of-scope"    "cccccc" "Analyst judged this not actionable"
 # PR states
 label "agent:review"            "c2e0c6" "Ask the Reviewer agent to review this PR"
 label "agent:changes-requested" "e99695" "Reviewer requested changes, Implementor agent fixes them"
-label "agent:approved"          "0e8a16" "Reviewer approved; waiting for a human to merge"
+label "agent:approved"          "0e8a16" "Approved; the merge gate merges once CI is green"
 
 # Both
-label "agent:needs-human"     "b60205" "Agents stopped; a human must decide"
+label "agent:needs-decision"  "f9d0c4" "Team is stuck; the Lead agent decides"
+label "agent:needs-human"     "b60205" "Escalated by the Lead; a human must decide"
+label "agent:done"            "0e8a16" "Merged by the agent team"
+
+# Risk recorded by the Architect (read by the merge gate)
+label "risk:low"              "c2e0c6" "Architect: low risk"
+label "risk:medium"           "fbca04" "Architect: medium risk"
+label "risk:high"             "b60205" "Architect: high risk; a human merges"

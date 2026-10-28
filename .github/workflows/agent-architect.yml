@@ -3,6 +3,9 @@ name: "Agent · Architect"
 # Trigger: the issue gets `agent:analyzed` (set by the Analyst, or by a human).
 # Records the design risk as a `risk:low|medium|high` label (the Merge gate reads it).
 # Next state: low/medium risk -> `agent:ready`. High risk or unsure -> the Lead (`agent:needs-decision`).
+# Too big for one PR -> `split`: split.sh creates sub-issues (each runs the full pipeline) and the
+# issue waits in `agent:split`; agent-subissues.yml closes it when all are done. Sub-issues never split
+# again. AGENT_SPLIT == 'false' turns splitting off; AGENT_MAX_SUBISSUES caps it (default 5).
 # Optional human gate: with AGENT_REQUIRE_DESIGN_APPROVAL == 'true', every design waits in
 # `agent:design-review` until a human applies `agent:ready`.
 on:
@@ -43,7 +46,7 @@ jobs:
         id: before
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: echo "count=$(.github/agents/count-comments.sh ${{ github.event.issue.number }} architect)" >> "$GITHUB_OUTPUT"
+        run: echo "count=$(scripts/agents/count-comments.sh ${{ github.event.issue.number }} architect)" >> "$GITHUB_OUTPUT"
 
       - uses: anthropics/claude-code-action@v1
         id: agent
@@ -58,6 +61,7 @@ jobs:
 
             Repository: ${{ github.repository }}
             Issue: #${{ github.event.issue.number }}
+            Splitting: ${{ (vars.AGENT_SPLIT == 'false' || contains(github.event.issue.body, '<!-- agent:sub-issue')) && 'not allowed (this is a sub-issue, or splitting is turned off)' || format('allowed, 2 to {0} subtasks', vars.AGENT_MAX_SUBISSUES || '5') }}
 
             Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).
             Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.
@@ -66,7 +70,7 @@ jobs:
             --max-turns 40
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*),Bash(gh pr list:*),Bash(git log:*)"
-            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["ready","needs-human"]},"risk":{"type":"string","enum":["low","medium","high"]}},"required":["decision","risk"]}'
+            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["ready","needs-human","split"]},"risk":{"type":"string","enum":["low","medium","high"]},"subtasks":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"},"acceptance_criteria":{"type":"array","items":{"type":"string"}},"depends_on":{"type":"array","items":{"type":"integer"}}},"required":["title","summary","acceptance_criteria"]}}},"required":["decision","risk"]}'
 
       - name: Report denied tools
         if: ${{ !cancelled() && steps.agent.outputs.execution_file != '' }}
@@ -86,9 +90,11 @@ jobs:
           N: ${{ github.event.issue.number }}
           BEFORE: ${{ steps.before.outputs.count }}
           REQUIRE_APPROVAL: ${{ vars.AGENT_REQUIRE_DESIGN_APPROVAL }}
+          SPLIT_ALLOWED: ${{ (vars.AGENT_SPLIT == 'false' || contains(github.event.issue.body, '<!-- agent:sub-issue')) && 'false' || 'true' }}
+          AGENT_MAX_SUBISSUES: ${{ vars.AGENT_MAX_SUBISSUES || '5' }}
         run: |
           decision=$(echo "${OUT:-null}" | jq -r '.decision // "error"')
-          after=$(.github/agents/count-comments.sh "$N" architect)
+          after=$(scripts/agents/count-comments.sh "$N" architect)
           if [ "$after" -le "${BEFORE:-0}" ]; then
             echo "::warning::architect returned '$decision' but posted no handoff comment"
             decision=missing-comment
@@ -98,17 +104,33 @@ jobs:
             for old in low medium high; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$N/labels/risk:$old" >/dev/null 2>&1 || true; done
             gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$N/labels" -f "labels[]=risk:$risk" >/dev/null ;;
           esac
+          if [ "$decision" = "split" ] && [ "$SPLIT_ALLOWED" != "true" ]; then
+            echo "::warning::Architect chose split, but splitting is not allowed here"
+            decision=needs-human
+          fi
+          if [ "$decision" = "split" ]; then
+            echo "${OUT}" > .agent-out/plan.json
+            if split=$(scripts/agents/split.sh "$N" .agent-out/plan.json); then
+              echo "$split" >> "$GITHUB_STEP_SUMMARY"
+              scripts/agents/progress.sh "$N" "🏛 **Architect**: too big for one PR, 🧩 split into ${split##* into }"
+            else
+              scripts/agents/transition.sh "$N" agent:needs-decision
+              gh issue comment "$N" --body "⚠️ Splitting failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Sub-issues created so far: $(echo "${split:-}" | grep -oE '^Created #[0-9]+' | cut -d' ' -f2 | paste -sd' ' - | sed 's/^$/none/'). Handing to the Lead."
+              scripts/agents/progress.sh "$N" "🏛 **Architect**: split failed, handed to the Lead"
+            fi
+            exit 0
+          fi
           if [ "$decision" = "ready" ] || [ "$decision" = "needs-human" ]; then
             if [ "$REQUIRE_APPROVAL" = "true" ]; then
-              .github/agents/transition.sh "$N" agent:design-review
+              scripts/agents/transition.sh "$N" agent:design-review
               gh issue comment "$N" --body "👀 Design is waiting for human approval (risk: **$risk**). Apply \`agent:ready\` to start implementation, or comment and re-apply \`agent:analyzed\` to redesign."
             elif [ "$decision" = "ready" ] && [ "$risk" != "high" ]; then
-              .github/agents/transition.sh "$N" agent:ready
+              scripts/agents/transition.sh "$N" agent:ready
             else
-              .github/agents/transition.sh "$N" agent:needs-decision
+              scripts/agents/transition.sh "$N" agent:needs-decision
             fi
           else
-            .github/agents/transition.sh "$N" agent:needs-decision
+            scripts/agents/transition.sh "$N" agent:needs-decision
             gh issue comment "$N" --body "⚠️ Architect agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead."
           fi
           next=$(gh api "repos/$GITHUB_REPOSITORY/issues/$N/labels" --jq '[.[].name | select(startswith("agent:"))][0] // ""')
@@ -117,4 +139,4 @@ jobs:
             agent:design-review) msg="design ready, risk **$risk**, waiting for human approval" ;;
             *)                   msg="risk **$risk**, handed to the Lead" ;;
           esac
-          .github/agents/progress.sh "$N" "🏛 **Architect**: $msg"
+          scripts/agents/progress.sh "$N" "🏛 **Architect**: $msg"

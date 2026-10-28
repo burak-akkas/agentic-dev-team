@@ -43,12 +43,14 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: .agent-trusted
-          sparse-checkout: .github/agents
+          sparse-checkout: |
+            .github/agents
+            scripts/agents
       - name: Publish to gh-pages/pr-${{ github.event.pull_request.number }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          .agent-trusted/.github/agents/publish-pages.sh out "pr-$PR" \
+          .agent-trusted/scripts/agents/publish-pages.sh out "pr-$PR" \
             "deploy: preview PR #$PR ${{ github.event.pull_request.head.sha }}" --replace
       - name: Request a Pages build
         env:

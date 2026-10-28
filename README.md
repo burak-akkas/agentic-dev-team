@@ -23,9 +23,10 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
                                            👤 human (agent:needs-human, assigned)
 ```
 
-- **Labels are the state machine.** Each workflow fires on a specific label (or PR event). The agent decides the outcome and returns it as structured JSON. A plain shell step then applies the next label using [`transition.sh`](.github/agents/transition.sh). Agents never change labels themselves.
+- **Labels are the state machine.** Each workflow fires on a specific label (or PR event). The agent decides the outcome and returns it as structured JSON. A plain shell step then applies the next label using [`transition.sh`](scripts/agents/transition.sh). Agents never change labels themselves.
 - **Handoffs are structured comments** with a hidden marker (`<!-- agent:analyst -->` and so on). Workflows check that the comment was actually posted; if it wasn't, the item goes to the Lead.
 - **The Lead is the decision maker.** Every "stuck" state goes to `agent:needs-decision` instead of a human. The Lead answers the Analyst's questions, rules on high-risk designs and review deadlocks, retries failed stages, or closes the item. Its decision overrides earlier comments. It only escalates for irreversible or high-impact choices, or after `AGENT_MAX_LEAD_DECISIONS` (default 3) on the same item.
+- **Big issues are split.** When an issue is too big for one reviewable PR, the Architect returns a split plan instead of a design. [`split.sh`](scripts/agents/split.sh) creates the sub-issues (linked as GitHub sub-issues, each with its own acceptance criteria) and the parent waits in `agent:split`. Sub-issues without dependencies start at once and run in parallel; the others wait in `agent:blocked` until what they depend on is merged. When the last one closes, the parent closes. Sub-issues never split again.
 - **Every PR gets a live preview** at `…/pr-<N>/` (link posted on the PR). After the Reviewer approves, **the QA agent** waits until the preview serves the PR's exact commit, runs the project's Playwright e2e suite against it, then tests the acceptance criteria in a real headless Chrome (Playwright MCP). It posts a report with **screenshots in the PR**. Defects go back to the Implementor, with steps to reproduce.
 - **The merge gate replaces the human merge.** It squash-merges *exactly the approved commit* once the required checks pass. High-risk changes (`risk:high`, set by the Architect) still go to a human unless you allow them explicitly.
 - **One custom GitHub App** is the agents' identity. Events created by an App token *do* trigger other workflows. Events created by the default `GITHUB_TOKEN` don't, and that would break the chain.
@@ -34,8 +35,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 |---|---|
 | [.github/agents/*.md](.github/agents/) | Role prompts (analyst, architect, implementor, reviewer, qa, lead). Review and version them like code |
 | [.github/workflows/agent-*.yml](.github/workflows/) | One workflow per role, plus `agent-merge.yml` (merge gate) and `agent-chat.yml` (human `@claude`) |
-| [.github/agents/transition.sh](.github/agents/transition.sh) | Swaps `agent:*` state labels; assigns a human on escalation |
-| [.github/agents/count-comments.sh](.github/agents/count-comments.sh) | Counts handoff comments (verification and loop budgets) |
+| [scripts/agents/](scripts/agents/) | Shell helpers the workflows run: [`transition.sh`](scripts/agents/transition.sh) (swaps `agent:*` state labels), [`count-comments.sh`](scripts/agents/count-comments.sh) (verifies handoffs, loop budgets), [`progress.sh`](scripts/agents/progress.sh) (issue progress log), [`pr-still-current.sh`](scripts/agents/pr-still-current.sh) (skips stale runs), [`split.sh`](scripts/agents/split.sh) / [`subissues.sh`](scripts/agents/subissues.sh) (sub-issues), [`publish-pages.sh`](scripts/agents/publish-pages.sh) (gh-pages with retries). PR-triggered workflows run them from the default branch |
 | [scripts/setup-labels.sh](scripts/setup-labels.sh) | Creates the labels |
 | [.github/ISSUE_TEMPLATE/agent-task.yml](.github/ISSUE_TEMPLATE/agent-task.yml) | Issue form that starts the pipeline |
 | [templates/CLAUDE.md](templates/CLAUDE.md) | Project guide every agent reads. Copy it to the target repo root as `CLAUDE.md` and fill it in |
@@ -76,6 +76,8 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_AUTO_MERGE` | – | `true` | **Kill switch** for the merge gate |
 | `AGENT_AUTO_MERGE_HIGH_RISK` | – | – | `true` lets the agents merge `risk:high` changes too (not recommended) |
 | `AGENT_REQUIRED_CHECKS` | | `CI` | Comma-separated workflow names that must pass before merge |
+| `AGENT_SPLIT` | | | `false` stops the Architect from splitting big issues into sub-issues |
+| `AGENT_MAX_SUBISSUES` | `5` | `5` | Maximum sub-issues per split |
 | `AGENT_MAX_REVIEW_ROUNDS` | `3` | `3` | Review rounds before the Lead steps in |
 | `AGENT_QA_SCREENSHOT_DAYS` | `7` | `7` | Days QA screenshots stay after a PR closes ([pages-janitor.yml](.github/workflows/pages-janitor.yml) also squashes `gh-pages` weekly) |
 | `AGENT_MAX_QA_ROUNDS` | `3` | `3` | Failed QA rounds before the Lead steps in |
@@ -104,7 +106,7 @@ You don't need to do anything in autonomous mode. These are overrides:
 - Only the **owner, org members and collaborators** can trigger agents. Outsiders' issues and comments are filtered out before any job starts, agents ignore their comments, and handoff markers only count when the agents' bot posted them. Bots other than `AGENT_BOT_LOGIN` are rejected.
 - On a public repo, consider limiting interactions to collaborators (up to 6 months, renewable): `gh api -X PUT repos/<owner>/<repo>/interaction-limits -f limit=collaborators_only -f expiry=six_months`.
 - Each role gets a **least-privilege tool allowlist**. Analyst, Architect, Reviewer and Lead can't edit code or run git. The Implementor can't force-push or push to the default branch. Denied tool calls are listed in the job summary.
-- The App has no *Workflows* permission, so agents can't change CI, the role prompts or the merge gate.
+- The App has no *Workflows* permission, so agents can't push changes to `.github/workflows/`. That permission doesn't cover the role prompts (`.github/agents/`) or the scripts (`scripts/`), so the merge gate never auto-merges a PR that touches `AGENT_PROTECTED_PATHS` (default `.github/,scripts/,templates/`): a human merges it.
 - For PR-triggered runs, role prompts are loaded from the **default branch** (`.agent-trusted/`), so a PR can't rewrite its own reviewer instructions.
 - Issue and PR text is treated as data, never as instructions (stated in every role prompt).
 - The merge gate only merges the **exact commit that was approved** (`--match-head-commit`), only after the required checks pass, and never `risk:high` by default.
@@ -119,7 +121,6 @@ You don't need to do anything in autonomous mode. These are overrides:
 
 ## Ideas for later
 
-- The Architect splits large issues into sub-issues, each going through the pipeline.
 - A scheduled "maintainer" agent that triages stale issues and CI failures.
 - Move the workflows into a reusable workflow in an org-level repo once the pilot works.
 

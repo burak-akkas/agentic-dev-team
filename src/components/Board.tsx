@@ -4,10 +4,12 @@ import { useCallback, useRef, useState, type DragEvent } from "react";
 import {
   addCard,
   archiveDone,
+  boardStats,
   COLUMNS,
   deleteArchived,
   deleteCard,
   filterCards,
+  filterOverdue,
   findCard,
   type Card,
   type ColumnId,
@@ -25,13 +27,18 @@ import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "./ArchivePanel";
 import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
 import { SearchBox } from "./SearchBox";
+import { SummaryBar } from "./SummaryBar";
 import { UndoToast } from "./UndoToast";
 
 export function Board() {
   const [board, update] = useBoard();
   const [query, setQuery] = useState("");
-  const visible = filterCards(board, query);
-  const filtering = isFiltering(query);
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const stats = boardStats(board);
+  // The filter lapses by itself once nothing is overdue any more.
+  const showOverdueOnly = overdueOnly && stats.overdue > 0;
+  const visible = filterCards(showOverdueOnly ? filterOverdue(board) : board, query);
+  const filtering = isFiltering(query) || showOverdueOnly;
   const [dragOver, setDragOver] = useState<ColumnId | null>(null);
   const dragSource = useRef<{ id: string; column: ColumnId } | null>(null);
 
@@ -95,6 +102,8 @@ export function Board() {
 
   return (
     <div className="flex flex-col gap-6">
+      <SummaryBar stats={stats} overdueOnly={showOverdueOnly} onToggleOverdue={() => setOverdueOnly(!showOverdueOnly)} />
+
       <AddCardForm onAdd={(title) => update((b) => addCard(b, title))} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

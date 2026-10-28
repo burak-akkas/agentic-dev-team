@@ -19,6 +19,13 @@ export function completeTask(tasks, id) {
   return tasks.map((t) => (t.id === id ? { ...t, done: true } : t));
 }
 
+export function removeTask(tasks, id) {
+  if (!tasks.some((t) => t.id === id)) {
+    throw new Error(`Task ${id} not found`);
+  }
+  return tasks.filter((t) => t.id !== id);
+}
+
 export function listTasks(tasks, { all = false } = {}) {
   return all ? tasks : tasks.filter((t) => !t.done);
 }

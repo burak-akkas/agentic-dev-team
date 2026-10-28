@@ -124,6 +124,7 @@ You don't need to do anything in autonomous mode. These are overrides:
 ```
 node bin/tasks.js add Buy milk     # Added: [ ] 1. Buy milk
 node bin/tasks.js done 1           # Completed task 1
+node bin/tasks.js remove 1         # Removed task 1
 node bin/tasks.js list [--all]     # list open (or all) tasks
 npm test                           # run tests
 ```

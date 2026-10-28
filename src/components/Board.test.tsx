@@ -165,6 +165,54 @@ describe("<Board />", () => {
     });
   });
 
+  describe("priority", () => {
+    const badge = (name: string) => within(screen.getByText(name).closest("li") as HTMLElement).getByTestId("priority-badge");
+
+    it("shows a Medium badge on new cards", async () => {
+      const user = userEvent.setup();
+      render(<Board />);
+      await user.type(screen.getByLabelText("New card title"), "Task{Enter}");
+
+      expect(badge("Task")).toHaveTextContent("Medium");
+      expect(screen.getByLabelText('Priority of "Task"')).toHaveValue("medium");
+    });
+
+    it("changes the priority with the select, keeping column and persisting", async () => {
+      const user = userEvent.setup();
+      saveBoard(moveCard(addCard(emptyBoard(), "Task", { id: "a" }), "a", "doing"));
+      const { unmount } = render(<Board />);
+
+      await user.selectOptions(screen.getByLabelText('Priority of "Task"'), "high");
+      expect(badge("Task")).toHaveTextContent("High");
+      expect(within(column("Doing")).getByText("Task")).toBeInTheDocument();
+      unmount();
+
+      resetBoardStore();
+      render(<Board />);
+      expect(badge("Task")).toHaveTextContent("High");
+    });
+
+    it("is reachable with the keyboard and keeps priority after rename and move", async () => {
+      const user = userEvent.setup();
+      saveBoard(addCard(emptyBoard(), "Task", { id: "a" }));
+      render(<Board />);
+
+      // Tab order: new card title, Add card, search box, then the card's priority select.
+      const select = screen.getByLabelText('Priority of "Task"');
+      for (let i = 0; i < 6 && document.activeElement !== select; i++) {
+        await user.tab();
+      }
+      expect(select).toHaveFocus();
+      await user.selectOptions(select, "high");
+      expect(badge("Task")).toHaveTextContent("High");
+
+      await user.click(screen.getByRole("button", { name: 'Edit "Task"' }));
+      await user.type(screen.getByLabelText("Card title"), " 2{Enter}");
+      await user.click(screen.getByRole("button", { name: 'Move "Task 2" to Doing' }));
+      expect(badge("Task 2")).toHaveTextContent("High");
+    });
+  });
+
   it("persists cards across reloads", async () => {
     const user = userEvent.setup();
     const { unmount } = render(<Board />);

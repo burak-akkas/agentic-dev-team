@@ -118,7 +118,7 @@ jobs:
           "$BIN/progress.sh" --pr "$PR" "🚦 **Merge gate**: \`$BASE\` moved on, updating #$PR and re-testing"
           if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR/update-branch" -f expected_head_sha="$HEAD_SHA" >/dev/null 2>&1; then
             "$BIN/transition.sh" "$PR"
-            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "🔄 \`$BASE\` moved on by $behind commit(s) since this was approved. I merged it into this branch; CI, review and QA now run again on the combined code."
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "🔄 \`$BASE\` moved on by $behind commit(s) since this was approved. I merged it into this branch. CI and QA now run again on the combined code (re-review is skipped: this PR's own changes are unchanged)."
           else
             "$BIN/transition.sh" "$PR" agent:changes-requested
             gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->

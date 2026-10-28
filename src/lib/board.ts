@@ -19,6 +19,8 @@ export interface Board {
   columns: Record<ColumnId, Card[]>;
   // Cards removed from Done with "Archive done", oldest first.
   archive: Card[];
+  // Optional soft WIP limits per column (whole numbers from 1 to MAX_WIP_LIMIT). Never blocks anything.
+  wipLimits?: Partial<Record<ColumnId, number>>;
 }
 
 export const COLUMNS: readonly { id: ColumnId; title: string }[] = [
@@ -38,6 +40,8 @@ export const DEFAULT_PRIORITY: Priority = "medium";
 export const MAX_TITLE_LENGTH = 120;
 
 export const MAX_NOTES_LENGTH = 1000;
+
+export const MAX_WIP_LIMIT = 99;
 
 export function emptyBoard(): Board {
   return { columns: { todo: [], doing: [], done: [] }, archive: [] };
@@ -151,6 +155,7 @@ export function archiveDone(board: Board): Board {
     return board;
   }
   return {
+    ...board,
     columns: { ...board.columns, done: [] },
     archive: [...board.archive, ...board.columns.done],
   };
@@ -163,6 +168,7 @@ export function restoreCard(board: Board, cardId: string): Board {
     throw new Error(`Archived card ${cardId} not found`);
   }
   return {
+    ...board,
     columns: { ...board.columns, done: [...board.columns.done, card] },
     archive: board.archive.filter((c) => c.id !== cardId),
   };
@@ -185,9 +191,60 @@ export function undoArchive(board: Board, cards: Card[]): Board {
   }
   const ids = new Set(back.map((c) => c.id));
   return {
+    ...board,
     columns: { ...board.columns, done: [...back, ...board.columns.done] },
     archive: board.archive.filter((c) => !ids.has(c.id)),
   };
+}
+
+export type WipLimitResult = { ok: true; limit: number | undefined } | { ok: false; error: string };
+
+// Parses the limit editor's text. Blank clears the limit; otherwise a whole number from 1 to MAX_WIP_LIMIT.
+export function parseWipLimit(input: string): WipLimitResult {
+  const trimmed = input.trim();
+  if (trimmed === "") {
+    return { ok: true, limit: undefined };
+  }
+  const limit = /^\d+$/.test(trimmed) ? Number(trimmed) : NaN;
+  if (!(limit >= 1 && limit <= MAX_WIP_LIMIT)) {
+    return { ok: false, error: `Enter a whole number from 1 to ${MAX_WIP_LIMIT}.` };
+  }
+  return { ok: true, limit };
+}
+
+export function isValidWipLimit(limit: unknown): limit is number {
+  return typeof limit === "number" && Number.isInteger(limit) && limit >= 1 && limit <= MAX_WIP_LIMIT;
+}
+
+// Sets, changes or (with `undefined`) clears a column's WIP limit. The key is removed once no limit is left.
+export function setWipLimit(board: Board, column: ColumnId, limit: number | undefined): Board {
+  if (limit !== undefined && !isValidWipLimit(limit)) {
+    throw new Error(`WIP limit must be a whole number from 1 to ${MAX_WIP_LIMIT}`);
+  }
+  if (board.wipLimits?.[column] === limit) {
+    return board;
+  }
+  const { wipLimits, ...rest } = board;
+  const next = { ...wipLimits };
+  if (limit === undefined) {
+    delete next[column];
+  } else {
+    next[column] = limit;
+  }
+  return Object.keys(next).length === 0 ? rest : { ...rest, wipLimits: next };
+}
+
+export type WipState = "none" | "ok" | "at" | "over";
+
+// How a column's real card count compares to its limit. `over` is how many cards exceed it.
+export function wipStatus(count: number, limit: number | undefined): { state: WipState; over: number } {
+  if (limit === undefined) {
+    return { state: "none", over: 0 };
+  }
+  if (count > limit) {
+    return { state: "over", over: count - limit };
+  }
+  return { state: count === limit ? "at" : "ok", over: 0 };
 }
 
 export function isValidDueDate(date: string): boolean {

@@ -1,4 +1,4 @@
-import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card } from "./board";
+import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, isValidWipLimit, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card, type ColumnId } from "./board";
 
 export const STORAGE_KEY = "kanban-board-v1";
 
@@ -39,7 +39,19 @@ function normalizeCard(card: Card): Card {
 // Boards saved before archiving have no `archive`; a corrupt one is dropped and invalid cards are skipped.
 function normalizeBoard(board: Board): Board {
   const archive: unknown = (board as { archive?: unknown }).archive;
+  // Invalid WIP limits are dropped; the key is only present when at least one limit is valid.
+  const limits: unknown = (board as { wipLimits?: unknown }).wipLimits;
+  const wipLimits: Partial<Record<ColumnId, number>> = {};
+  if (typeof limits === "object" && limits !== null) {
+    for (const { id } of COLUMNS) {
+      const limit = (limits as Record<string, unknown>)[id];
+      if (isValidWipLimit(limit)) {
+        wipLimits[id] = limit;
+      }
+    }
+  }
   return {
+    ...(Object.keys(wipLimits).length > 0 && { wipLimits }),
     columns: {
       todo: board.columns.todo.map(normalizeCard),
       doing: board.columns.doing.map(normalizeCard),

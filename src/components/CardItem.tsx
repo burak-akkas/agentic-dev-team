@@ -38,6 +38,7 @@ export function CardItem({
   onSetDueDate,
   onSetNotes,
   onSetPriority,
+  onOpen,
   onDragStart,
   onDragEnd,
 }: {
@@ -49,6 +50,7 @@ export function CardItem({
   onSetDueDate: (date: string | undefined) => void;
   onSetNotes: (notes: string | undefined) => void;
   onSetPriority: (priority: Priority) => void;
+  onOpen: () => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
 }) {
@@ -193,13 +195,21 @@ export function CardItem({
 
   return (
     <li
+      data-card-id={card.id}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
       className="group cursor-grab rounded-lg border border-zinc-200 bg-white p-3 shadow-sm active:cursor-grabbing dark:border-zinc-800 dark:bg-zinc-900"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="break-words text-sm">{card.title}</p>
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          onClick={onOpen}
+          className="card-title min-w-0 break-words rounded text-left text-sm hover:underline"
+        >
+          {card.title}
+        </button>
         <span
           data-testid="priority-badge"
           className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${badgeStyles[card.priority]}`}

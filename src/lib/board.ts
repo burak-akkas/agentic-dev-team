@@ -251,6 +251,34 @@ export function setNotes(board: Board, cardId: string, notes: string | undefined
   };
 }
 
+export interface CardEdits {
+  title: string;
+  notes: string | undefined;
+  priority: Priority;
+  dueDate: string | undefined;
+  column: ColumnId;
+}
+
+// Applies every edit at once. Validates first (the setters throw), so nothing is half-applied.
+export function updateCard(board: Board, cardId: string, edits: CardEdits): Board {
+  let next = renameCard(board, cardId, edits.title);
+  next = setNotes(next, cardId, edits.notes);
+  next = setPriority(next, cardId, edits.priority);
+  next = setDueDate(next, cardId, edits.dueDate);
+  return moveCard(next, cardId, edits.column);
+}
+
+// Whether a dialog draft differs from the stored card. Whitespace-only differences in title/notes don't count.
+export function hasChanges(card: Card, column: ColumnId, draft: CardEdits): boolean {
+  return (
+    draft.title.trim() !== card.title ||
+    (draft.notes?.trim() || undefined) !== card.notes ||
+    draft.priority !== card.priority ||
+    (draft.dueDate || undefined) !== card.dueDate ||
+    draft.column !== column
+  );
+}
+
 // Local calendar day as `YYYY-MM-DD`.
 export function todayString(now: Date = new Date()): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");

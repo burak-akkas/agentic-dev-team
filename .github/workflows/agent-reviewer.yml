@@ -34,6 +34,7 @@ jobs:
     env:
       PR: ${{ github.event.pull_request.number }}
       TRUSTED: .agent-trusted/.github/agents
+      BIN: .agent-trusted/scripts/agents
       MAX_ROUNDS: ${{ vars.AGENT_MAX_REVIEW_ROUNDS || '3' }}
     steps:
       - uses: actions/create-github-app-token@v2
@@ -54,7 +55,9 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: .agent-trusted
-          sparse-checkout: .github/agents
+          sparse-checkout: |
+            .github/agents
+            scripts/agents
           token: ${{ steps.app.outputs.token }}
 
       - name: Loop guard
@@ -64,7 +67,7 @@ jobs:
         run: |
           mkdir -p .agent-out
           # A queued run may be stale by now (new commits, merge-gate verdict, conflict): don't spend a round on it.
-          skip=$("$TRUSTED/pr-still-current.sh" "$PR" "${{ github.event.pull_request.head.sha }}")
+          skip=$("$BIN/pr-still-current.sh" "$PR" "${{ github.event.pull_request.head.sha }}")
           if [ -n "$skip" ]; then
             echo "Skipped review: ${skip#skip=}" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "stop=true" >> "$GITHUB_OUTPUT"
@@ -80,7 +83,7 @@ jobs:
           echo "total=$total" >> "$GITHUB_OUTPUT"
           echo "round=$((rounds + 1))" >> "$GITHUB_OUTPUT"
           if [ "$rounds" -ge "$MAX_ROUNDS" ]; then
-            "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+            "$BIN/transition.sh" "$PR" agent:needs-decision
             gh pr comment "$PR" --body "🛑 Reached $MAX_ROUNDS review rounds without approval. Handing to the Lead."
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
@@ -129,20 +132,20 @@ jobs:
           QA: ${{ vars.AGENT_QA }}
         run: |
           verdict=$(echo "${OUT:-null}" | jq -r '.verdict // "error"')
-          after=$("$TRUSTED/count-comments.sh" "$PR" reviewer)
+          after=$("$BIN/count-comments.sh" "$PR" reviewer)
           if [ "$after" -le "${{ steps.guard.outputs.total }}" ]; then
             echo "::warning::Reviewer returned '$verdict' but posted no summary comment"
             verdict=missing-comment
           fi
           case "$verdict" in
             approve)         if [ "$QA" = "true" ]; then
-                               "$TRUSTED/transition.sh" "$PR" agent:qa
+                               "$BIN/transition.sh" "$PR" agent:qa
                              else
-                               "$TRUSTED/transition.sh" "$PR" agent:approved
+                               "$BIN/transition.sh" "$PR" agent:approved
                              fi ;;
-            request-changes) "$TRUSTED/transition.sh" "$PR" agent:changes-requested ;;
-            needs-human)     "$TRUSTED/transition.sh" "$PR" agent:needs-decision ;;
-            *)               "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+            request-changes) "$BIN/transition.sh" "$PR" agent:changes-requested ;;
+            needs-human)     "$BIN/transition.sh" "$PR" agent:needs-decision ;;
+            *)               "$BIN/transition.sh" "$PR" agent:needs-decision
                              gh pr comment "$PR" --body "⚠️ Reviewer agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
           esac
           case "$verdict" in
@@ -150,4 +153,4 @@ jobs:
             request-changes) msg="requested changes" ;;
             *)               msg="unsure or failed, handed to the Lead" ;;
           esac
-          "$TRUSTED/progress.sh" --pr "$PR" "🧐 **Reviewer** (round ${{ steps.guard.outputs.round }}): $msg on #$PR"
+          "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer** (round ${{ steps.guard.outputs.round }}): $msg on #$PR"

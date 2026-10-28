@@ -34,6 +34,7 @@ jobs:
       N: ${{ github.event.issue.number || github.event.pull_request.number }}
       KIND: ${{ github.event_name == 'issues' && 'issue' || 'pr' }}
       TRUSTED: .agent-trusted/.github/agents
+      BIN: .agent-trusted/scripts/agents
       MAX_DECISIONS: ${{ vars.AGENT_MAX_LEAD_DECISIONS || '3' }}
     steps:
       - uses: actions/create-github-app-token@v2
@@ -53,7 +54,9 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: .agent-trusted
-          sparse-checkout: .github/agents
+          sparse-checkout: |
+            .github/agents
+            scripts/agents
           token: ${{ steps.app.outputs.token }}
 
       - name: Decision budget
@@ -63,10 +66,10 @@ jobs:
         run: |
           mkdir -p .agent-out
           printf '.agent-out/\n.agent-trusted/\n' >> .git/info/exclude
-          used=$("$TRUSTED/count-comments.sh" "$N" lead)
+          used=$("$BIN/count-comments.sh" "$N" lead)
           echo "used=$used" >> "$GITHUB_OUTPUT"
           if [ "$used" -ge "$MAX_DECISIONS" ]; then
-            "$TRUSTED/transition.sh" "$N" agent:needs-human
+            "$BIN/transition.sh" "$N" agent:needs-human
             gh api "repos/$GITHUB_REPOSITORY/issues/$N/comments" -f body="🛑 Lead has already made $used decisions here without resolving it. Escalating to a human." >/dev/null
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
@@ -117,31 +120,31 @@ jobs:
         run: |
           action=$(echo "${OUT:-null}" | jq -r '.action // "error"')
           reason=$(echo "${OUT:-null}" | jq -r '.rationale // "no rationale"')
-          if [ "$("$TRUSTED/count-comments.sh" "$N" lead)" -le "$USED" ]; then
+          if [ "$("$BIN/count-comments.sh" "$N" lead)" -le "$USED" ]; then
             echo "::warning::Lead returned '$action' but posted no decision comment"
             action=missing-comment
           fi
           echo "Lead decision on $KIND #$N: $action ($reason)" >> "$GITHUB_STEP_SUMMARY"
 
           case "$KIND:$action" in
-            issue:restart-analysis) "$TRUSTED/transition.sh" "$N" agent:start ;;
-            issue:redesign)         "$TRUSTED/transition.sh" "$N" agent:analyzed ;;
-            issue:implement)        "$TRUSTED/transition.sh" "$N" agent:ready ;;
-            issue:close)            "$TRUSTED/transition.sh" "$N" agent:out-of-scope
+            issue:restart-analysis) "$BIN/transition.sh" "$N" agent:start ;;
+            issue:redesign)         "$BIN/transition.sh" "$N" agent:analyzed ;;
+            issue:implement)        "$BIN/transition.sh" "$N" agent:ready ;;
+            issue:close)            "$BIN/transition.sh" "$N" agent:out-of-scope
                                     gh issue close "$N" --reason "not planned" ;;
-            pr:fix)                 "$TRUSTED/transition.sh" "$N" agent:changes-requested ;;
-            pr:re-review)           "$TRUSTED/transition.sh" "$N" agent:review ;;
-            pr:qa)                  "$TRUSTED/transition.sh" "$N" agent:qa ;;
-            pr:approve)             "$TRUSTED/transition.sh" "$N" agent:approved ;;
-            pr:close)               "$TRUSTED/transition.sh" "$N"
+            pr:fix)                 "$BIN/transition.sh" "$N" agent:changes-requested ;;
+            pr:re-review)           "$BIN/transition.sh" "$N" agent:review ;;
+            pr:qa)                  "$BIN/transition.sh" "$N" agent:qa ;;
+            pr:approve)             "$BIN/transition.sh" "$N" agent:approved ;;
+            pr:close)               "$BIN/transition.sh" "$N"
                                     gh pr close "$N" --delete-branch ;;
-            *:escalate)             "$TRUSTED/transition.sh" "$N" agent:needs-human ;;
-            *)                      "$TRUSTED/transition.sh" "$N" agent:needs-human
+            *:escalate)             "$BIN/transition.sh" "$N" agent:needs-human ;;
+            *)                      "$BIN/transition.sh" "$N" agent:needs-human
                                     gh api "repos/$GITHUB_REPOSITORY/issues/$N/comments" \
                                       -f body="⚠️ Lead could not decide ('$action', [run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Escalating to a human." >/dev/null ;;
           esac
           if [ "$KIND" = "issue" ]; then
-            .agent-trusted/.github/agents/progress.sh "$N" "🧭 **Lead**: $action"
+            .agent-trusted/scripts/agents/progress.sh "$N" "🧭 **Lead**: $action"
           else
-            .agent-trusted/.github/agents/progress.sh --pr "$N" "🧭 **Lead** (on #$N): $action"
+            .agent-trusted/scripts/agents/progress.sh --pr "$N" "🧭 **Lead** (on #$N): $action"
           fi

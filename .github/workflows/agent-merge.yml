@@ -2,7 +2,8 @@ name: "Agent · Merge"
 
 # Merge gate. When a PR gets `agent:approved` (from the Reviewer or the Lead):
 #   1. Kill switch: does nothing unless AGENT_AUTO_MERGE == 'true'
-#   2. Risk: if the linked issue is `risk:high`, a human merges (unless AGENT_AUTO_MERGE_HIGH_RISK == 'true')
+#   2. Risk: if the linked issue is `risk:high`, a human merges (unless AGENT_AUTO_MERGE_HIGH_RISK == 'true').
+#      So does any PR touching AGENT_PROTECTED_PATHS (default .github/, scripts/, templates/)
 #   3. Up to date: if the default branch moved on, updates the PR branch (re-runs CI, review, QA)
 #   4. Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names, default "CI")
 #   5. Green: squash-merges exactly the approved commit. Red: sends the PR back to the Implementor.
@@ -33,6 +34,7 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       TRUSTED: .agent-trusted/.github/agents
+      BIN: .agent-trusted/scripts/agents
       REQUIRED: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
     steps:
       - uses: actions/create-github-app-token@v2
@@ -45,7 +47,9 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: .agent-trusted
-          sparse-checkout: .github/agents
+          sparse-checkout: |
+            .github/agents
+            scripts/agents
           token: ${{ steps.app.outputs.token }}
 
       - name: Risk gate
@@ -53,6 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           HIGH_RISK_OK: ${{ vars.AGENT_AUTO_MERGE_HIGH_RISK }}
+          PROTECTED: ${{ vars.AGENT_PROTECTED_PATHS || '.github/,scripts/,templates/' }}
         run: |
           issue=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
           risk=unknown
@@ -62,8 +67,18 @@ jobs:
           echo "issue=$issue" >> "$GITHUB_OUTPUT"
           echo "Linked issue: ${issue:-none}, risk: $risk" >> "$GITHUB_STEP_SUMMARY"
           if [ "$risk" = "high" ] && [ "$HIGH_RISK_OK" != "true" ]; then
-            "$TRUSTED/transition.sh" "$PR" agent:needs-human
+            "$BIN/transition.sh" "$PR" agent:needs-human
             gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "✋ Approved by the agents, but the change is **high risk**, so a human merges it."
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The team's own tooling (prompts, scripts, templates) is never changed without a human.
+          # The App's missing Workflows permission only protects .github/workflows/.
+          touched=$(gh pr diff "$PR" -R "$GITHUB_REPOSITORY" --name-only | grep -E "^(${PROTECTED//,/|})" || true)
+          if [ -n "$touched" ]; then
+            "$BIN/transition.sh" "$PR" agent:needs-human
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "✋ Approved by the agents, but it changes the agent team's own tooling, so a human merges it:
+          $(echo "$touched" | sed 's/^/- `/; s/$/`/')"
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -81,12 +96,12 @@ jobs:
           echo "Behind $BASE by $behind commit(s)" >> "$GITHUB_STEP_SUMMARY"
           [ "$behind" -eq 0 ] && exit 0
           echo "stop=true" >> "$GITHUB_OUTPUT"
-          "$TRUSTED/progress.sh" --pr "$PR" "🚦 **Merge gate**: \`$BASE\` moved on, updating #$PR and re-testing"
+          "$BIN/progress.sh" --pr "$PR" "🚦 **Merge gate**: \`$BASE\` moved on, updating #$PR and re-testing"
           if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR/update-branch" -f expected_head_sha="$HEAD_SHA" >/dev/null 2>&1; then
-            "$TRUSTED/transition.sh" "$PR"
+            "$BIN/transition.sh" "$PR"
             gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "🔄 \`$BASE\` moved on by $behind commit(s) since this was approved. I merged it into this branch; CI, review and QA now run again on the combined code."
           else
-            "$TRUSTED/transition.sh" "$PR" agent:changes-requested
+            "$BIN/transition.sh" "$PR" agent:changes-requested
             gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
           ⚠️ This PR is behind \`$BASE\` and can't be updated automatically (merge conflicts, or the base changed workflow files). Implementor: run \`git fetch origin $BASE\` and \`git merge origin/$BASE\`, resolve the conflicts keeping the intent of both sides, run all checks, and push."
           fi
@@ -125,23 +140,23 @@ jobs:
             pass)
               # --match-head-commit: never merge commits pushed after the approval.
               if gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$HEAD_SHA"; then
-                "$TRUSTED/transition.sh" "$PR" agent:done
-                if [ -n "$ISSUE" ]; then "$TRUSTED/transition.sh" "$ISSUE" agent:done; fi
+                "$BIN/transition.sh" "$PR" agent:done
+                if [ -n "$ISSUE" ]; then "$BIN/transition.sh" "$ISSUE" agent:done; fi
                 prod="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
-                [ -n "$ISSUE" ] && "$TRUSTED/progress.sh" "$ISSUE" "✅ **Merged** #$PR, deploying to [production]($prod)"
+                [ -n "$ISSUE" ] && "$BIN/progress.sh" "$ISSUE" "✅ **Merged** #$PR, deploying to [production]($prod)"
                 echo "Merged PR #$PR" >> "$GITHUB_STEP_SUMMARY"
                 echo "merged=true" >> "$GITHUB_OUTPUT"
               else
-                "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+                "$BIN/transition.sh" "$PR" agent:needs-decision
                 gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⚠️ Auto-merge failed (conflict or new commits). Lead, please decide."
               fi ;;
             fail)
-              [ -n "$ISSUE" ] && "$TRUSTED/progress.sh" "$ISSUE" "🚦 **Merge gate**: required checks failed on #$PR, back to the Implementor"
-              "$TRUSTED/transition.sh" "$PR" agent:changes-requested
+              [ -n "$ISSUE" ] && "$BIN/progress.sh" "$ISSUE" "🚦 **Merge gate**: required checks failed on #$PR, back to the Implementor"
+              "$BIN/transition.sh" "$PR" agent:changes-requested
               gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
           ❌ Required checks failed: **$FAILED**. Implementor, please fix ([checks](https://github.com/$GITHUB_REPOSITORY/pull/$PR/checks))." ;;
             *)
-              "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+              "$BIN/transition.sh" "$PR" agent:needs-decision
               gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⏱️ Required checks ($REQUIRED) did not finish in time. Lead, please decide." ;;
           esac
 
@@ -166,8 +181,8 @@ jobs:
             [ "$state" = "CONFLICTING" ] || continue
             labels=$(gh pr view "$n" -R "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | join(",")')
             case ",$labels," in *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*) continue ;; esac
-            "$TRUSTED/transition.sh" "$n" agent:changes-requested
+            "$BIN/transition.sh" "$n" agent:changes-requested
             gh pr comment "$n" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
           ⚠️ #$PR was just merged into \`$BASE\`, and this PR now **conflicts** with it. Implementor: run \`git fetch origin $BASE\` and \`git merge origin/$BASE\`, resolve the conflicts keeping the intent of both changes, run all checks, and push."
-            "$TRUSTED/progress.sh" --pr "$n" "🚦 **Merge gate**: #$n conflicts with the just-merged #$PR, back to the Implementor"
+            "$BIN/progress.sh" --pr "$n" "🚦 **Merge gate**: #$n conflicts with the just-merged #$PR, back to the Implementor"
           done

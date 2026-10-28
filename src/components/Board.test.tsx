@@ -1,6 +1,6 @@
 import { createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, todayString } from "@/lib/board";
 import { saveBoard } from "@/lib/storage";
 import { resetBoardStore } from "@/lib/useBoard";
@@ -62,7 +62,7 @@ describe("<Board />", () => {
     const titles = (name: string) =>
       within(column(name))
         .getAllByRole("listitem")
-        .map((li) => li.querySelector("p")?.textContent);
+        .map((li) => li.querySelector("button.card-title")?.textContent);
 
     it("shows a focused, pre-filled input with Save and Cancel", async () => {
       const user = userEvent.setup();
@@ -663,6 +663,74 @@ describe("<Board />", () => {
 
       await user.click(screen.getByRole("button", { name: 'Edit "Beta"' }));
       expect(screen.getByLabelText("Card title").closest("li")).not.toHaveAttribute("draggable");
+    });
+  });
+
+  describe("card dialog", () => {
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+
+    function seedOne() {
+      saveBoard(addCard(emptyBoard(), "Alpha", { id: "a" }));
+    }
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it("opens on click and on Enter, and saves all edits to the board and storage", async () => {
+      const user = userEvent.setup();
+      seedOne();
+      render(<Board />);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      const open = screen.getByRole("button", { name: "Alpha" });
+      open.focus();
+      await user.keyboard("{Enter}");
+      const dialog = screen.getByRole("dialog", { name: "Alpha" });
+
+      await user.clear(within(dialog).getByLabelText("Title"));
+      await user.type(within(dialog).getByLabelText("Title"), "Beta");
+      await user.type(within(dialog).getByLabelText("Description"), "Details");
+      await user.selectOptions(within(dialog).getByLabelText("Status"), "done");
+      await user.selectOptions(within(dialog).getByLabelText("Priority"), "high");
+      await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(within(column("Done")).getByText("Beta")).toBeInTheDocument();
+      expect(within(column("Done")).getByTestId("priority-badge")).toHaveTextContent("High");
+      expect(within(column("Done")).getByText("Details")).toBeInTheDocument();
+      expect(localStorage.getItem(localStorage.key(0) as string)).toContain("Details");
+
+      await nextFrame();
+      expect(screen.getByRole("button", { name: "Beta" })).toHaveFocus();
+    });
+
+    it("discards changes on Cancel", async () => {
+      const user = userEvent.setup();
+      seedOne();
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      render(<Board />);
+
+      await user.click(screen.getByRole("button", { name: "Alpha" }));
+      await user.type(screen.getByLabelText("Title"), "zzz");
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(within(column("To do")).getByText("Alpha")).toBeInTheDocument();
+    });
+
+    it("deletes the card after confirmation and keeps it when declined", async () => {
+      const user = userEvent.setup();
+      seedOne();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+      render(<Board />);
+
+      await user.click(screen.getByRole("button", { name: "Alpha" }));
+      await user.click(screen.getByRole("button", { name: "Delete card" }));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Delete card" }));
+      expect(confirm).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(within(column("To do")).getByText("No cards")).toBeInTheDocument();
     });
   });
 });

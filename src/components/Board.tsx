@@ -14,9 +14,11 @@ import {
   setDueDate,
   setNotes,
   setPriority,
+  updateCard,
 } from "@/lib/board";
 import { useBoard } from "@/lib/useBoard";
 import { AddCardForm } from "./AddCardForm";
+import { CardDialog } from "./CardDialog";
 import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
 import { SearchBox } from "./SearchBox";
 
@@ -25,6 +27,7 @@ export function Board() {
   const [query, setQuery] = useState("");
   const visible = filterCards(board, query);
   const filtering = isFiltering(query);
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<ColumnId | null>(null);
   const dragSource = useRef<{ id: string; column: ColumnId } | null>(null);
 
@@ -65,8 +68,38 @@ export function Board() {
     update((b) => (findCard(b, id) ? moveCard(b, id, column) : b));
   }
 
+  // Looked up in the unfiltered board so an active search never drops the open dialog.
+  const open = openCardId ? findCard(board, openCardId) : undefined;
+
+  // The card may have changed column (and remounted), so find its title button in the DOM after the commit.
+  function closeDialog(focusCardId?: string) {
+    setOpenCardId(null);
+    requestAnimationFrame(() => {
+      const target = focusCardId
+        ? document.querySelector<HTMLElement>(`[data-card-id="${focusCardId}"] button.card-title`)
+        : document.querySelector<HTMLElement>('input[aria-label="New card title"]');
+      target?.focus();
+    });
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      {openCardId && open && (
+        <CardDialog
+          key={openCardId}
+          card={open.card}
+          column={open.column}
+          onSave={(edits) => {
+            update((b) => updateCard(b, openCardId, edits));
+            closeDialog(openCardId);
+          }}
+          onDelete={() => {
+            update((b) => deleteCard(b, openCardId));
+            closeDialog();
+          }}
+          onClose={() => closeDialog(openCardId)}
+        />
+      )}
       <AddCardForm onAdd={(title) => update((b) => addCard(b, title))} />
 
       <SearchBox value={query} onChange={setQuery} />
@@ -111,6 +144,7 @@ export function Board() {
                       onSetDueDate={(date) => update((b) => setDueDate(b, card.id, date))}
                       onSetNotes={(notes) => update((b) => setNotes(b, card.id, notes))}
                       onSetPriority={(priority) => update((b) => setPriority(b, card.id, priority))}
+                      onOpen={() => setOpenCardId(card.id)}
                       onDragStart={() => {
                         dragSource.current = { id: card.id, column: id };
                       }}

@@ -18,6 +18,10 @@ import {
   setNotes,
   setPriority,
   todayString,
+  hasChanges,
+  updateCard,
+  type Card,
+  type CardEdits,
 } from "./board";
 
 const ids = (cards: { id: string }[]) => cards.map((c) => c.id);
@@ -322,5 +326,59 @@ describe("notes", () => {
   it("keeps notes when moving or renaming", () => {
     expect(card(moveCard(withNotes, "a", "doing")).notes).toBe("line one\nline two");
     expect(card(renameCard(withNotes, "a", "New")).notes).toBe("line one\nline two");
+  });
+});
+
+describe("updateCard / hasChanges", () => {
+  const base = addCard(emptyBoard(), "Task", { id: "a" });
+  const original = findCard(base, "a")?.card as Card;
+  const same: CardEdits = { title: "Task", notes: undefined, priority: "medium", dueDate: undefined, column: "todo" };
+
+  it("applies all edits at once", () => {
+    const next = updateCard(base, "a", {
+      title: "  Renamed ",
+      notes: "Some notes",
+      priority: "high",
+      dueDate: "2030-01-02",
+      column: "doing",
+    });
+    expect(next.columns.todo).toEqual([]);
+    expect(next.columns.doing).toEqual([
+      { ...original, title: "Renamed", notes: "Some notes", priority: "high", dueDate: "2030-01-02" },
+    ]);
+  });
+
+  it("clears notes and due date", () => {
+    const full = updateCard(base, "a", { ...same, notes: "n", dueDate: "2030-01-02" });
+    const cleared = updateCard(full, "a", same);
+    expect(findCard(cleared, "a")?.card).toEqual(original);
+  });
+
+  it("returns the same board when nothing changed", () => {
+    expect(updateCard(base, "a", same)).toBe(base);
+  });
+
+  it("throws on invalid input and leaves the input board untouched", () => {
+    const snapshot = JSON.stringify(base);
+    expect(() => updateCard(base, "a", { ...same, title: "  ", priority: "high" })).toThrow();
+    expect(() => updateCard(base, "a", { ...same, title: "x".repeat(MAX_TITLE_LENGTH + 1) })).toThrow();
+    expect(() => updateCard(base, "a", { ...same, notes: "x".repeat(MAX_NOTES_LENGTH + 1) })).toThrow();
+    expect(() => updateCard(base, "a", { ...same, dueDate: "2030-13-40" })).toThrow();
+    expect(JSON.stringify(base)).toBe(snapshot);
+  });
+
+  it("throws for an unknown card", () => {
+    expect(() => updateCard(base, "nope", same)).toThrow();
+  });
+
+  it("detects changes per field and ignores whitespace-only differences", () => {
+    expect(hasChanges(original, "todo", same)).toBe(false);
+    expect(hasChanges(original, "todo", { ...same, title: " Task " })).toBe(false);
+    expect(hasChanges(original, "todo", { ...same, notes: "  " })).toBe(false);
+    expect(hasChanges(original, "todo", { ...same, title: "Other" })).toBe(true);
+    expect(hasChanges(original, "todo", { ...same, notes: "n" })).toBe(true);
+    expect(hasChanges(original, "todo", { ...same, priority: "low" })).toBe(true);
+    expect(hasChanges(original, "todo", { ...same, dueDate: "2030-01-02" })).toBe(true);
+    expect(hasChanges(original, "todo", { ...same, column: "done" })).toBe(true);
   });
 });

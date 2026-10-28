@@ -263,6 +263,46 @@ export function filterCards(board: Board, query: string): Board {
   };
 }
 
+export interface BoardStats {
+  total: number;
+  done: number;
+  // Share of cards in Done, rounded to a whole percent (0 for an empty board).
+  percentDone: number;
+  overdue: number;
+  // High priority cards that are not in Done.
+  highOpen: number;
+}
+
+export function boardStats(board: Board, today: string = todayString()): BoardStats {
+  let total = 0;
+  let overdue = 0;
+  let highOpen = 0;
+  for (const { id: column } of COLUMNS) {
+    for (const card of board.columns[column]) {
+      total += 1;
+      if (isOverdue(card, column, today)) {
+        overdue += 1;
+      }
+      if (column !== "done" && card.priority === "high") {
+        highOpen += 1;
+      }
+    }
+  }
+  const done = board.columns.done.length;
+  return { total, done, percentDone: total === 0 ? 0 : Math.round((done / total) * 100), overdue, highOpen };
+}
+
+// Only the overdue cards (due before today, not in Done).
+export function filterOverdue(board: Board, today: string = todayString()): Board {
+  return {
+    columns: {
+      todo: board.columns.todo.filter((c) => isOverdue(c, "todo", today)),
+      doing: board.columns.doing.filter((c) => isOverdue(c, "doing", today)),
+      done: [],
+    },
+  };
+}
+
 // Neighbouring column, for the "move left / right" buttons.
 export function adjacentColumn(column: ColumnId, direction: -1 | 1): ColumnId | undefined {
   const index = COLUMNS.findIndex((c) => c.id === column);

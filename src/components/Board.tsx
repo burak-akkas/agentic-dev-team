@@ -3,9 +3,11 @@
 import { useRef, useState, type DragEvent } from "react";
 import {
   addCard,
+  boardStats,
   COLUMNS,
   deleteCard,
   filterCards,
+  filterOverdue,
   findCard,
   type ColumnId,
   isFiltering,
@@ -21,13 +23,18 @@ import { AddCardForm } from "./AddCardForm";
 import { CardDialog } from "./CardDialog";
 import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
 import { SearchBox } from "./SearchBox";
+import { SummaryBar } from "./SummaryBar";
 
 export function Board() {
   const [board, update] = useBoard();
   const [query, setQuery] = useState("");
-  const visible = filterCards(board, query);
-  const filtering = isFiltering(query);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const stats = boardStats(board);
+  // The filter lapses by itself once nothing is overdue any more.
+  const showOverdueOnly = overdueOnly && stats.overdue > 0;
+  const visible = filterCards(showOverdueOnly ? filterOverdue(board) : board, query);
+  const filtering = isFiltering(query) || showOverdueOnly;
   const [dragOver, setDragOver] = useState<ColumnId | null>(null);
   const dragSource = useRef<{ id: string; column: ColumnId } | null>(null);
 
@@ -100,6 +107,8 @@ export function Board() {
           onClose={() => closeDialog(openCardId)}
         />
       )}
+      <SummaryBar stats={stats} overdueOnly={showOverdueOnly} onToggleOverdue={() => setOverdueOnly(!showOverdueOnly)} />
+
       <AddCardForm onAdd={(title) => update((b) => addCard(b, title))} />
 
       <SearchBox value={query} onChange={setQuery} />

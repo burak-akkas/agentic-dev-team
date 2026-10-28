@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  pages: write
   pull-requests: write
 
 concurrency:
@@ -44,6 +45,10 @@ jobs:
           destination_dir: pr-${{ github.event.pull_request.number }}
           keep_files: true
           commit_message: "deploy: preview PR #${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}"
+      - name: Request a Pages build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" --jq .status || true
       - name: Post or update preview link
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

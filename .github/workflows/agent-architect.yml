@@ -1,0 +1,75 @@
+name: "Agent · Architect"
+
+# Trigger: the issue gets `agent:analyzed` (set by the Analyst, or by a human).
+# Human gate: when AGENT_REQUIRE_DESIGN_APPROVAL == 'true', or when the Architect flags
+# high risk, the issue goes to `agent:design-review`. A human approves by applying `agent:ready`.
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  architect:
+    if: github.event.label.name == 'agent:analyzed' && !github.event.issue.pull_request
+    concurrency:
+      group: agent-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Prepare scratch dir
+        run: mkdir -p .agent-out && echo ".agent-out/" >> .git/info/exclude
+
+      - uses: anthropics/claude-code-action@v1
+        id: agent
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app.outputs.token }}
+          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          prompt: |
+            You are the ARCHITECT agent. Read .github/agents/architect.md and follow it exactly.
+
+            Repository: ${{ github.repository }}
+            Issue: #${{ github.event.issue.number }}
+
+            Write comment bodies to .agent-out/ and post them with --body-file.
+          claude_args: |
+            --max-turns 40
+            ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*),Bash(gh pr list:*),Bash(git log:*)"
+            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["ready","needs-human"]},"risk":{"type":"string","enum":["low","medium","high"]}},"required":["decision","risk"]}'
+
+      - name: Apply state transition
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OUT: ${{ steps.agent.outputs.structured_output }}
+          N: ${{ github.event.issue.number }}
+          REQUIRE_APPROVAL: ${{ vars.AGENT_REQUIRE_DESIGN_APPROVAL }}
+        run: |
+          decision=$(echo "${OUT:-null}" | jq -r '.decision // "error"')
+          risk=$(echo "${OUT:-null}" | jq -r '.risk // "unknown"')
+          if [ "$decision" = "ready" ] && [ "$risk" != "high" ] && [ "$REQUIRE_APPROVAL" != "true" ]; then
+            .github/agents/transition.sh "$N" agent:ready
+          elif [ "$decision" = "ready" ] || [ "$decision" = "needs-human" ]; then
+            .github/agents/transition.sh "$N" agent:design-review
+            gh issue comment "$N" --body "👀 Design is waiting for human approval (risk: **$risk**). Apply \`agent:ready\` to start implementation, or comment and re-apply \`agent:analyzed\` to redesign."
+          else
+            .github/agents/transition.sh "$N" agent:needs-human
+            gh issue comment "$N" --body "⚠️ Architect agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Needs a human."
+          fi

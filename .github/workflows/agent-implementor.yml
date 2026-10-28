@@ -1,0 +1,179 @@
+name: "Agent · Implementor"
+
+# Two jobs:
+#   implement: the issue gets `agent:ready`  -> branch + code + tests + PR
+#   fix:       the PR gets `agent:changes-requested` -> address review, push to the same branch
+#
+# Project build/test commands the agent may run come from the repo variable
+# AGENT_BUILD_TOOLS, e.g.  Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [labeled]
+
+jobs:
+  implement:
+    if: github.event_name == 'issues' && github.event.label.name == 'agent:ready' && !github.event.issue.pull_request
+    concurrency:
+      group: agent-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      N: ${{ github.event.issue.number }}
+      BRANCH: agent/issue-${{ github.event.issue.number }}
+      BASE: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Prepare
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ vars.AGENT_BOT_LOGIN }}
+        run: |
+          mkdir -p .agent-out && echo ".agent-out/" >> .git/info/exclude
+          git config user.name "$BOT"
+          git config user.email "${{ vars.AGENT_BOT_ID }}+$BOT@users.noreply.github.com"
+          .github/agents/transition.sh "$N" agent:in-progress
+
+      - uses: anthropics/claude-code-action@v1
+        id: agent
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app.outputs.token }}
+          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          branch_prefix: "agent/"
+          prompt: |
+            You are the IMPLEMENTOR agent. Read .github/agents/implementor.md and follow it exactly.
+
+            MODE: implement
+            Repository: ${{ github.repository }}
+            Issue: #${{ github.event.issue.number }}
+            Branch to create: ${{ env.BRANCH }}
+            Default branch: ${{ env.BASE }}
+
+            Write PR and comment bodies to .agent-out/ (git-ignored) and use --body-file.
+          claude_args: |
+            --max-turns 100
+            ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,Grep,Glob,Bash(git checkout:*),Bash(git switch:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*)${{ vars.AGENT_BUILD_TOOLS && format(',{0}', vars.AGENT_BUILD_TOOLS) || '' }}"
+            --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Bash(git push origin ${{ github.event.repository.default_branch }}:*)"
+            --json-schema '{"type":"object","properties":{"status":{"type":"string","enum":["pr-opened","blocked"]},"pr_number":{"type":"integer"},"reason":{"type":"string"}},"required":["status"]}'
+
+      - name: Apply state transition
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OUT: ${{ steps.agent.outputs.structured_output }}
+        run: |
+          status=$(echo "${OUT:-null}" | jq -r '.status // "error"')
+          if [ "$status" = "pr-opened" ]; then
+            .github/agents/transition.sh "$N" agent:pr-open
+          else
+            reason=$(echo "${OUT:-null}" | jq -r '.reason // "agent did not finish"')
+            .github/agents/transition.sh "$N" agent:needs-human
+            gh issue comment "$N" --body "⚠️ Implementor stopped: $reason ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))."
+          fi
+
+  fix:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'agent:changes-requested' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    concurrency:
+      group: agent-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      TRUSTED: .agent-trusted/.github/agents
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 1
+          token: ${{ steps.app.outputs.token }}
+
+      # Role prompts and scripts always come from the default branch,
+      # so a PR cannot rewrite its own reviewer/implementor instructions.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .agent-trusted
+          sparse-checkout: .github/agents
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Prepare
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BOT: ${{ vars.AGENT_BOT_LOGIN }}
+        run: |
+          mkdir -p .agent-out
+          printf '.agent-out/\n.agent-trusted/\n' >> .git/info/exclude
+          git config user.name "$BOT"
+          git config user.email "${{ vars.AGENT_BOT_ID }}+$BOT@users.noreply.github.com"
+          "$TRUSTED/transition.sh" "$PR"   # clear agent:changes-requested
+
+      - uses: anthropics/claude-code-action@v1
+        id: agent
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app.outputs.token }}
+          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          prompt: |
+            You are the IMPLEMENTOR agent. Read ${{ env.TRUSTED }}/implementor.md and follow it exactly.
+
+            MODE: fix
+            Repository: ${{ github.repository }}
+            Pull request: #${{ github.event.pull_request.number }}
+            Branch (already checked out): ${{ github.event.pull_request.head.ref }}
+
+            Write comment bodies to .agent-out/ (git-ignored) and use --body-file.
+          claude_args: |
+            --max-turns 80
+            ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
+            --allowedTools "Read,Write,Edit,Grep,Glob,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments:*),Bash(gh issue view:*)${{ vars.AGENT_BUILD_TOOLS && format(',{0}', vars.AGENT_BUILD_TOOLS) || '' }}"
+            --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Bash(git push origin ${{ github.event.repository.default_branch }}:*)"
+            --json-schema '{"type":"object","properties":{"status":{"type":"string","enum":["pushed","no-change","blocked"]},"reason":{"type":"string"}},"required":["status"]}'
+
+      - name: Apply state transition
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OUT: ${{ steps.agent.outputs.structured_output }}
+        run: |
+          status=$(echo "${OUT:-null}" | jq -r '.status // "error"')
+          # On "pushed" there is nothing to do: the push fires `synchronize` and the Reviewer runs again.
+          if [ "$status" != "pushed" ]; then
+            reason=$(echo "${OUT:-null}" | jq -r '.reason // "agent did not finish"')
+            "$TRUSTED/transition.sh" "$PR" agent:needs-human
+            gh pr comment "$PR" --body "⚠️ Implementor ($status): $reason ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))."
+          fi

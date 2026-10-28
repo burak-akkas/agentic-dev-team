@@ -1,0 +1,104 @@
+name: "Agent · Reviewer"
+
+# Triggers:
+#   - agent PRs (branch `agent/*`) are opened, updated or marked ready
+#   - a human applies `agent:review` to any same-repo PR
+# Loop guard: after AGENT_MAX_REVIEW_ROUNDS reviewer summaries (default 3) the PR goes to `agent:needs-human`.
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, labeled]
+
+jobs:
+  review:
+    if: >-
+      ${{ !github.event.pull_request.draft &&
+        github.event.pull_request.head.repo.full_name == github.repository && (
+          (github.event.action != 'labeled' && startsWith(github.event.pull_request.head.ref, 'agent/')) ||
+          (github.event.action == 'labeled' && github.event.label.name == 'agent:review')
+        ) }}
+    concurrency:
+      group: agent-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      TRUSTED: .agent-trusted/.github/agents
+      MAX_ROUNDS: ${{ vars.AGENT_MAX_REVIEW_ROUNDS || '3' }}
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          token: ${{ steps.app.outputs.token }}
+
+      # Role prompts and scripts always come from the default branch,
+      # so a PR cannot rewrite its own reviewer instructions.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .agent-trusted
+          sparse-checkout: .github/agents
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Loop guard
+        id: guard
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          mkdir -p .agent-out
+          rounds=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+                     --jq '.[] | select(.body | contains("<!-- agent:reviewer -->")) | .id' | wc -l | tr -d ' ')
+          echo "round=$((rounds + 1))" >> "$GITHUB_OUTPUT"
+          if [ "$rounds" -ge "$MAX_ROUNDS" ]; then
+            "$TRUSTED/transition.sh" "$PR" agent:needs-human
+            gh pr comment "$PR" --body "🛑 Reached $MAX_ROUNDS review rounds without approval. Handing over to a human."
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: anthropics/claude-code-action@v1
+        id: agent
+        if: steps.guard.outputs.stop != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app.outputs.token }}
+          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          prompt: |
+            You are the REVIEWER agent. Read ${{ env.TRUSTED }}/reviewer.md and follow it exactly.
+
+            Repository: ${{ github.repository }}
+            Pull request: #${{ github.event.pull_request.number }}
+            Review round: ${{ steps.guard.outputs.round }} of ${{ env.MAX_ROUNDS }}
+
+            Write comment bodies to .agent-out/ and post them with --body-file.
+          # Tip: use a different (stronger) model than the Implementor, via AGENT_REVIEWER_MODEL.
+          claude_args: |
+            --max-turns 40
+            ${{ (vars.AGENT_REVIEWER_MODEL || vars.AGENT_MODEL) && format('--model {0}', vars.AGENT_REVIEWER_MODEL || vars.AGENT_MODEL) || '' }}
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(gh issue view:*),mcp__github_inline_comment__create_inline_comment"
+            --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["approve","request-changes","needs-human"]}},"required":["verdict"]}'
+
+      - name: Apply state transition
+        if: ${{ !cancelled() && steps.guard.outputs.stop != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OUT: ${{ steps.agent.outputs.structured_output }}
+        run: |
+          verdict=$(echo "${OUT:-null}" | jq -r '.verdict // "error"')
+          case "$verdict" in
+            approve)         "$TRUSTED/transition.sh" "$PR" agent:approved ;;
+            request-changes) "$TRUSTED/transition.sh" "$PR" agent:changes-requested ;;
+            needs-human)     "$TRUSTED/transition.sh" "$PR" agent:needs-human ;;
+            *)               "$TRUSTED/transition.sh" "$PR" agent:needs-human
+                             gh pr comment "$PR" --body "⚠️ Reviewer agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))." ;;
+          esac

@@ -1,0 +1,82 @@
+name: "Agent · Analyst"
+
+# Triggers:
+#   - a new issue (only when the repo variable AGENT_AUTO_START == 'true')
+#   - a human applies the `agent:start` label
+#   - a human replies on an issue that is in `agent:needs-info`
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+jobs:
+  analyst:
+    if: >-
+      ${{ !github.event.issue.pull_request && (
+        (github.event.action == 'opened' && vars.AGENT_AUTO_START == 'true' &&
+         !contains(github.event.issue.labels.*.name, 'agent:start')) ||
+        (github.event.action == 'labeled' && github.event.label.name == 'agent:start') ||
+        (github.event_name == 'issue_comment' &&
+         contains(github.event.issue.labels.*.name, 'agent:needs-info') &&
+         github.event.comment.user.type != 'Bot')
+      ) }}
+    concurrency:
+      group: agent-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Prepare scratch dir
+        run: mkdir -p .agent-out && echo ".agent-out/" >> .git/info/exclude
+
+      - uses: anthropics/claude-code-action@v1
+        id: agent
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app.outputs.token }}
+          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          prompt: |
+            You are the ANALYST agent. Read .github/agents/analyst.md and follow it exactly.
+
+            Repository: ${{ github.repository }}
+            Issue: #${{ github.event.issue.number }}
+
+            Write comment bodies to .agent-out/ and post them with --body-file.
+          claude_args: |
+            --max-turns 25
+            ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*)"
+            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["analyzed","needs-info","out-of-scope"]},"summary":{"type":"string"}},"required":["decision"]}'
+
+      - name: Apply state transition
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OUT: ${{ steps.agent.outputs.structured_output }}
+          N: ${{ github.event.issue.number }}
+        run: |
+          decision=$(echo "${OUT:-null}" | jq -r '.decision // "error"')
+          case "$decision" in
+            analyzed)     .github/agents/transition.sh "$N" agent:analyzed ;;
+            needs-info)   .github/agents/transition.sh "$N" agent:needs-info ;;
+            out-of-scope) .github/agents/transition.sh "$N" agent:out-of-scope ;;
+            *)            .github/agents/transition.sh "$N" agent:needs-human
+                          gh issue comment "$N" --body "⚠️ Analyst agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Needs a human." ;;
+          esac

@@ -1,4 +1,0 @@
-:HL["/agentic-dev-team/pr-56/_next/static/chunks/2x25z_y80gzqa.css","style"]
-2:[["children",{"s":"__PAGE__","h":160}]]
-1:[["children",{"s":"/_not-found","h":96,"c":"$Q2"}]]
-0:{"b":"kHFGNqmqFJ8nzZ6dExyE4","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

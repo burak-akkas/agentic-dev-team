@@ -1,11 +1,20 @@
 name: "Agent · Watchdog"
 
-# Every 10 minutes: finds issues and PRs whose agent state hasn't moved for AGENT_WATCHDOG_MINUTES
-# (default 10) while no agent run is queued or running for them, e.g. after a cancelled or crashed
-# run, or a pending run GitHub dropped from the concurrency queue. Re-triggers them up to AGENT_WATCHDOG_RETRIES times (default 2) since
-# the last Lead decision, then hands them to the Lead (or a human, if the Lead is what stalls).
-# See scripts/agents/watchdog.sh. Manual runs can override the threshold and do a dry run.
+# Finds issues and PRs whose agent state hasn't moved for AGENT_WATCHDOG_MINUTES (default 10) while
+# no agent run is queued or running for them, e.g. after a cancelled or crashed run, or a pending run
+# GitHub dropped from the concurrency queue. Re-triggers them up to AGENT_WATCHDOG_RETRIES times
+# (default 2) since the last Lead decision, then hands them to the Lead (or a human, if the Lead is
+# what stalls). See scripts/agents/watchdog.sh. Manual runs can override the threshold and do a dry run.
+#
+# When it runs:
+#   - AGENT_WATCHDOG_MINUTES after the last agent run finished (debounced: every finished run restarts
+#     the wait and cancels the previous one). This is the main trigger: stalls start when activity stops.
+#   - every 10 minutes as a backup. GitHub's scheduler is best effort and can skip runs entirely.
 on:
+  workflow_run:
+    workflows: ["Agent · Analyst", "Agent · Architect", "Agent · Implementor", "Agent · Reviewer",
+                "Agent · QA", "Agent · Lead", "Agent · Merge", "Agent · Sub-issues", "Agent · Chat (@claude)"]
+    types: [completed]
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
@@ -22,17 +31,24 @@ env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
   AGENT_BOT_ID: ${{ vars.AGENT_BOT_ID }}   # the App's bot user id: unlike its login, it survives renames
 
-concurrency:
-  group: agent-watchdog
-  cancel-in-progress: false
-
 jobs:
   watch:
+    # Skipped agent runs (most label events) carry no information, so they don't restart the wait.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped'
+    # Job-level, so skipped runs never enter the group. The debounced runs share one group and cancel
+    # each other; scheduled and manual runs queue in their own group.
+    concurrency:
+      group: agent-watchdog-${{ github.event_name == 'workflow_run' && 'debounce' || 'check' }}
+      cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
+      - name: Wait for activity to settle
+        if: github.event_name == 'workflow_run'
+        run: sleep $(( (${{ vars.AGENT_WATCHDOG_MINUTES || '10' }} + 1) * 60 ))
+
       - uses: actions/create-github-app-token@v2
         id: app
         with:

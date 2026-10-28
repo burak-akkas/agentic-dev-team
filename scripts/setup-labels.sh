@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates (or updates) the agent state labels in a repository.
+# Creates (or updates) the agent state labels in a repository (test: protected-path gate).
 # Usage: scripts/setup-labels.sh owner/repo
 set -euo pipefail
 

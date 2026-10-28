@@ -1,4 +1,4 @@
-import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, PRIORITIES, type Board, type Card } from "./board";
+import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, PRIORITIES, type Board, type Card } from "./board";
 
 export const STORAGE_KEY = "kanban-board-v1";
 
@@ -10,7 +10,8 @@ function isCard(value: unknown): value is Omit<Card, "priority"> & { priority?: 
     c !== null &&
     typeof c.id === "string" &&
     typeof c.title === "string" &&
-    typeof c.createdAt === "string"
+    typeof c.createdAt === "string" &&
+    (c.dueDate === undefined || (typeof c.dueDate === "string" && isValidDueDate(c.dueDate)))
   );
 }
 

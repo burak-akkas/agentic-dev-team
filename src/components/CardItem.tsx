@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   adjacentColumn,
   COLUMNS,
+  formatDueDate,
+  isOverdue,
+  isValidDueDate,
   MAX_TITLE_LENGTH,
   PRIORITIES,
   type Card,
@@ -29,6 +32,7 @@ export function CardItem({
   onMove,
   onDelete,
   onRename,
+  onSetDueDate,
   onSetPriority,
 }: {
   card: Card;
@@ -36,6 +40,7 @@ export function CardItem({
   onMove: (to: ColumnId) => void;
   onDelete: () => void;
   onRename: (title: string) => void;
+  onSetDueDate: (date: string | undefined) => void;
   onSetPriority: (priority: Priority) => void;
 }) {
   const previous = adjacentColumn(column, -1);
@@ -44,7 +49,9 @@ export function CardItem({
   const [draft, setDraft] = useState(card.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLButtonElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
   const restoreFocus = useRef(false);
+  const overdue = isOverdue(card, column);
 
   useEffect(() => {
     if (editing) {
@@ -54,6 +61,20 @@ export function CardItem({
       editRef.current?.focus();
     }
   }, [editing]);
+
+  function clearDueDate() {
+    onSetDueDate(undefined);
+    dateRef.current?.focus();
+  }
+
+  function handleDueDateChange(event: ChangeEvent<HTMLInputElement>) {
+    const { value } = event.target;
+    if (!value) {
+      onSetDueDate(undefined);
+    } else if (isValidDueDate(value)) {
+      onSetDueDate(value);
+    }
+  }
 
   function startEditing() {
     setDraft(card.title);
@@ -121,6 +142,34 @@ export function CardItem({
         >
           {priorityLabel(card.priority)}
         </span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+        <input
+          ref={dateRef}
+          type="date"
+          aria-label={`Due date for "${card.title}"`}
+          value={card.dueDate ?? ""}
+          onChange={handleDueDateChange}
+          className="rounded-md border border-zinc-300 bg-white px-1.5 py-0.5 text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:[color-scheme:dark]"
+        />
+        {card.dueDate && (
+          <>
+            <time dateTime={card.dueDate}>{formatDueDate(card.dueDate)}</time>
+            {overdue && (
+              <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                <span aria-hidden="true">⚠ </span>Overdue
+              </span>
+            )}
+            <button
+              type="button"
+              className={iconButton}
+              aria-label={`Clear due date for "${card.title}"`}
+              onClick={clearDueDate}
+            >
+              Clear
+            </button>
+          </>
+        )}
       </div>
       <div className="mt-2 flex items-center gap-1">
         <select

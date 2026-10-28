@@ -44,6 +44,12 @@ jobs:
       - name: Prepare scratch dir
         run: mkdir -p .agent-out && echo ".agent-out/" >> .git/info/exclude
 
+      - name: Count handoff comments
+        id: before
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: echo "count=$(.github/agents/count-comments.sh ${{ github.event.issue.number }} analyst)" >> "$GITHUB_OUTPUT"
+
       - uses: anthropics/claude-code-action@v1
         id: agent
         env:
@@ -58,12 +64,24 @@ jobs:
             Repository: ${{ github.repository }}
             Issue: #${{ github.event.issue.number }}
 
-            Write comment bodies to .agent-out/ and post them with --body-file.
+            Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).
+            Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.
+            Compound commands are blocked by the permission system.
           claude_args: |
             --max-turns 25
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*)"
             --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["analyzed","needs-info","out-of-scope"]},"summary":{"type":"string"}},"required":["decision"]}'
+
+      - name: Report denied tools
+        if: ${{ !cancelled() && steps.agent.outputs.execution_file != '' }}
+        run: |
+          denied=$(jq -r '.[] | select(.type == "result") | .permission_denials[]? | "- `\(.tool_name)`: `\(.tool_input | tostring | .[0:300])`"' \
+                   "${{ steps.agent.outputs.execution_file }}" 2>/dev/null || true)
+          if [ -n "$denied" ]; then
+            printf '### Denied tool calls\n%s\n' "$denied" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Agent had denied tool calls, see the job summary"
+          fi
 
       - name: Apply state transition
         if: ${{ !cancelled() }}
@@ -71,8 +89,14 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           OUT: ${{ steps.agent.outputs.structured_output }}
           N: ${{ github.event.issue.number }}
+          BEFORE: ${{ steps.before.outputs.count }}
         run: |
           decision=$(echo "${OUT:-null}" | jq -r '.decision // "error"')
+          after=$(.github/agents/count-comments.sh "$N" analyst)
+          if [ "$after" -le "${BEFORE:-0}" ]; then
+            echo "::warning::analyst returned '$decision' but posted no handoff comment"
+            decision=missing-comment
+          fi
           case "$decision" in
             analyzed)     .github/agents/transition.sh "$N" agent:analyzed ;;
             needs-info)   .github/agents/transition.sh "$N" agent:needs-info ;;

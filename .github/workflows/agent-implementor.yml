@@ -83,7 +83,7 @@ jobs:
             Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.
             Compound commands are blocked by the permission system.
           claude_args: |
-            --max-turns 100
+            --max-turns 150
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Write,Edit,Grep,Glob,Bash(git checkout:*),Bash(git switch:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git fetch:*),Bash(git merge:*),Bash(git push:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*)${{ vars.AGENT_BUILD_TOOLS && format(',{0}', vars.AGENT_BUILD_TOOLS) || '' }}"
             --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Bash(git push origin ${{ github.event.repository.default_branch }}:*)"
@@ -106,6 +106,13 @@ jobs:
           OUT: ${{ steps.agent.outputs.structured_output }}
         run: |
           status=$(echo "${OUT:-null}" | jq -r '.status // "error"')
+          # The agent can open the PR and then run out of turns before reporting. The open PR is what counts.
+          existing=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ "$status" != "pr-opened" ] && [ -n "$existing" ]; then
+            echo "::warning::Agent reported '$status' but PR #$existing is open for $BRANCH; continuing with it"
+            status=pr-opened
+            OUT=$(jq -n --argjson pr "$existing" '{status: "pr-opened", pr_number: $pr}')
+          fi
           if [ "$status" = "pr-opened" ]; then
             .github/agents/transition.sh "$N" agent:pr-open
             pr=$(echo "${OUT:-null}" | jq -r '.pr_number // empty')

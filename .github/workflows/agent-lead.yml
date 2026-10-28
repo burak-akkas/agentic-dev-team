@@ -95,7 +95,7 @@ jobs:
           claude_args: |
             --max-turns 40
             ${{ (vars.AGENT_LEAD_MODEL || vars.AGENT_MODEL) && format('--model {0}', vars.AGENT_LEAD_MODEL || vars.AGENT_MODEL) || '' }}
-            --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(git log:*)"
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(git log:*)"
             --json-schema '{"type":"object","properties":{"action":{"type":"string","enum":["restart-analysis","redesign","implement","fix","re-review","qa","approve","close","escalate"]},"rationale":{"type":"string"}},"required":["action","rationale"]}'
 
       - name: Report denied tools

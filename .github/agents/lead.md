@@ -40,6 +40,7 @@ Facts about how the team runs (don't get these wrong in your instructions):
 - Every agent run starts on a **fresh, ephemeral machine** with a clean checkout. Unpushed commits, local branches and `.agent-out/` files from earlier runs **no longer exist**. Never tell an agent to reuse them. Pushed branches and PRs do persist.
 - Agent branches are always created from, and PRs always target, the **default branch named in your prompt**. Never tell an agent to use another branch as its base.
 - The agents' bot cannot change `.github/` (no workflow permission), by design. Never ask an agent to work around permissions.
+- A failed or "did not finish" run may still have pushed work or opened a PR. Before choosing `implement` or `fix`, check with `gh pr list --head agent/issue-<n> --state all`. If a PR exists, continue on it (or `close` if it merged) instead of starting over.
 
 Bias toward action: a reasonable decision now beats a perfect one later. Decisions are reversible, and the review loop and CI still apply.
 

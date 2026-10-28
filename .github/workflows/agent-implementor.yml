@@ -105,9 +105,16 @@ jobs:
           status=$(echo "${OUT:-null}" | jq -r '.status // "error"')
           if [ "$status" = "pr-opened" ]; then
             .github/agents/transition.sh "$N" agent:pr-open
+            pr=$(echo "${OUT:-null}" | jq -r '.pr_number // empty')
+            if [ -n "$pr" ]; then
+              stats=$(gh pr view "$pr" --json additions,deletions,changedFiles --jq '"+\(.additions)/−\(.deletions), \(.changedFiles) files"')
+              url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/pr-$pr/"
+              .github/agents/progress.sh "$N" "🛠 **Implementor**: opened #$pr ($stats) · [preview]($url)"
+            fi
           else
             reason=$(echo "${OUT:-null}" | jq -r '.reason // "agent did not finish"')
             .github/agents/transition.sh "$N" agent:needs-decision
+            .github/agents/progress.sh "$N" "🛠 **Implementor**: stopped, handed to the Lead"
             gh issue comment "$N" --body "⚠️ Implementor stopped: $reason ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))."
           fi
 
@@ -208,6 +215,11 @@ jobs:
         run: |
           status=$(echo "${OUT:-null}" | jq -r '.status // "error"')
           # On "pushed" there is nothing to do: the push fires `synchronize` and the Reviewer runs again.
+          if [ "$status" = "pushed" ]; then
+            "$TRUSTED/progress.sh" --pr "$PR" "🛠 **Implementor**: pushed fixes to #$PR"
+          else
+            "$TRUSTED/progress.sh" --pr "$PR" "🛠 **Implementor**: could not fix #$PR ($status), handed to the Lead"
+          fi
           if [ "$status" != "pushed" ]; then
             reason=$(echo "${OUT:-null}" | jq -r '.reason // "agent did not finish"')
             "$TRUSTED/transition.sh" "$PR" agent:needs-decision

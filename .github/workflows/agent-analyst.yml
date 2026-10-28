@@ -117,3 +117,10 @@ jobs:
             *)            .github/agents/transition.sh "$N" agent:needs-decision
                           gh issue comment "$N" --body "⚠️ Analyst agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
           esac
+          case "$decision" in
+            analyzed)     msg="analyzed: problem statement and acceptance criteria above" ;;
+            needs-info)   msg="has open questions (see above)" ;;
+            out-of-scope) msg="out of scope (see above)" ;;
+            *)            msg="failed, handed to the Lead" ;;
+          esac
+          .github/agents/progress.sh "$N" "🔍 **Analyst**: $msg"

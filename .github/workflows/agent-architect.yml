@@ -111,3 +111,10 @@ jobs:
             .github/agents/transition.sh "$N" agent:needs-decision
             gh issue comment "$N" --body "⚠️ Architect agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead."
           fi
+          next=$(gh api "repos/$GITHUB_REPOSITORY/issues/$N/labels" --jq '[.[].name | select(startswith("agent:"))][0] // ""')
+          case "$next" in
+            agent:ready)         msg="design ready, risk **$risk**, implementing" ;;
+            agent:design-review) msg="design ready, risk **$risk**, waiting for human approval" ;;
+            *)                   msg="risk **$risk**, handed to the Lead" ;;
+          esac
+          .github/agents/progress.sh "$N" "🏛 **Architect**: $msg"

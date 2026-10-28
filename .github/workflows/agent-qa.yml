@@ -151,7 +151,7 @@ jobs:
           fi
 
       # Screenshots are committed to gh-pages (qa/pr-N/<run>/) and embedded via raw URLs,
-      # so they show up in the PR right away. The Preview workflow deletes them when the PR closes.
+      # so they show up in the PR right away. They are kept after the PR closes, as test evidence.
       - name: Publish screenshots
         if: ${{ !cancelled() && steps.agent.outcome != 'skipped' }}
         env:
@@ -218,3 +218,10 @@ jobs:
             *)           "$TRUSTED/transition.sh" "$PR" agent:needs-decision
                          gh pr comment "$PR" --body "⚠️ QA agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
           esac
+          e2e=$([ "${{ steps.e2e.outputs.exit }}" = "0" ] && echo "e2e green" || echo "e2e failing")
+          case "$verdict" in
+            pass) msg="passed · $e2e · screenshots on #$PR" ;;
+            fail) msg="found defects · $e2e · details and screenshots on #$PR" ;;
+            *)    msg="could not decide, handed to the Lead" ;;
+          esac
+          "$TRUSTED/progress.sh" --pr "$PR" "🧪 **QA** (round ${{ steps.guard.outputs.round }}): $msg"

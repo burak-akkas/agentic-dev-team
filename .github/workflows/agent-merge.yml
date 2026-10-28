@@ -78,6 +78,7 @@ jobs:
           echo "Behind $BASE by $behind commit(s)" >> "$GITHUB_STEP_SUMMARY"
           [ "$behind" -eq 0 ] && exit 0
           echo "stop=true" >> "$GITHUB_OUTPUT"
+          "$TRUSTED/progress.sh" --pr "$PR" "🚦 **Merge gate**: \`$BASE\` moved on, updating #$PR and re-testing"
           if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR/update-branch" -f expected_head_sha="$HEAD_SHA" >/dev/null 2>&1; then
             "$TRUSTED/transition.sh" "$PR"
             gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "🔄 \`$BASE\` moved on by $behind commit(s) since this was approved. I merged it into this branch; CI, review and QA now run again on the combined code."
@@ -122,12 +123,15 @@ jobs:
               if gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$HEAD_SHA"; then
                 "$TRUSTED/transition.sh" "$PR" agent:done
                 if [ -n "$ISSUE" ]; then "$TRUSTED/transition.sh" "$ISSUE" agent:done; fi
+                prod="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+                [ -n "$ISSUE" ] && "$TRUSTED/progress.sh" "$ISSUE" "✅ **Merged** #$PR, deploying to [production]($prod)"
                 echo "Merged PR #$PR" >> "$GITHUB_STEP_SUMMARY"
               else
                 "$TRUSTED/transition.sh" "$PR" agent:needs-decision
                 gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⚠️ Auto-merge failed (conflict or new commits). Lead, please decide."
               fi ;;
             fail)
+              [ -n "$ISSUE" ] && "$TRUSTED/progress.sh" "$ISSUE" "🚦 **Merge gate**: required checks failed on #$PR, back to the Implementor"
               "$TRUSTED/transition.sh" "$PR" agent:changes-requested
               gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
           ❌ Required checks failed: **$FAILED**. Implementor, please fix ([checks](https://github.com/$GITHUB_REPOSITORY/pull/$PR/checks))." ;;

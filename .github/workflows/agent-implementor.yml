@@ -83,7 +83,7 @@ jobs:
             Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.
             Compound commands are blocked by the permission system.
           claude_args: |
-            --max-turns 150
+            --max-turns ${{ vars.AGENT_IMPLEMENTOR_MAX_TURNS || '150' }}
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Write,Edit,Grep,Glob,Bash(git checkout:*),Bash(git switch:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git fetch:*),Bash(git merge:*),Bash(git push:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh pr create:*),Bash(gh pr view:*)${{ vars.AGENT_BUILD_TOOLS && format(',{0}', vars.AGENT_BUILD_TOOLS) || '' }}"
             --disallowedTools "Bash(git push --force:*),Bash(git push -f:*),Bash(git push origin ${{ github.event.repository.default_branch }}:*)"

@@ -4,6 +4,7 @@ import {
   addComment,
   adjacentColumn,
   archiveDone,
+  emptyArchive,
   boardStats,
   deleteArchived,
   deleteCard,
@@ -482,6 +483,17 @@ describe("archive", () => {
     board = moveCard(board, "b", "done");
     return moveCard(board, "c", "doing");
   };
+
+  it("emptyArchive removes every archived card", () => {
+    const next = emptyArchive(archiveDone(seed()));
+    expect(next.archive).toEqual([]);
+    expect(next.columns.doing.map((c) => c.id)).toEqual(["c"]);
+  });
+
+  it("emptyArchive returns the same board when the archive is empty", () => {
+    const board = seed();
+    expect(emptyArchive(board)).toBe(board);
+  });
 
   it("archiveDone moves only Done cards, in order, and leaves other columns alone", () => {
     const next = archiveDone(seed());

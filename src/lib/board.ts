@@ -354,6 +354,14 @@ export function restoreCard(board: Board, cardId: string, opts: ActivityOptions 
   };
 }
 
+// Permanently removes every archived card. Cards on the board are untouched.
+export function emptyArchive(board: Board): Board {
+  if (board.archive.length === 0) {
+    return board;
+  }
+  return { ...board, columns: { ...board.columns, done: [] }, archive: [] };
+}
+
 export function deleteArchived(board: Board, cardId: string): Board {
   if (!board.archive.some((c) => c.id === cardId)) {
     throw new Error(`Archived card ${cardId} not found`);

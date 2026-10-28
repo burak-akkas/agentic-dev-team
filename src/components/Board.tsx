@@ -8,6 +8,7 @@ import {
   boardStats,
   COLUMNS,
   deleteArchived,
+  emptyArchive,
   deleteCard,
   duplicateCard,
   filterByLabel,
@@ -200,6 +201,7 @@ export function Board() {
           cards={board.archive}
           onRestore={(cardId) => update((b) => (b.archive.some((c) => c.id === cardId) ? restoreCard(b, cardId) : b))}
           onDelete={(cardId) => update((b) => (b.archive.some((c) => c.id === cardId) ? deleteArchived(b, cardId) : b))}
+          onEmpty={() => update(emptyArchive)}
         />
       )}
 

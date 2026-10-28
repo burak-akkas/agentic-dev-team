@@ -8,14 +8,23 @@ export function ArchivePanel({
   cards,
   onRestore,
   onDelete,
+  onEmpty,
 }: {
   id: string;
   cards: Card[];
   onRestore: (cardId: string) => void;
   onDelete: (cardId: string) => void;
+  onEmpty: () => void;
 }) {
   return (
     <Surface id={id} aria-label="Archived cards">
+      {cards.length > 0 && (
+        <div className="mb-2 flex justify-end">
+          <Button size="xs" onClick={onEmpty} className="text-danger">
+            <span aria-hidden="true">🗑</span>
+          </Button>
+        </div>
+      )}
       {cards.length === 0 ? (
         <p className="px-1 py-2 text-center text-xs text-muted">No archived cards</p>
       ) : (

@@ -45,7 +45,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 1. **Copy these files** into the target repo: `.github/`, `scripts/`, and `CLAUDE.md` (fill it in).
 2. **Create a GitHub App** (Settings → Developer settings → GitHub Apps → New). It's free on any plan.
    - Name, e.g. `acme-agents`. Disable the webhook.
-   - Repository permissions: **Contents: R/W, Issues: R/W, Pull requests: R/W, Checks: Read, Actions: Read**, Metadata: Read.
+   - Repository permissions: **Contents: R/W, Issues: R/W, Pull requests: R/W, Checks: Read, Commit statuses: Read, Actions: Read**, Metadata: Read.
    - Deliberately **do not** grant *Workflows* permission. That way agents can't change CI.
    - Create it, note the **App ID**, generate a **private key**, and install the app on the repo.
 3. **Get a Claude token:** run `claude setup-token` locally (needs Pro, Max, Team or Enterprise).

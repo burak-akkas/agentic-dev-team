@@ -1,5 +1,5 @@
 import { DEFAULT_BOARD_NAME, initialBoardList, type BoardEntry, type BoardList } from "./boards";
-import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, isValidDueDate, isValidWipLimit, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card, type ColumnId } from "./board";
+import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, isValidDueDate, isValidWipLimit, MAX_COMMENT_LENGTH, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card, type CardComment, type ColumnId } from "./board";
 
 export const STORAGE_KEY = "kanban-boards-v2";
 // Only read, to migrate old data; never written or removed.
@@ -29,7 +29,7 @@ export function isBoard(value: unknown): value is Board {
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const { notes, labels, ...rest } = card as Card & { notes?: unknown; labels?: unknown };
+  const { notes, labels, comments, ...rest } = card as Card & { notes?: unknown; labels?: unknown; comments?: unknown };
   const priority = PRIORITIES.some((p) => p.id === card.priority) ? card.priority : DEFAULT_PRIORITY;
   const trimmed = typeof notes === "string" ? notes.trim() : "";
   const normalized: Card = { ...rest, priority };
@@ -40,7 +40,40 @@ function normalizeCard(card: Card): Card {
   if (cleanLabels.length > 0) {
     normalized.labels = cleanLabels;
   }
+  const cleanComments = normalizeComments(comments);
+  if (cleanComments.length > 0) {
+    normalized.comments = cleanComments;
+  }
   return normalized;
+}
+
+const isValidDate = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(new Date(value).getTime());
+
+// Keeps valid comments only (stored trimmed, in stored order). Entries with a bad shape, blank or over-long text,
+// an invalid `createdAt` or a duplicate id are dropped; an invalid `editedAt` is dropped on its own.
+function normalizeComments(value: unknown): CardComment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: CardComment[] = [];
+  for (const entry of value) {
+    const c = entry as Partial<Record<keyof CardComment, unknown>> | null;
+    if (typeof c !== "object" || c === null || typeof c.id !== "string" || seen.has(c.id)) {
+      continue;
+    }
+    const text = typeof c.text === "string" ? c.text.trim() : "";
+    if (!text || text.length > MAX_COMMENT_LENGTH || !isValidDate(c.createdAt)) {
+      continue;
+    }
+    seen.add(c.id);
+    const comment: CardComment = { id: c.id, text, createdAt: c.createdAt };
+    if (isValidDate(c.editedAt)) {
+      comment.editedAt = c.editedAt;
+    }
+    result.push(comment);
+  }
+  return result;
 }
 
 // Keeps valid labels only: non-strings, blank, over-long and duplicate (case-insensitive) entries are dropped.

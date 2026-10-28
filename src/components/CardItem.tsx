@@ -66,6 +66,7 @@ export function CardItem({
   const dateRef = useRef<HTMLInputElement>(null);
   const restoreFocus = useRef(false);
   const overdue = isOverdue(card, column);
+  const commentCount = card.comments?.length ?? 0;
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(card.notes ?? "");
   const [expanded, setExpanded] = useState(false);
@@ -224,6 +225,16 @@ export function CardItem({
             </li>
           ))}
         </ul>
+      )}
+      {commentCount > 0 && (
+        <div className="mt-2 flex items-center gap-1 text-xs">
+          <span
+            aria-label={`${commentCount} ${commentCount === 1 ? "comment" : "comments"}`}
+            className="rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+          >
+            <span aria-hidden="true">💬 {commentCount}</span>
+          </span>
+        </div>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
         <Input

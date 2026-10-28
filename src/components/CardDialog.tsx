@@ -2,20 +2,25 @@
 
 import { useId, useState, type FormEvent } from "react";
 import {
+  addComment,
   addLabelToList,
   COLUMNS,
+  deleteComment,
+  editComment,
   hasChanges,
   isValidDueDate,
   MAX_NOTES_LENGTH,
   MAX_TITLE_LENGTH,
   PRIORITIES,
   removeLabelFromList,
+  type Board,
   type Card,
   type CardEdits,
   type ColumnId,
   type Priority,
 } from "@/lib/board";
 
+import { CardComments } from "./CardComments";
 import { LabelChip } from "./LabelChip";
 import { Button, Dialog, Input, Select, Textarea } from "./ui";
 
@@ -27,12 +32,14 @@ export function CardDialog({
   onSave,
   onDelete,
   onClose,
+  onUpdateBoard,
 }: {
   card: Card;
   column: ColumnId;
   onSave: (edits: CardEdits) => void;
   onDelete: () => void;
   onClose: () => void;
+  onUpdateBoard: (fn: (board: Board) => Board) => void;
 }) {
   const headingId = useId();
   const [title, setTitle] = useState(card.title);
@@ -240,6 +247,14 @@ export function CardDialog({
             </p>
           )}
         </div>
+
+        {/* Comment actions apply immediately; they are not part of the draft or the discard prompt. */}
+        <CardComments
+          comments={card.comments ?? []}
+          onAdd={(text) => onUpdateBoard((b) => addComment(b, card.id, text))}
+          onEdit={(id, text) => onUpdateBoard((b) => editComment(b, card.id, id, text))}
+          onDelete={(id) => onUpdateBoard((b) => deleteComment(b, card.id, id))}
+        />
 
         <p className="text-xs text-muted">
           Created <time dateTime={card.createdAt}>{new Date(card.createdAt).toLocaleString()}</time>

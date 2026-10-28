@@ -134,3 +134,9 @@ jobs:
             *)               "$TRUSTED/transition.sh" "$PR" agent:needs-decision
                              gh pr comment "$PR" --body "⚠️ Reviewer agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
           esac
+          case "$verdict" in
+            approve)         msg="approved$([ "$QA" = "true" ] && echo ", sent to QA")" ;;
+            request-changes) msg="requested changes" ;;
+            *)               msg="unsure or failed, handed to the Lead" ;;
+          esac
+          "$TRUSTED/progress.sh" --pr "$PR" "🧐 **Reviewer** (round ${{ steps.guard.outputs.round }}): $msg on #$PR"

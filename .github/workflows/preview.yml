@@ -3,7 +3,7 @@ name: Preview
 # Every same-repo PR gets a live preview at https://<owner>.github.io/<repo>/pr-<N>/
 # (published to the `gh-pages` branch). The preview serves version.txt with the PR's
 # head SHA, so the QA agent can wait until the preview matches the commit it tests.
-# The preview is removed when the PR closes.
+# The preview is removed when the PR closes; QA screenshots (qa/pr-N/) are kept as test evidence.
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
@@ -73,11 +73,11 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: gh-pages
-      - name: Remove preview and QA screenshots
+      - name: Remove preview (keep QA screenshots)
         env:
           PR: ${{ github.event.pull_request.number }}
         run: |
-          git rm -rq --ignore-unmatch "pr-$PR" "qa/pr-$PR"
+          git rm -rq --ignore-unmatch "pr-$PR"
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"

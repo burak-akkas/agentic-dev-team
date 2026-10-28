@@ -137,3 +137,8 @@ jobs:
                                     gh api "repos/$GITHUB_REPOSITORY/issues/$N/comments" \
                                       -f body="⚠️ Lead could not decide ('$action', [run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Escalating to a human." >/dev/null ;;
           esac
+          if [ "$KIND" = "issue" ]; then
+            .agent-trusted/.github/agents/progress.sh "$N" "🧭 **Lead**: $action"
+          else
+            .agent-trusted/.github/agents/progress.sh --pr "$N" "🧭 **Lead** (on #$N): $action"
+          fi

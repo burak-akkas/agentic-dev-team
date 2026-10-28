@@ -27,4 +27,13 @@ if [ "$new" = "agent:needs-human" ] && [ -n "${AGENT_ESCALATION_ASSIGNEE:-}" ]; 
   gh api -X POST "repos/$repo/issues/$n/assignees" -f "assignees[]=$AGENT_ESCALATION_ASSIGNEE" >/dev/null || true
 fi
 
+if [ "$new" = "agent:needs-human" ]; then
+  here="$(dirname "$0")"
+  if [ -n "$(gh api "repos/$repo/issues/$n" --jq '.pull_request.url // empty')" ]; then
+    "$here/progress.sh" --pr "$n" "👤 **Escalated to a human** on #$n"
+  else
+    "$here/progress.sh" "$n" "👤 **Escalated to a human**"
+  fi
+fi
+
 echo "#$n -> ${new:-<cleared>}"

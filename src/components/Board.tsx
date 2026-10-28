@@ -9,6 +9,7 @@ import {
   COLUMNS,
   deleteArchived,
   deleteCard,
+  duplicateCard,
   filterByLabel,
   filterCards,
   filterOverdue,
@@ -143,6 +144,11 @@ export function Board() {
           onDelete={() => {
             update((b) => deleteCard(b, openCardId));
             closeDialog();
+          }}
+          onDuplicate={() => {
+            const id = crypto.randomUUID();
+            update((b) => duplicateCard(b, openCardId, { id }));
+            setOpenCardId(id);
           }}
           onClose={() => closeDialog(openCardId)}
           onUpdateBoard={update}

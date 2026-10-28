@@ -24,6 +24,8 @@ export function describeActivity(entry: ActivityEntry): string {
       return "Restored";
     case "checklistDone":
       return `Completed checklist item “${entry.to ?? ""}”`;
+    case "duplicated":
+      return `created as a copy of ${entry.from ?? ""}`;
   }
 }
 

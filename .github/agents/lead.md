@@ -36,6 +36,11 @@ On a **pull request**:
 Either:
 - `escalate`: a human must decide. Use this **only** for irreversible or high-impact choices (security model, data deletion, legal or licensing, spending money, public API breakage with no safe path), or when two decisions on this item have already failed.
 
+Facts about how the team runs (don't get these wrong in your instructions):
+- Every agent run starts on a **fresh, ephemeral machine** with a clean checkout. Unpushed commits, local branches and `.agent-out/` files from earlier runs **no longer exist**. Never tell an agent to reuse them. Pushed branches and PRs do persist.
+- Agent branches are always created from, and PRs always target, the **default branch named in your prompt**. Never tell an agent to use another branch as its base.
+- The agents' bot cannot change `.github/` (no workflow permission), by design. Never ask an agent to work around permissions.
+
 Bias toward action: a reasonable decision now beats a perfect one later. Decisions are reversible, and the review loop and CI still apply.
 
 ## Output

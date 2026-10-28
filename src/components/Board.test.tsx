@@ -452,7 +452,7 @@ describe("<Board />", () => {
       saveBoard(board);
     }
 
-    it("filters cards in every column and updates the counters", async () => {
+    it("filters cards in every column and keeps the real counters", async () => {
       const user = userEvent.setup();
       seed();
       render(<Board />);
@@ -462,7 +462,8 @@ describe("<Board />", () => {
       expect(within(column("To do")).getByText("Write docs")).toBeInTheDocument();
       expect(within(column("Doing")).getByText("Docs review")).toBeInTheDocument();
       expect(screen.queryByText("Fix bug")).not.toBeInTheDocument();
-      expect(column("To do")).toHaveTextContent("To do1");
+      // The counters show the real column size, so they stay comparable to WIP limits while filtering.
+      expect(column("To do")).toHaveTextContent("To do2");
       expect(column("Doing")).toHaveTextContent("Doing1");
       expect(column("Done")).toHaveTextContent("Done0");
       expect(within(column("Done")).getByText("No matching cards")).toBeInTheDocument();

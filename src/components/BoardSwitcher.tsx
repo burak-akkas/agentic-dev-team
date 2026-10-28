@@ -106,7 +106,6 @@ export function BoardSwitcher() {
     <div className="mt-3 flex flex-wrap items-center gap-2">
       <Select
         aria-label="Board"
-        fieldSize="sm"
         value={currentId}
         onChange={(event) => selectBoard(event.target.value)}
         className="max-w-full min-w-0"
@@ -117,13 +116,13 @@ export function BoardSwitcher() {
           </option>
         ))}
       </Select>
-      <Button size="sm" aria-label="New board" onClick={() => setDialog("create")}>
+      <Button aria-label="New board" onClick={() => setDialog("create")}>
         New
       </Button>
-      <Button size="sm" aria-label="Rename board" onClick={() => setDialog("rename")}>
+      <Button aria-label="Rename board" onClick={() => setDialog("rename")}>
         Rename
       </Button>
-      <Button size="sm" aria-label="Delete board" disabled={boards.length <= 1} onClick={() => setDialog("delete")}>
+      <Button aria-label="Delete board" disabled={boards.length <= 1} onClick={() => setDialog("delete")}>
         Delete
       </Button>
       {dialog === "create" && (

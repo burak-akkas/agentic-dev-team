@@ -1,6 +1,7 @@
 "use client";
 
 import type { BoardStats } from "@/lib/board";
+import { Surface } from "./ui";
 
 export function SummaryBar({
   stats,
@@ -11,19 +12,16 @@ export function SummaryBar({
   overdueOnly: boolean;
   onToggleOverdue: () => void;
 }) {
-  const box =
-    "rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900";
-
   if (stats.total === 0) {
     return (
-      <section aria-label="Board summary" className={`${box} text-center text-zinc-500`}>
+      <Surface aria-label="Board summary" className="text-center text-sm text-muted">
         No cards yet. Add one to see your progress.
-      </section>
+      </Surface>
     );
   }
 
   return (
-    <section aria-label="Board summary" className={`${box} flex flex-col gap-3`}>
+    <Surface aria-label="Board summary" className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <p>
           <span className="font-semibold">{stats.total}</span> {stats.total === 1 ? "card" : "cards"} total
@@ -56,12 +54,12 @@ export function SummaryBar({
           aria-valuemax={100}
           aria-valuenow={stats.percentDone}
           aria-valuetext={`${stats.percentDone}% done (${stats.done} of ${stats.total})`}
-          className="h-2 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+          className="h-2 flex-1 overflow-hidden rounded-full bg-line"
         >
           <div className="h-full bg-emerald-600 dark:bg-emerald-500" style={{ width: `${stats.percentDone}%` }} />
         </div>
-        <span className="w-24 text-right text-xs text-zinc-600 dark:text-zinc-400">{stats.percentDone}% done</span>
+        <span className="w-24 text-right text-xs text-subtle">{stats.percentDone}% done</span>
       </div>
-    </section>
+    </Surface>
   );
 }

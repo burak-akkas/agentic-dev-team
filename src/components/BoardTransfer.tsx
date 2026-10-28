@@ -5,8 +5,7 @@ import { COLUMNS, type Board } from "@/lib/board";
 import { exportFilename, parseBoard, serializeBoard } from "@/lib/storage";
 import { useBoard } from "@/lib/useBoard";
 
-const BUTTON =
-  "rounded-lg border border-zinc-300 bg-white px-3 py-1 text-sm text-zinc-700 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800";
+import { Button } from "./ui";
 
 function countCards(board: Board): number {
   return COLUMNS.reduce((total, { id }) => total + board.columns[id].length, 0);
@@ -85,12 +84,12 @@ export function BoardTransfer() {
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
       <div className="flex gap-2">
-        <button type="button" onClick={exportBoard} className={BUTTON}>
+        <Button size="sm" onClick={exportBoard}>
           Export
-        </button>
-        <button type="button" ref={importButton} onClick={() => fileInput.current?.click()} className={BUTTON}>
+        </Button>
+        <Button size="sm" ref={importButton} onClick={() => fileInput.current?.click()}>
           Import
-        </button>
+        </Button>
         <input
           ref={fileInput}
           type="file"
@@ -119,12 +118,12 @@ export function BoardTransfer() {
             Replace the current board with the imported one ({countCards(pending)} {countCards(pending) === 1 ? "card" : "cards"})? This cannot be undone.
           </p>
           <div className="mt-2 flex gap-2">
-            <button type="button" onClick={confirmReplace} className={BUTTON}>
+            <Button size="sm" onClick={confirmReplace}>
               Replace
-            </button>
-            <button type="button" ref={cancelButton} onClick={closeConfirmation} className={BUTTON}>
+            </Button>
+            <Button size="sm" ref={cancelButton} onClick={closeConfirmation}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}

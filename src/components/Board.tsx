@@ -31,6 +31,7 @@ import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
 import { UndoToast } from "./UndoToast";
+import { Button } from "./ui";
 
 export function Board() {
   const [board, update] = useBoard();
@@ -143,15 +144,14 @@ export function Board() {
         <div className="flex-1">
           <SearchBox value={query} onChange={setQuery} />
         </div>
-        <button
-          type="button"
+        <Button
           aria-expanded={showArchive}
           aria-controls="archive-panel"
           onClick={() => setShowArchive((open) => !open)}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium outline-none hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+          className="bg-surface"
         >
           Archived ({board.archive.length})
-        </button>
+        </Button>
       </div>
 
       {showArchive && (
@@ -179,29 +179,22 @@ export function Board() {
               className={`flex flex-col gap-3 rounded-xl p-3 ${
                 dragOver === id
                   ? "bg-indigo-50 ring-2 ring-indigo-500 dark:bg-indigo-950/40"
-                  : "bg-zinc-100 dark:bg-zinc-900/50"
+                  : "bg-surface-muted dark:bg-surface/50"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <h2 id={`column-${id}`} className="flex items-center gap-2 px-1 text-sm font-semibold">
                   {title}
-                  <span className="rounded-full bg-zinc-200 px-2 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                    {cards.length}
-                  </span>
+                  <span className="rounded-full bg-line px-2 text-xs font-medium text-subtle">{cards.length}</span>
                 </h2>
                 {id === "done" && (
-                  <button
-                    type="button"
-                    disabled={board.columns.done.length === 0}
-                    onClick={archiveDoneCards}
-                    className="rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium outline-none hover:bg-zinc-200 focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                  >
+                  <Button size="xs" disabled={board.columns.done.length === 0} onClick={archiveDoneCards}>
                     Archive done
-                  </button>
+                  </Button>
                 )}
               </div>
               {cards.length === 0 ? (
-                <p className="px-1 py-4 text-center text-xs text-zinc-500">
+                <p className="px-1 py-4 text-center text-xs text-muted">
                   {filtering ? "No matching cards" : "No cards"}
                 </p>
               ) : (

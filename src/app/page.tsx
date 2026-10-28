@@ -1,4 +1,5 @@
 import { Board } from "@/components/Board";
+import { BoardSwitcher } from "@/components/BoardSwitcher";
 import { BoardTransfer } from "@/components/BoardTransfer";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -12,6 +13,7 @@ export default function Home() {
           <p className="mt-1 text-sm text-zinc-500">
             A small board built and maintained by an autonomous agent team. Your cards are saved in this browser.
           </p>
+          <BoardSwitcher />
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <ThemeToggle />

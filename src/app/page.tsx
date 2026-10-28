@@ -1,5 +1,6 @@
 import { Board } from "@/components/Board";
 import { BoardTransfer } from "@/components/BoardTransfer";
+import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Home() {
@@ -15,6 +16,7 @@ export default function Home() {
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <ThemeToggle />
           <BoardTransfer />
+          <KeyboardShortcuts />
         </div>
       </header>
       <Board />

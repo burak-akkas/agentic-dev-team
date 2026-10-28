@@ -7,6 +7,7 @@ import {
   isValidDueDate,
   isValidWipLimit,
   MAX_ACTIVITY_ENTRIES,
+  MAX_COMMENT_LENGTH,
   MAX_NOTES_LENGTH,
   normalizeChecklistText,
   PRIORITIES,
@@ -15,6 +16,7 @@ import {
   type ActivityType,
   type Board,
   type Card,
+  type CardComment,
   type ChecklistItem,
   type ColumnId,
 } from "./board";
@@ -47,7 +49,13 @@ export function isBoard(value: unknown): value is Board {
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const { notes, labels, checklist, activity, ...rest } = card as Card & { notes?: unknown; labels?: unknown; checklist?: unknown; activity?: unknown };
+  const { notes, labels, checklist, comments, activity, ...rest } = card as Card & {
+    notes?: unknown;
+    labels?: unknown;
+    checklist?: unknown;
+    comments?: unknown;
+    activity?: unknown;
+  };
   const priority = PRIORITIES.some((p) => p.id === card.priority) ? card.priority : DEFAULT_PRIORITY;
   const trimmed = typeof notes === "string" ? notes.trim() : "";
   const normalized: Card = { ...rest, priority };
@@ -61,6 +69,10 @@ function normalizeCard(card: Card): Card {
   const cleanChecklist = normalizeChecklist(checklist);
   if (cleanChecklist.length > 0) {
     normalized.checklist = cleanChecklist;
+  }
+  const cleanComments = normalizeComments(comments);
+  if (cleanComments.length > 0) {
+    normalized.comments = cleanComments;
   }
   const cleanActivity = normalizeActivity(activity);
   if (cleanActivity.length > 0) {
@@ -87,6 +99,35 @@ function normalizeChecklist(value: unknown): ChecklistItem[] {
     } catch {
       // blank or too long: skip it
     }
+  }
+  return result;
+}
+
+const isValidDate = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(new Date(value).getTime());
+
+// Keeps valid comments only (stored trimmed, in stored order). Entries with a bad shape, blank or over-long text,
+// an invalid `createdAt` or a duplicate id are dropped; an invalid `editedAt` is dropped on its own.
+function normalizeComments(value: unknown): CardComment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: CardComment[] = [];
+  for (const entry of value) {
+    const c = entry as Partial<Record<keyof CardComment, unknown>> | null;
+    if (typeof c !== "object" || c === null || typeof c.id !== "string" || seen.has(c.id)) {
+      continue;
+    }
+    const text = typeof c.text === "string" ? c.text.trim() : "";
+    if (!text || text.length > MAX_COMMENT_LENGTH || !isValidDate(c.createdAt)) {
+      continue;
+    }
+    seen.add(c.id);
+    const comment: CardComment = { id: c.id, text, createdAt: c.createdAt };
+    if (isValidDate(c.editedAt)) {
+      comment.editedAt = c.editedAt;
+    }
+    result.push(comment);
   }
   return result;
 }

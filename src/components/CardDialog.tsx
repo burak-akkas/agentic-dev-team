@@ -2,8 +2,11 @@
 
 import { useId, useState, type FormEvent } from "react";
 import {
+  addComment,
   addLabelToList,
   COLUMNS,
+  deleteComment,
+  editComment,
   hasChanges,
   isValidDueDate,
   MAX_NOTES_LENGTH,
@@ -18,6 +21,7 @@ import {
 } from "@/lib/board";
 
 import { ActivityLog } from "./ActivityLog";
+import { CardComments } from "./CardComments";
 import { ChecklistSection } from "./ChecklistSection";
 import { LabelChip } from "./LabelChip";
 import { Button, Dialog, Input, Select, Textarea } from "./ui";
@@ -31,6 +35,7 @@ export function CardDialog({
   onDelete,
   onClose,
   onChecklist,
+  onUpdateBoard,
 }: {
   card: Card;
   column: ColumnId;
@@ -38,6 +43,7 @@ export function CardDialog({
   onSave: (edits: CardEdits) => void;
   onDelete: () => void;
   onClose: () => void;
+  onUpdateBoard: (fn: (board: Board) => Board) => void;
 }) {
   const headingId = useId();
   const [title, setTitle] = useState(card.title);
@@ -247,6 +253,14 @@ export function CardDialog({
         </div>
 
         {onChecklist && <ChecklistSection card={card} onChange={onChecklist} />}
+
+        {/* Comment actions apply immediately; they are not part of the draft or the discard prompt. */}
+        <CardComments
+          comments={card.comments ?? []}
+          onAdd={(text) => onUpdateBoard((b) => addComment(b, card.id, text))}
+          onEdit={(id, text) => onUpdateBoard((b) => editComment(b, card.id, id, text))}
+          onDelete={(id) => onUpdateBoard((b) => deleteComment(b, card.id, id))}
+        />
 
         <p className="text-xs text-muted">
           Created <time dateTime={card.createdAt}>{new Date(card.createdAt).toLocaleString()}</time>

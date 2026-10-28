@@ -145,6 +145,7 @@ export function Board() {
             closeDialog();
           }}
           onClose={() => closeDialog(openCardId)}
+          onUpdateBoard={update}
         />
       )}
       <SummaryBar stats={stats} overdueOnly={showOverdueOnly} onToggleOverdue={() => setOverdueOnly(!showOverdueOnly)} />

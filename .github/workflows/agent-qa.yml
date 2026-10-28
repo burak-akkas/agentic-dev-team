@@ -77,7 +77,8 @@ jobs:
           url=$(echo "$URL_TEMPLATE" | sed -e "s|{owner}|${GITHUB_REPOSITORY_OWNER}|g" \
                 -e "s|{repo}|${GITHUB_REPOSITORY#*/}|g" -e "s|{pr}|$PR|g")
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          # QA rounds are counted since the latest Lead decision.
+          # QA rounds are counted since the latest Lead decision. Only failed rounds count toward the
+          # budget: QA re-runs after base updates are not a loop.
           comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
                        | jq --argjson bot "${AGENT_BOT_ID:?AGENT_BOT_ID must be set}" '[[.[][] | select(.user.id == $bot)]]')
           total=$(echo "$comments" | jq '[.[][] | select(.body | contains("<!-- agent:qa -->"))] | length')
@@ -86,9 +87,13 @@ jobs:
             | [$c | to_entries[] | select(.key > $last and (.value.body | contains("<!-- agent:qa -->")))] | length')
           echo "total=$total" >> "$GITHUB_OUTPUT"
           echo "round=$((rounds + 1))" >> "$GITHUB_OUTPUT"
-          if [ "$rounds" -ge "$MAX_ROUNDS" ]; then
+          failed=$(echo "$comments" | jq '[.[][]] as $c
+            | ([$c | to_entries[] | select(.value.body | contains("<!-- agent:lead -->")) | .key] | max // -1) as $last
+            | [$c | to_entries[] | select(.key > $last and (.value.body | contains("<!-- agent:qa -->"))
+                and (.value.body | test("\\*\\*Verdict:\\*\\*\\s*pass") | not))] | length')
+          if [ "$failed" -ge "$MAX_ROUNDS" ]; then
             "$BIN/transition.sh" "$PR" agent:needs-decision
-            gh pr comment "$PR" --body "🛑 Reached $MAX_ROUNDS QA rounds without a pass. Handing to the Lead."
+            gh pr comment "$PR" --body "🛑 $MAX_ROUNDS QA rounds without a pass. Handing to the Lead."
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 

@@ -64,6 +64,7 @@ jobs:
         id: guard
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          QA: ${{ vars.AGENT_QA }}
         run: |
           mkdir -p .agent-out
           # A queued run may be stale by now (new commits, merge-gate verdict, conflict): don't spend a round on it.
@@ -73,7 +74,22 @@ jobs:
             echo "stop=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The merge gate merged the base into an approved PR (update-branch): the PR's own changes are
+          # exactly what was approved, so skip re-review. QA still tests the combined code.
+          if [ "${{ github.event.action }}" = "synchronize" ] \
+             && approved=$("$BIN/clean-base-update.sh" "$PR" "${{ github.event.pull_request.head.sha }}"); then
+            echo "Skipped review: only a clean merge of the base on top of approved ${approved:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"
+            if [ "$QA" = "true" ]; then
+              "$BIN/transition.sh" "$PR" agent:qa
+            else
+              "$BIN/approve.sh" "$PR" "${{ github.event.pull_request.head.sha }}" reviewer
+            fi
+            "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer**: only the base branch was merged in since the approved commit, re-review skipped"
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Rounds are counted since the latest Lead decision, so a Lead ruling gives the loop a fresh budget.
+          # Only rejected rounds count toward the budget: re-reviews after base updates are not a loop.
           comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
                        | jq --argjson bot "${AGENT_BOT_ID:?AGENT_BOT_ID must be set}" '[[.[][] | select(.user.id == $bot)]]')
           total=$(echo "$comments" | jq '[.[][] | select(.body | contains("<!-- agent:reviewer -->"))] | length')
@@ -82,9 +98,13 @@ jobs:
             | [$c | to_entries[] | select(.key > $last and (.value.body | contains("<!-- agent:reviewer -->")))] | length')
           echo "total=$total" >> "$GITHUB_OUTPUT"
           echo "round=$((rounds + 1))" >> "$GITHUB_OUTPUT"
-          if [ "$rounds" -ge "$MAX_ROUNDS" ]; then
+          rejected=$(echo "$comments" | jq '[.[][]] as $c
+            | ([$c | to_entries[] | select(.value.body | contains("<!-- agent:lead -->")) | .key] | max // -1) as $last
+            | [$c | to_entries[] | select(.key > $last and (.value.body | contains("<!-- agent:reviewer -->"))
+                and (.value.body | test("\\*\\*Verdict:\\*\\*\\s*approve") | not))] | length')
+          if [ "$rejected" -ge "$MAX_ROUNDS" ]; then
             "$BIN/transition.sh" "$PR" agent:needs-decision
-            gh pr comment "$PR" --body "🛑 Reached $MAX_ROUNDS review rounds without approval. Handing to the Lead."
+            gh pr comment "$PR" --body "🛑 $MAX_ROUNDS review rounds without approval. Handing to the Lead."
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 

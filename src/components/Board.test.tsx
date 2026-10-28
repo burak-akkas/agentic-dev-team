@@ -199,13 +199,20 @@ describe("<Board />", () => {
       expect(screen.queryByRole("time")).not.toBeInTheDocument();
     });
 
+    it("ignores invalid values from the native input instead of throwing", () => {
+      seed("2999-10-28");
+      render(<Board />);
+      fireEvent.change(dateInput(), { target: { value: "20261-10-28" } });
+      expect(screen.getByRole("time")).toHaveTextContent(formatDueDate("2999-10-28"));
+    });
+
     it("is reachable with the keyboard", async () => {
       const user = userEvent.setup();
       seed();
       render(<Board />);
-      await user.tab();
-      await user.tab();
-      await user.tab();
+      for (let i = 0; i < 8 && document.activeElement !== dateInput(); i++) {
+        await user.tab();
+      }
       expect(dateInput()).toHaveFocus();
     });
 
@@ -240,6 +247,54 @@ describe("<Board />", () => {
       render(<Board />);
       expect(screen.getByRole("time")).toBeInTheDocument();
       expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("priority", () => {
+    const badge = (name: string) => within(screen.getByText(name).closest("li") as HTMLElement).getByTestId("priority-badge");
+
+    it("shows a Medium badge on new cards", async () => {
+      const user = userEvent.setup();
+      render(<Board />);
+      await user.type(screen.getByLabelText("New card title"), "Task{Enter}");
+
+      expect(badge("Task")).toHaveTextContent("Medium");
+      expect(screen.getByLabelText('Priority of "Task"')).toHaveValue("medium");
+    });
+
+    it("changes the priority with the select, keeping column and persisting", async () => {
+      const user = userEvent.setup();
+      saveBoard(moveCard(addCard(emptyBoard(), "Task", { id: "a" }), "a", "doing"));
+      const { unmount } = render(<Board />);
+
+      await user.selectOptions(screen.getByLabelText('Priority of "Task"'), "high");
+      expect(badge("Task")).toHaveTextContent("High");
+      expect(within(column("Doing")).getByText("Task")).toBeInTheDocument();
+      unmount();
+
+      resetBoardStore();
+      render(<Board />);
+      expect(badge("Task")).toHaveTextContent("High");
+    });
+
+    it("is reachable with the keyboard and keeps priority after rename and move", async () => {
+      const user = userEvent.setup();
+      saveBoard(addCard(emptyBoard(), "Task", { id: "a" }));
+      render(<Board />);
+
+      // Tab order: new card title, Add card, search box, then the card's priority select.
+      const select = screen.getByLabelText('Priority of "Task"');
+      for (let i = 0; i < 6 && document.activeElement !== select; i++) {
+        await user.tab();
+      }
+      expect(select).toHaveFocus();
+      await user.selectOptions(select, "high");
+      expect(badge("Task")).toHaveTextContent("High");
+
+      await user.click(screen.getByRole("button", { name: 'Edit "Task"' }));
+      await user.type(screen.getByLabelText("Card title"), " 2{Enter}");
+      await user.click(screen.getByRole("button", { name: 'Move "Task 2" to Doing' }));
+      expect(badge("Task 2")).toHaveTextContent("High");
     });
   });
 

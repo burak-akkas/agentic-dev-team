@@ -14,6 +14,7 @@ import {
   moveCard,
   renameCard,
   setDueDate,
+  setPriority,
   todayString,
 } from "./board";
 
@@ -25,7 +26,12 @@ describe("addCard", () => {
     board = addCard(board, "second", { id: "b" });
 
     expect(ids(board.columns.todo)).toEqual(["a", "b"]);
-    expect(board.columns.todo[0]).toEqual({ id: "a", title: "first", createdAt: "2026-01-01T00:00:00.000Z" });
+    expect(board.columns.todo[0]).toEqual({
+      id: "a",
+      title: "first",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      priority: "medium",
+    });
   });
 
   it("rejects empty and too long titles", () => {
@@ -89,7 +95,12 @@ describe("renameCard", () => {
 
   it("trims the title and keeps column, index, id and createdAt", () => {
     const result = renameCard(base, "a", "  renamed  ");
-    expect(result.columns.todo[0]).toEqual({ id: "a", title: "renamed", createdAt: "2026-01-01T00:00:00.000Z" });
+    expect(result.columns.todo[0]).toEqual({
+      id: "a",
+      title: "renamed",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      priority: "medium",
+    });
     expect(ids(result.columns.todo)).toEqual(["a", "b"]);
     expect(ids(result.columns.doing)).toEqual(["c"]);
   });
@@ -120,6 +131,39 @@ describe("renameCard", () => {
   it("does not mutate the input board", () => {
     renameCard(base, "a", "changed");
     expect(base.columns.todo[0].title).toBe("a");
+  });
+});
+
+describe("setPriority", () => {
+  const base = moveCard(addCard(addCard(emptyBoard(), "a", { id: "a" }), "b", { id: "b" }), "b", "doing");
+
+  it("changes only the given card, keeping column and order", () => {
+    const result = setPriority(base, "b", "high");
+    expect(result.columns.doing[0].priority).toBe("high");
+    expect(result.columns.todo[0].priority).toBe("medium");
+    expect(ids(result.columns.todo)).toEqual(["a"]);
+    expect(ids(result.columns.doing)).toEqual(["b"]);
+  });
+
+  it("returns the same board when the priority is unchanged", () => {
+    expect(setPriority(base, "a", "medium")).toBe(base);
+  });
+
+  it("does not mutate the input board", () => {
+    setPriority(base, "a", "low");
+    expect(base.columns.todo[0].priority).toBe("medium");
+  });
+
+  it("throws for unknown cards", () => {
+    expect(() => setPriority(base, "nope", "high")).toThrow(/not found/);
+  });
+
+  it("is kept by rename, move and filter", () => {
+    let board = setPriority(base, "a", "high");
+    board = renameCard(board, "a", "renamed");
+    board = moveCard(board, "a", "done");
+    expect(board.columns.done[0].priority).toBe("high");
+    expect(filterCards(board, "renamed").columns.done[0].priority).toBe("high");
   });
 });
 

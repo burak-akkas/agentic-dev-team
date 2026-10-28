@@ -2,10 +2,13 @@
 
 export type ColumnId = "todo" | "doing" | "done";
 
+export type Priority = "low" | "medium" | "high";
+
 export interface Card {
   id: string;
   title: string;
   createdAt: string;
+  priority: Priority;
   // Optional date-only due date, `YYYY-MM-DD` (local calendar day).
   dueDate?: string;
 }
@@ -19,6 +22,14 @@ export const COLUMNS: readonly { id: ColumnId; title: string }[] = [
   { id: "doing", title: "Doing" },
   { id: "done", title: "Done" },
 ];
+
+export const PRIORITIES: readonly { id: Priority; label: string }[] = [
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High" },
+];
+
+export const DEFAULT_PRIORITY: Priority = "medium";
 
 export const MAX_TITLE_LENGTH = 120;
 
@@ -42,8 +53,29 @@ export function addCard(
   title: string,
   { id = crypto.randomUUID(), now = new Date() }: { id?: string; now?: Date } = {},
 ): Board {
-  const card: Card = { id, title: normalizeTitle(title), createdAt: now.toISOString() };
+  const card: Card = {
+    id,
+    title: normalizeTitle(title),
+    createdAt: now.toISOString(),
+    priority: DEFAULT_PRIORITY,
+  };
   return { columns: { ...board.columns, todo: [...board.columns.todo, card] } };
+}
+
+export function setPriority(board: Board, cardId: string, priority: Priority): Board {
+  const found = findCard(board, cardId);
+  if (!found) {
+    throw new Error(`Card ${cardId} not found`);
+  }
+  if (found.card.priority === priority) {
+    return board;
+  }
+  return {
+    columns: {
+      ...board.columns,
+      [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? { ...c, priority } : c)),
+    },
+  };
 }
 
 export function renameCard(board: Board, cardId: string, title: string): Board {

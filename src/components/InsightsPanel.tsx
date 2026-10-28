@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import type { ReactNode } from "react";
-import { formatDueDate } from "@/lib/board";
+import { boardLists, formatDueDate, insightsListIds, listName, setInsightsList } from "@/lib/board";
 import type { Board } from "@/lib/board";
 import { barRects, chartBounds, chartMax, linePoints } from "@/lib/chart";
 import type { ChartSize } from "@/lib/chart";
@@ -14,10 +14,65 @@ import {
   summarizeCycleTimes,
   weeklyThroughput,
 } from "@/lib/insights";
-import { Button, Dialog } from "./ui";
+import { Button, Dialog, Select } from "./ui";
+
+// Names of the lists insights use; a placeholder when none is chosen.
+function insightsNames(board: Board): { doing: string; done: string } {
+  const { doing, done } = insightsListIds(board);
+  return {
+    doing: doing === undefined ? "the in-progress list" : listName(board, doing),
+    done: done === undefined ? "the done list" : listName(board, done),
+  };
+}
+
+function ListChoice({
+  board,
+  onUpdateBoard,
+}: {
+  board: Board;
+  onUpdateBoard: (change: (board: Board) => Board) => void;
+}) {
+  const headingId = useId();
+  const ids = insightsListIds(board);
+  const field = (kind: "doing" | "done", label: string) => (
+    <label className="flex flex-col gap-1 text-xs font-medium text-subtle">
+      {label}
+      <Select
+        fieldSize="sm"
+        value={ids[kind] ?? ""}
+        onChange={(event) => {
+          const id = event.target.value || undefined;
+          onUpdateBoard((b) => (id === undefined || boardLists(b).some((l) => l.id === id) ? setInsightsList(b, kind, id) : b));
+        }}
+      >
+        <option value="">Not set</option>
+        {boardLists(board).map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </Select>
+    </label>
+  );
+  return (
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
+      <h3 id={headingId} className="text-sm font-semibold">
+        Lists used
+      </h3>
+      <div className="grid grid-cols-2 gap-3">
+        {field("doing", "In progress list")}
+        {field("done", "Done list")}
+      </div>
+      {(ids.doing === undefined || ids.done === undefined) && (
+        <p className="text-xs text-muted">Pick the lists that mean in progress and done to see these numbers.</p>
+      )}
+    </section>
+  );
+}
 
 function CycleTimeSection({ board, now }: { board: Board; now?: Date }) {
   const headingId = useId();
+  const { doing, done } = insightsNames(board);
   const { durationsMs, excluded } = cycleTimes(board, { now });
   const summary = summarizeCycleTimes(durationsMs);
   return (
@@ -37,11 +92,11 @@ function CycleTimeSection({ board, now }: { board: Board; now?: Date }) {
           </div>
         </dl>
       ) : (
-        <p className="text-sm text-muted">No finished cards with a recorded Doing → Done history yet</p>
+        <p className="text-sm text-muted">No finished cards with a recorded {doing} → {done} history yet</p>
       )}
       {excluded > 0 && (
         <p className="text-xs text-muted">
-          {excluded} {excluded === 1 ? "card" : "cards"} left out (no recorded Doing → Done history)
+          {excluded} {excluded === 1 ? "card" : "cards"} left out (no recorded {doing} → {done} history)
         </p>
       )}
     </section>
@@ -113,6 +168,7 @@ function DataTable({
 
 function ThroughputSection({ board, now }: { board: Board; now?: Date }) {
   const headingId = useId();
+  const { done } = insightsNames(board);
   const weeks = weeklyThroughput(board, { now });
   const counts = weeks.map((w) => w.count);
   const bars = barRects(counts, CHART_SIZE);
@@ -140,11 +196,11 @@ function ThroughputSection({ board, now }: { board: Board; now?: Date }) {
           </g>
         ))}
       </ChartFrame>
-      {empty && <p className="text-sm text-muted">No cards moved to Done in the last {weeks.length} weeks</p>}
+      {empty && <p className="text-sm text-muted">No cards moved to {done} in the last {weeks.length} weeks</p>}
       <DataTable
-        caption="Cards moved to Done per week"
+        caption={`Cards moved to ${done} per week`}
         rowHeader="Week of"
-        valueHeader="Cards moved to Done"
+        valueHeader={`Cards moved to ${done}`}
         rows={weeks.map((w) => ({ label: w.label, count: w.count }))}
       />
     </section>
@@ -153,6 +209,7 @@ function ThroughputSection({ board, now }: { board: Board; now?: Date }) {
 
 function WipSection({ board, now }: { board: Board; now?: Date }) {
   const headingId = useId();
+  const { doing } = insightsNames(board);
   const days = dailyWip(board, { now });
   const counts = days.map((d) => d.count);
   const points = linePoints(counts, CHART_SIZE);
@@ -183,11 +240,11 @@ function WipSection({ board, now }: { board: Board; now?: Date }) {
           </g>
         ))}
       </ChartFrame>
-      {empty && <p className="text-sm text-muted">No cards in Doing in the last {days.length} days</p>}
+      {empty && <p className="text-sm text-muted">No cards in {doing} in the last {days.length} days</p>}
       <DataTable
-        caption="Cards in Doing per day"
+        caption={`Cards in ${doing} per day`}
         rowHeader="Day"
-        valueHeader="Cards in Doing"
+        valueHeader={`Cards in ${doing}`}
         rows={days.map((d) => ({ label: formatDueDate(d.day), count: d.count }))}
       />
     </section>
@@ -233,11 +290,14 @@ export function InsightsPanel({
   now,
   onClose,
   onOpenCard,
+  onUpdateBoard,
 }: {
   board: Board;
   now?: Date;
   onClose: () => void;
   onOpenCard: (cardId: string) => void;
+  // Without it the list choice is not shown.
+  onUpdateBoard?: (change: (board: Board) => Board) => void;
 }) {
   const headingId = useId();
   return (
@@ -246,6 +306,7 @@ export function InsightsPanel({
         <h2 id={headingId} className="text-lg font-semibold">
           Board insights
         </h2>
+        {onUpdateBoard && <ListChoice board={board} onUpdateBoard={onUpdateBoard} />}
         <CycleTimeSection board={board} now={now} />
         <ThroughputSection board={board} now={now} />
         <WipSection board={board} now={now} />

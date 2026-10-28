@@ -1,6 +1,7 @@
 // Pure board logic. Every function returns a new board and never mutates its input.
 
-export type ColumnId = "todo" | "doing" | "done";
+// A list id. Boards migrated from the fixed columns keep "todo", "doing" and "done".
+export type ColumnId = string;
 
 export type Priority = "low" | "medium" | "high";
 
@@ -64,19 +65,40 @@ export interface ActivityEntry {
   to?: string;
 }
 
-export interface Board {
-  columns: Record<ColumnId, Card[]>;
-  // Cards removed from Done with "Archive done", oldest first.
-  archive: Card[];
-  // Optional soft WIP limits per column (whole numbers from 1 to MAX_WIP_LIMIT). Never blocks anything.
-  wipLimits?: Partial<Record<ColumnId, number>>;
+export interface List {
+  id: ColumnId;
+  name: string;
 }
 
-export const COLUMNS: readonly { id: ColumnId; title: string }[] = [
-  { id: "todo", title: "To do" },
-  { id: "doing", title: "Doing" },
-  { id: "done", title: "Done" },
+export interface InsightsLists {
+  doing?: ColumnId;
+  done?: ColumnId;
+}
+
+export interface Board {
+  // Ordered lists. Absent on boards built before custom lists: they have the default three (see `boardLists`).
+  lists?: List[];
+  // Cards per list id.
+  columns: Record<ColumnId, Card[]>;
+  // Cards removed with "Archive", oldest first.
+  archive: Card[];
+  // Optional soft WIP limits per list (whole numbers from 1 to MAX_WIP_LIMIT). Never blocks anything.
+  wipLimits?: Partial<Record<ColumnId, number>>;
+  // Last name of deleted lists, so old activity entries stay readable.
+  formerLists?: Record<ColumnId, string>;
+  // Which lists insights treat as "in progress" and "done". Absent: the lists named Doing / Done.
+  insightsLists?: InsightsLists;
+}
+
+export const DEFAULT_LISTS: readonly List[] = [
+  { id: "todo", name: "To do" },
+  { id: "doing", name: "Doing" },
+  { id: "done", name: "Done" },
 ];
+
+export const MAX_LIST_NAME_LENGTH = 30;
+
+export const DELETED_LIST_NAME = "Deleted list";
 
 export const PRIORITIES: readonly { id: Priority; label: string }[] = [
   { id: "low", label: "Low" },
@@ -150,7 +172,190 @@ export function withActivity(
 }
 
 export function emptyBoard(): Board {
-  return { columns: { todo: [], doing: [], done: [] }, archive: [] };
+  return {
+    lists: DEFAULT_LISTS.map((l) => ({ ...l })),
+    columns: { todo: [], doing: [], done: [] },
+    archive: [],
+    insightsLists: { doing: "doing", done: "done" },
+  };
+}
+
+export function boardLists(board: Board): readonly List[] {
+  return board.lists ?? DEFAULT_LISTS;
+}
+
+// Cards of a list, in order. Unknown lists are empty.
+export function listCards(board: Board, id: ColumnId): Card[] {
+  return board.columns[id] ?? [];
+}
+
+// Name of a list: current name, else the name it had when deleted, else "Deleted list".
+export function listName(board: Board, id: string | undefined): string {
+  if (id === undefined) {
+    return "";
+  }
+  return boardLists(board).find((l) => l.id === id)?.name ?? board.formerLists?.[id] ?? DELETED_LIST_NAME;
+}
+
+export function newListId(): string {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === "function") {
+    return `list-${cryptoApi.randomUUID()}`;
+  }
+  return `list-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export type ListNameResult = { ok: true; name: string } | { ok: false; error: string };
+
+// `ignoreId` is the list being renamed, so it may keep its own name (e.g. with different casing).
+export function validateListName(name: string, lists: readonly List[], ignoreId?: string): ListNameResult {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { ok: false, error: "List name must not be empty." };
+  }
+  if (trimmed.length > MAX_LIST_NAME_LENGTH) {
+    return { ok: false, error: `List name must be at most ${MAX_LIST_NAME_LENGTH} characters.` };
+  }
+  const lower = trimmed.toLowerCase();
+  if (lists.some((l) => l.id !== ignoreId && l.name.toLowerCase() === lower)) {
+    return { ok: false, error: "A list with this name already exists." };
+  }
+  return { ok: true, name: trimmed };
+}
+
+function requireList(board: Board, id: ColumnId): number {
+  const index = boardLists(board).findIndex((l) => l.id === id);
+  if (index === -1) {
+    throw new Error(`List ${id} not found`);
+  }
+  return index;
+}
+
+// Appends an empty list. Throws on an invalid name.
+export function addList(board: Board, name: string, { id = newListId() }: { id?: string } = {}): Board {
+  const lists = boardLists(board);
+  const result = validateListName(name, lists);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  if (lists.some((l) => l.id === id)) {
+    throw new Error(`List ${id} already exists`);
+  }
+  return { ...board, lists: [...lists, { id, name: result.name }], columns: { ...board.columns, [id]: [] } };
+}
+
+// Throws on an unknown list or invalid name. Renaming to the same name returns the same board.
+export function renameList(board: Board, id: ColumnId, name: string): Board {
+  const index = requireList(board, id);
+  const lists = boardLists(board);
+  const result = validateListName(name, lists, id);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  if (lists[index].name === result.name) {
+    return board;
+  }
+  return { ...board, lists: lists.map((l) => (l.id === id ? { ...l, name: result.name } : l)) };
+}
+
+// Moves a list one place left (-1) or right (1). Returns the same board at either end.
+export function moveList(board: Board, id: ColumnId, direction: -1 | 1): Board {
+  const index = requireList(board, id);
+  const lists = boardLists(board);
+  const target = index + direction;
+  if (target < 0 || target >= lists.length) {
+    return board;
+  }
+  const next = [...lists];
+  [next[index], next[target]] = [next[target], next[index]];
+  return { ...board, lists: next };
+}
+
+// Deletes a list. Refuses (throws) for the last list, and for a list with cards unless `moveTo` is another
+// existing list: the cards are appended there. The list's WIP limit is dropped and its name remembered.
+export function deleteList(board: Board, id: ColumnId, moveTo?: ColumnId): Board {
+  const index = requireList(board, id);
+  const lists = boardLists(board);
+  if (lists.length <= 1) {
+    throw new Error("The last list cannot be deleted");
+  }
+  const cards = listCards(board, id);
+  if (cards.length > 0 && (moveTo === undefined || moveTo === id || !lists.some((l) => l.id === moveTo))) {
+    throw new Error("Choose another list to move the cards to");
+  }
+  const columns = { ...board.columns };
+  delete columns[id];
+  if (cards.length > 0 && moveTo !== undefined) {
+    columns[moveTo] = [...listCards(board, moveTo), ...cards];
+  }
+  const next: Board = {
+    ...board,
+    lists: lists.filter((l) => l.id !== id),
+    columns,
+    formerLists: { ...board.formerLists, [id]: lists[index].name },
+  };
+  if (board.wipLimits) {
+    const limits = { ...board.wipLimits };
+    delete limits[id];
+    if (Object.keys(limits).length > 0) {
+      next.wipLimits = limits;
+    } else {
+      delete next.wipLimits;
+    }
+  }
+  if (board.insightsLists) {
+    const chosen = { ...board.insightsLists };
+    if (chosen.doing === id) {
+      delete chosen.doing;
+    }
+    if (chosen.done === id) {
+      delete chosen.done;
+    }
+    next.insightsLists = chosen;
+  }
+  return next;
+}
+
+// The lists insights use as "in progress" and "done". Without a stored choice: lists named Doing / Done.
+export function insightsListIds(board: Board): InsightsLists {
+  const lists = boardLists(board);
+  const known = (id: string | undefined) => (id !== undefined && lists.some((l) => l.id === id) ? id : undefined);
+  if (board.insightsLists) {
+    return { doing: known(board.insightsLists.doing), done: known(board.insightsLists.done) };
+  }
+  const named = (name: string) => lists.find((l) => l.name.toLowerCase() === name)?.id;
+  return { doing: named("doing"), done: named("done") };
+}
+
+// Chooses the in-progress or done list (`undefined` clears it).
+export function setInsightsList(board: Board, kind: "doing" | "done", id: ColumnId | undefined): Board {
+  if (id !== undefined) {
+    requireList(board, id);
+  }
+  const current = insightsListIds(board);
+  if (board.insightsLists && current[kind] === id) {
+    return board;
+  }
+  const next: InsightsLists = { ...current, [kind]: id };
+  if (id === undefined) {
+    delete next[kind];
+  }
+  return { ...board, insightsLists: next };
+}
+
+// Where restored cards go: the chosen done list, else the last list.
+function restoreTarget(board: Board): ColumnId {
+  const lists = boardLists(board);
+  return insightsListIds(board).done ?? lists[lists.length - 1].id;
+}
+
+// Same board with every list's cards replaced by `change(cards, listId)`.
+function mapLists(board: Board, change: (cards: Card[], id: ColumnId) => Card[]): Board {
+  const columns: Record<ColumnId, Card[]> = { ...board.columns };
+  for (const { id } of boardLists(board)) {
+    columns[id] = change(listCards(board, id), id);
+  }
+  return { ...board, columns };
 }
 
 function normalizeTitle(title: string): string {
@@ -176,7 +381,9 @@ export function addCard(
     priority: DEFAULT_PRIORITY,
   };
   const card = withActivity(base, { type: "created" }, { now });
-  return { ...board, columns: { ...board.columns, todo: [...board.columns.todo, card] } };
+  // New cards go to the first list.
+  const first = boardLists(board)[0].id;
+  return { ...board, columns: { ...board.columns, [first]: [...listCards(board, first), card] } };
 }
 
 export function setPriority(board: Board, cardId: string, priority: Priority, opts: ActivityOptions = {}): Board {
@@ -247,8 +454,8 @@ export function renameCard(board: Board, cardId: string, title: string, opts: Ac
 }
 
 export function findCard(board: Board, cardId: string): { card: Card; column: ColumnId } | undefined {
-  for (const { id: column } of COLUMNS) {
-    const card = board.columns[column].find((c) => c.id === cardId);
+  for (const { id: column } of boardLists(board)) {
+    const card = listCards(board, column).find((c) => c.id === cardId);
     if (card) {
       return { card, column };
     }
@@ -264,12 +471,15 @@ export function moveCard(board: Board, cardId: string, to: ColumnId, opts: Activ
   if (found.column === to) {
     return board;
   }
+  if (!boardLists(board).some((l) => l.id === to)) {
+    throw new Error(`List ${to} not found`);
+  }
   return {
     ...board,
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].filter((c) => c.id !== cardId),
-      [to]: [...board.columns[to], withActivity(found.card, { type: "moved", from: found.column, to }, opts)],
+      [to]: [...listCards(board, to), withActivity(found.card, { type: "moved", from: found.column, to }, opts)],
     },
   };
 }
@@ -329,27 +539,36 @@ export function deleteCard(board: Board, cardId: string): Board {
   };
 }
 
-// Moves every Done card to the end of the archive. Returns the same board when Done is empty.
-export function archiveDone(board: Board, { now = new Date() }: { now?: Date } = {}): Board {
-  if (board.columns.done.length === 0) {
+// Moves every card of a list to the end of the archive. Returns the same board when the list is empty.
+export function archiveList(board: Board, listId: ColumnId, { now = new Date() }: { now?: Date } = {}): Board {
+  requireList(board, listId);
+  const cards = listCards(board, listId);
+  if (cards.length === 0) {
     return board;
   }
   return {
     ...board,
-    columns: { ...board.columns, done: [] },
-    archive: [...board.archive, ...board.columns.done.map((c) => withActivity(c, { type: "archived" }, { now }))],
+    columns: { ...board.columns, [listId]: [] },
+    archive: [...board.archive, ...cards.map((c) => withActivity(c, { type: "archived" }, { now }))],
   };
 }
 
-// Moves an archived card to the end of Done.
-export function restoreCard(board: Board, cardId: string, opts: ActivityOptions = {}): Board {
+// Archives the done list (see `insightsListIds`). Returns the same board when there is none or it is empty.
+export function archiveDone(board: Board, opts: { now?: Date } = {}): Board {
+  const done = insightsListIds(board).done;
+  return done === undefined ? board : archiveList(board, done, opts);
+}
+
+// Moves an archived card to the end of `listId` (default: the done list, else the last list).
+export function restoreCard(board: Board, cardId: string, opts: ActivityOptions & { listId?: ColumnId } = {}): Board {
   const card = board.archive.find((c) => c.id === cardId);
   if (!card) {
     throw new Error(`Archived card ${cardId} not found`);
   }
+  const target = opts.listId !== undefined && boardLists(board).some((l) => l.id === opts.listId) ? opts.listId : restoreTarget(board);
   return {
     ...board,
-    columns: { ...board.columns, done: [...board.columns.done, withActivity(card, { type: "restored" }, opts)] },
+    columns: { ...board.columns, [target]: [...listCards(board, target), withActivity(card, { type: "restored" }, opts)] },
     archive: board.archive.filter((c) => c.id !== cardId),
   };
 }
@@ -361,21 +580,26 @@ export function deleteArchived(board: Board, cardId: string): Board {
   return { ...board, archive: board.archive.filter((c) => c.id !== cardId) };
 }
 
-// Undoes `archiveDone`: puts the given cards back at the start of Done, in order.
-// Cards no longer in the archive (restored or deleted meanwhile) are skipped.
+// Undoes `archiveList`: puts the given cards back at the start of `listId` (default: the done list, else the
+// last list), in order. Cards no longer in the archive (restored or deleted meanwhile) are skipped.
 // The archive's current copies are put back, so earlier activity is kept.
-export function undoArchive(board: Board, cards: Card[], { now = new Date() }: { now?: Date } = {}): Board {
+export function undoArchive(
+  board: Board,
+  cards: Card[],
+  { now = new Date(), listId }: { now?: Date; listId?: ColumnId } = {},
+): Board {
   const archived = new Map(board.archive.map((c) => [c.id, c]));
   const back = cards.flatMap((c) => archived.get(c.id) ?? []);
   if (back.length === 0) {
     return board;
   }
   const ids = new Set(back.map((c) => c.id));
+  const target = listId !== undefined && boardLists(board).some((l) => l.id === listId) ? listId : restoreTarget(board);
   return {
     ...board,
     columns: {
       ...board.columns,
-      done: [...back.map((c) => withActivity(c, { type: "restored" }, { now })), ...board.columns.done],
+      [target]: [...back.map((c) => withActivity(c, { type: "restored" }, { now })), ...listCards(board, target)],
     },
     archive: board.archive.filter((c) => !ids.has(c.id)),
   };
@@ -764,8 +988,8 @@ export function labelColor(name: string): string {
 // Distinct labels in use on the board (first spelling wins), sorted alphabetically.
 export function boardLabels(board: Board): string[] {
   const seen = new Map<string, string>();
-  for (const { id: column } of COLUMNS) {
-    for (const card of board.columns[column]) {
+  for (const { id: column } of boardLists(board)) {
+    for (const card of listCards(board, column)) {
       for (const label of card.labels ?? []) {
         const key = label.toLowerCase();
         if (!seen.has(key)) {
@@ -783,14 +1007,7 @@ export function filterByLabel(board: Board, label: string | null): Board {
     return board;
   }
   const has = (c: Card) => (c.labels ?? []).some((l) => sameLabel(l, label));
-  return {
-    ...board,
-    columns: {
-      todo: board.columns.todo.filter(has),
-      doing: board.columns.doing.filter(has),
-      done: board.columns.done.filter(has),
-    },
-  };
+  return mapLists(board, (cards) => cards.filter(has));
 }
 
 export interface CardEdits {
@@ -841,9 +1058,15 @@ export function todayString(now: Date = new Date()): string {
   return `${String(now.getFullYear()).padStart(4, "0")}-${month}-${day}`;
 }
 
-// Overdue = due before today and not in Done. Due today is not overdue.
-export function isOverdue(card: Card, column: ColumnId, today: string = todayString()): boolean {
-  return column !== "done" && !!card.dueDate && card.dueDate < today;
+// Overdue = due before today and not in the done list (`doneId`: "done" by default, `null` when there is none).
+// Due today is not overdue.
+export function isOverdue(card: Card, column: ColumnId, today: string = todayString(), doneId: ColumnId | null = "done"): boolean {
+  return column !== doneId && !!card.dueDate && card.dueDate < today;
+}
+
+// Whether a card in `column` is overdue on this board (its done list is not overdue).
+export function isCardOverdue(board: Board, card: Card, column: ColumnId, today: string = todayString()): boolean {
+  return isOverdue(card, column, today, insightsListIds(board).done ?? null);
 }
 
 // Short readable date (e.g. "Oct 28"). Parsed as a local date so the day never shifts by timezone.
@@ -862,14 +1085,7 @@ export function filterCards(board: Board, query: string): Board {
     return board;
   }
   const q = query.trim().toLowerCase();
-  return {
-    ...board,
-    columns: {
-      todo: board.columns.todo.filter((c) => c.title.toLowerCase().includes(q)),
-      doing: board.columns.doing.filter((c) => c.title.toLowerCase().includes(q)),
-      done: board.columns.done.filter((c) => c.title.toLowerCase().includes(q)),
-    },
-  };
+  return mapLists(board, (cards) => cards.filter((c) => c.title.toLowerCase().includes(q)));
 }
 
 export interface BoardStats {
@@ -886,35 +1102,34 @@ export function boardStats(board: Board, today: string = todayString()): BoardSt
   let total = 0;
   let overdue = 0;
   let highOpen = 0;
-  for (const { id: column } of COLUMNS) {
-    for (const card of board.columns[column]) {
+  const doneId = insightsListIds(board).done;
+  for (const { id: column } of boardLists(board)) {
+    for (const card of listCards(board, column)) {
       total += 1;
-      if (isOverdue(card, column, today)) {
+      if (isOverdue(card, column, today, doneId ?? null)) {
         overdue += 1;
       }
-      if (column !== "done" && card.priority === "high") {
+      if (column !== doneId && card.priority === "high") {
         highOpen += 1;
       }
     }
   }
-  const done = board.columns.done.length;
+  const done = doneId === undefined ? 0 : listCards(board, doneId).length;
   return { total, done, percentDone: total === 0 ? 0 : Math.round((done / total) * 100), overdue, highOpen };
 }
 
-// Only the overdue cards (due before today, not in Done).
+// Only the overdue cards (due before today, not in the done list).
 export function filterOverdue(board: Board, today: string = todayString()): Board {
-  return {
-    ...board,
-    columns: {
-      todo: board.columns.todo.filter((c) => isOverdue(c, "todo", today)),
-      doing: board.columns.doing.filter((c) => isOverdue(c, "doing", today)),
-      done: [],
-    },
-  };
+  const doneId = insightsListIds(board).done ?? null;
+  return mapLists(board, (cards, id) => cards.filter((c) => isOverdue(c, id, today, doneId)));
 }
 
-// Neighbouring column, for the "move left / right" buttons.
-export function adjacentColumn(column: ColumnId, direction: -1 | 1): ColumnId | undefined {
-  const index = COLUMNS.findIndex((c) => c.id === column);
-  return COLUMNS[index + direction]?.id;
+// Neighbouring list, for the "move left / right" buttons.
+export function adjacentColumn(
+  column: ColumnId,
+  direction: -1 | 1,
+  lists: readonly List[] = DEFAULT_LISTS,
+): ColumnId | undefined {
+  const index = lists.findIndex((l) => l.id === column);
+  return index === -1 ? undefined : lists[index + direction]?.id;
 }

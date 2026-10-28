@@ -211,7 +211,7 @@ describe("<Board />", () => {
       const user = userEvent.setup();
       seed();
       render(<Board />);
-      for (let i = 0; i < 8 && document.activeElement !== dateInput(); i++) {
+      for (let i = 0; i < 12 && document.activeElement !== dateInput(); i++) {
         await user.tab();
       }
       expect(dateInput()).toHaveFocus();

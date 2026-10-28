@@ -15,6 +15,30 @@ export interface Card {
   notes?: string;
   // Optional labels (trimmed, unique case-insensitively, each at most MAX_LABEL_LENGTH characters).
   labels?: string[];
+  // Optional change log, newest first, at most MAX_ACTIVITY_ENTRIES entries.
+  activity?: ActivityEntry[];
+}
+
+export type ActivityType =
+  | "created"
+  | "moved"
+  | "title"
+  | "description"
+  | "priority"
+  | "dueDate"
+  | "archived"
+  | "restored"
+  | "checklistDone";
+
+export interface ActivityEntry {
+  id: string;
+  // ISO timestamp.
+  at: string;
+  type: ActivityType;
+  // Column ids for `moved`; old/new value for `title`, `priority` and `dueDate` (omitted when empty).
+  // `checklistDone` keeps the item text in `to`. `description` stores no text.
+  from?: string;
+  to?: string;
 }
 
 export interface Board {
@@ -47,6 +71,41 @@ export const MAX_LABEL_LENGTH = 20;
 
 export const MAX_WIP_LIMIT = 99;
 
+export const MAX_ACTIVITY_ENTRIES = 50;
+
+export const ACTIVITY_TYPES: readonly ActivityType[] = [
+  "created",
+  "moved",
+  "title",
+  "description",
+  "priority",
+  "dueDate",
+  "archived",
+  "restored",
+  "checklistDone",
+];
+
+export interface ActivityOptions {
+  now?: Date;
+  id?: string;
+}
+
+// Returns a new card with the entry prepended (newest first) and the log capped.
+export function withActivity(
+  card: Card,
+  entry: { type: ActivityType; from?: string; to?: string },
+  { now = new Date(), id = crypto.randomUUID() }: ActivityOptions = {},
+): Card {
+  const full: ActivityEntry = { id, at: now.toISOString(), type: entry.type };
+  if (entry.from !== undefined) {
+    full.from = entry.from;
+  }
+  if (entry.to !== undefined) {
+    full.to = entry.to;
+  }
+  return { ...card, activity: [full, ...(card.activity ?? [])].slice(0, MAX_ACTIVITY_ENTRIES) };
+}
+
 export function emptyBoard(): Board {
   return { columns: { todo: [], doing: [], done: [] }, archive: [] };
 }
@@ -67,16 +126,17 @@ export function addCard(
   title: string,
   { id = crypto.randomUUID(), now = new Date() }: { id?: string; now?: Date } = {},
 ): Board {
-  const card: Card = {
+  const base: Card = {
     id,
     title: normalizeTitle(title),
     createdAt: now.toISOString(),
     priority: DEFAULT_PRIORITY,
   };
+  const card = withActivity(base, { type: "created" }, { now });
   return { ...board, columns: { ...board.columns, todo: [...board.columns.todo, card] } };
 }
 
-export function setPriority(board: Board, cardId: string, priority: Priority): Board {
+export function setPriority(board: Board, cardId: string, priority: Priority, opts: ActivityOptions = {}): Board {
   const found = findCard(board, cardId);
   if (!found) {
     throw new Error(`Card ${cardId} not found`);
@@ -88,12 +148,13 @@ export function setPriority(board: Board, cardId: string, priority: Priority): B
     ...board,
     columns: {
       ...board.columns,
-      [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? { ...c, priority } : c)),
+      [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? withActivity({ ...c, priority }, { type: "priority", from: c.priority, to: priority }, opts) : c),
+      ),
     },
   };
 }
 
-export function renameCard(board: Board, cardId: string, title: string): Board {
+export function renameCard(board: Board, cardId: string, title: string, opts: ActivityOptions = {}): Board {
   const found = findCard(board, cardId);
   if (!found) {
     throw new Error(`Card ${cardId} not found`);
@@ -106,7 +167,8 @@ export function renameCard(board: Board, cardId: string, title: string): Board {
     ...board,
     columns: {
       ...board.columns,
-      [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? { ...c, title: trimmed } : c)),
+      [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? withActivity({ ...c, title: trimmed }, { type: "title", from: c.title, to: trimmed }, opts) : c),
+      ),
     },
   };
 }
@@ -121,7 +183,7 @@ export function findCard(board: Board, cardId: string): { card: Card; column: Co
   return undefined;
 }
 
-export function moveCard(board: Board, cardId: string, to: ColumnId): Board {
+export function moveCard(board: Board, cardId: string, to: ColumnId, opts: ActivityOptions = {}): Board {
   const found = findCard(board, cardId);
   if (!found) {
     throw new Error(`Card ${cardId} not found`);
@@ -134,7 +196,7 @@ export function moveCard(board: Board, cardId: string, to: ColumnId): Board {
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].filter((c) => c.id !== cardId),
-      [to]: [...board.columns[to], found.card],
+      [to]: [...board.columns[to], withActivity(found.card, { type: "moved", from: found.column, to }, opts)],
     },
   };
 }
@@ -154,26 +216,26 @@ export function deleteCard(board: Board, cardId: string): Board {
 }
 
 // Moves every Done card to the end of the archive. Returns the same board when Done is empty.
-export function archiveDone(board: Board): Board {
+export function archiveDone(board: Board, { now = new Date() }: { now?: Date } = {}): Board {
   if (board.columns.done.length === 0) {
     return board;
   }
   return {
     ...board,
     columns: { ...board.columns, done: [] },
-    archive: [...board.archive, ...board.columns.done],
+    archive: [...board.archive, ...board.columns.done.map((c) => withActivity(c, { type: "archived" }, { now }))],
   };
 }
 
 // Moves an archived card to the end of Done.
-export function restoreCard(board: Board, cardId: string): Board {
+export function restoreCard(board: Board, cardId: string, opts: ActivityOptions = {}): Board {
   const card = board.archive.find((c) => c.id === cardId);
   if (!card) {
     throw new Error(`Archived card ${cardId} not found`);
   }
   return {
     ...board,
-    columns: { ...board.columns, done: [...board.columns.done, card] },
+    columns: { ...board.columns, done: [...board.columns.done, withActivity(card, { type: "restored" }, opts)] },
     archive: board.archive.filter((c) => c.id !== cardId),
   };
 }
@@ -187,16 +249,20 @@ export function deleteArchived(board: Board, cardId: string): Board {
 
 // Undoes `archiveDone`: puts the given cards back at the start of Done, in order.
 // Cards no longer in the archive (restored or deleted meanwhile) are skipped.
-export function undoArchive(board: Board, cards: Card[]): Board {
-  const inArchive = new Set(board.archive.map((c) => c.id));
-  const back = cards.filter((c) => inArchive.has(c.id));
+// The archive's current copies are put back, so earlier activity is kept.
+export function undoArchive(board: Board, cards: Card[], { now = new Date() }: { now?: Date } = {}): Board {
+  const archived = new Map(board.archive.map((c) => [c.id, c]));
+  const back = cards.flatMap((c) => archived.get(c.id) ?? []);
   if (back.length === 0) {
     return board;
   }
   const ids = new Set(back.map((c) => c.id));
   return {
     ...board,
-    columns: { ...board.columns, done: [...back, ...board.columns.done] },
+    columns: {
+      ...board.columns,
+      done: [...back.map((c) => withActivity(c, { type: "restored" }, { now })), ...board.columns.done],
+    },
     archive: board.archive.filter((c) => !ids.has(c.id)),
   };
 }
@@ -262,7 +328,7 @@ export function isValidDueDate(date: string): boolean {
 }
 
 // Sets, changes or (with `undefined`) clears a card's due date.
-export function setDueDate(board: Board, cardId: string, date: string | undefined): Board {
+export function setDueDate(board: Board, cardId: string, date: string | undefined, opts: ActivityOptions = {}): Board {
   const found = findCard(board, cardId);
   if (!found) {
     throw new Error(`Card ${cardId} not found`);
@@ -273,10 +339,11 @@ export function setDueDate(board: Board, cardId: string, date: string | undefine
   if (found.card.dueDate === date) {
     return board;
   }
-  const updated: Card = { ...found.card, dueDate: date };
+  let updated: Card = { ...found.card, dueDate: date };
   if (date === undefined) {
     delete updated.dueDate;
   }
+  updated = withActivity(updated, { type: "dueDate", from: found.card.dueDate, to: date }, opts);
   return {
     ...board,
     columns: {
@@ -287,7 +354,7 @@ export function setDueDate(board: Board, cardId: string, date: string | undefine
 }
 
 // Sets, changes or clears a card's notes. Blank notes (or `undefined`) clear them.
-export function setNotes(board: Board, cardId: string, notes: string | undefined): Board {
+export function setNotes(board: Board, cardId: string, notes: string | undefined, opts: ActivityOptions = {}): Board {
   const found = findCard(board, cardId);
   if (!found) {
     throw new Error(`Card ${cardId} not found`);
@@ -299,10 +366,11 @@ export function setNotes(board: Board, cardId: string, notes: string | undefined
   if (found.card.notes === trimmed) {
     return board;
   }
-  const updated: Card = { ...found.card, notes: trimmed };
+  let updated: Card = { ...found.card, notes: trimmed };
   if (trimmed === undefined) {
     delete updated.notes;
   }
+  updated = withActivity(updated, { type: "description" }, opts);
   return {
     ...board,
     columns: {
@@ -428,15 +496,15 @@ export interface CardEdits {
 }
 
 // Applies every edit at once. Validates first (the setters throw), so nothing is half-applied.
-export function updateCard(board: Board, cardId: string, edits: CardEdits): Board {
-  let next = renameCard(board, cardId, edits.title);
-  next = setNotes(next, cardId, edits.notes);
+export function updateCard(board: Board, cardId: string, edits: CardEdits, opts: { now?: Date } = {}): Board {
+  let next = renameCard(board, cardId, edits.title, opts);
+  next = setNotes(next, cardId, edits.notes, opts);
   if (edits.labels !== undefined) {
     next = setLabels(next, cardId, edits.labels);
   }
-  next = setPriority(next, cardId, edits.priority);
-  next = setDueDate(next, cardId, edits.dueDate);
-  return moveCard(next, cardId, edits.column);
+  next = setPriority(next, cardId, edits.priority, opts);
+  next = setDueDate(next, cardId, edits.dueDate, opts);
+  return moveCard(next, cardId, edits.column, opts);
 }
 
 // Whether a dialog draft differs from the stored card. Whitespace-only differences in title/notes don't count.

@@ -2,18 +2,21 @@
 
 import { useId, useState, type FormEvent } from "react";
 import {
+  addLabelToList,
   COLUMNS,
   hasChanges,
   isValidDueDate,
   MAX_NOTES_LENGTH,
   MAX_TITLE_LENGTH,
   PRIORITIES,
+  removeLabelFromList,
   type Card,
   type CardEdits,
   type ColumnId,
   type Priority,
 } from "@/lib/board";
 
+import { LabelChip } from "./LabelChip";
 import { Button, Dialog, Input, Select, Textarea } from "./ui";
 
 const labelStyles = "text-xs font-medium text-subtle";
@@ -37,6 +40,19 @@ export function CardDialog({
   const [priority, setPriority] = useState<Priority>(card.priority);
   const [dueDate, setDueDate] = useState(card.dueDate ?? "");
   const [status, setStatus] = useState<ColumnId>(column);
+  const [labels, setLabels] = useState<string[]>(card.labels ?? []);
+  const [labelInput, setLabelInput] = useState("");
+  const [labelError, setLabelError] = useState<string | null>(null);
+
+  function addLabel() {
+    try {
+      setLabels(addLabelToList(labels, labelInput));
+      setLabelInput("");
+      setLabelError(null);
+    } catch (error) {
+      setLabelError(error instanceof Error ? error.message : "Invalid label");
+    }
+  }
 
   const titleInvalid = !title.trim();
   const dueDateInvalid = dueDate !== "" && !isValidDueDate(dueDate);
@@ -48,6 +64,7 @@ export function CardDialog({
     priority,
     dueDate: dueDate || undefined,
     column: status,
+    labels,
   };
 
   // Closing with unsaved changes needs confirmation.
@@ -172,6 +189,56 @@ export function CardDialog({
               </Button>
             )}
           </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor={`${headingId}-label`} className={labelStyles}>
+            Labels
+          </label>
+          {labels.length > 0 && (
+            <ul className="flex flex-wrap gap-2">
+              {labels.map((label) => (
+                <li key={label.toLowerCase()} className="flex items-center gap-1">
+                  <LabelChip label={label} />
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    aria-label={`Remove label ${label}`}
+                    onClick={() => setLabels(removeLabelFromList(labels, label))}
+                  >
+                    ×
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex items-center gap-2">
+            <Input
+              id={`${headingId}-label`}
+              value={labelInput}
+              aria-invalid={labelError !== null}
+              aria-describedby={labelError ? `${headingId}-label-error` : undefined}
+              onChange={(event) => {
+                setLabelInput(event.target.value);
+                setLabelError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addLabel();
+                }
+              }}
+              className="w-full"
+            />
+            <Button size="sm" onClick={addLabel}>
+              Add label
+            </Button>
+          </div>
+          {labelError && (
+            <p id={`${headingId}-label-error`} role="alert" className="text-xs text-danger">
+              {labelError}
+            </p>
+          )}
         </div>
 
         <p className="text-xs text-muted">

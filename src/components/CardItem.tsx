@@ -14,6 +14,7 @@ import {
   type ColumnId,
   type Priority,
 } from "@/lib/board";
+import { LabelChip } from "./LabelChip";
 import { Button, Input, Select, Textarea } from "./ui";
 
 export const CARD_DRAG_TYPE = "application/x-kanban-card";
@@ -39,6 +40,7 @@ export function CardItem({
   onSetNotes,
   onSetPriority,
   onOpen,
+  onFilterLabel,
   onDragStart,
   onDragEnd,
 }: {
@@ -51,6 +53,7 @@ export function CardItem({
   onSetNotes: (notes: string | undefined) => void;
   onSetPriority: (priority: Priority) => void;
   onOpen: () => void;
+  onFilterLabel?: (label: string) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
 }) {
@@ -213,6 +216,15 @@ export function CardItem({
           {priorityLabel(card.priority)}
         </span>
       </div>
+      {card.labels && card.labels.length > 0 && (
+        <ul aria-label="Labels" className="mt-2 flex flex-wrap gap-1">
+          {card.labels.map((label) => (
+            <li key={label.toLowerCase()} className="max-w-full">
+              <LabelChip label={label} onClick={() => onFilterLabel?.(label)} />
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
         <Input
           ref={dateRef}

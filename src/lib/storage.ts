@@ -1,4 +1,4 @@
-import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card } from "./board";
+import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card } from "./board";
 
 export const STORAGE_KEY = "kanban-board-v1";
 
@@ -26,14 +26,37 @@ export function isBoard(value: unknown): value is Board {
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const { notes, ...rest } = card as Card & { notes?: unknown };
+  const { notes, labels, ...rest } = card as Card & { notes?: unknown; labels?: unknown };
   const priority = PRIORITIES.some((p) => p.id === card.priority) ? card.priority : DEFAULT_PRIORITY;
   const trimmed = typeof notes === "string" ? notes.trim() : "";
   const normalized: Card = { ...rest, priority };
   if (trimmed && trimmed.length <= MAX_NOTES_LENGTH) {
     normalized.notes = trimmed;
   }
+  const cleanLabels = normalizeLabels(labels);
+  if (cleanLabels.length > 0) {
+    normalized.labels = cleanLabels;
+  }
   return normalized;
+}
+
+// Keeps valid labels only: non-strings, blank, over-long and duplicate (case-insensitive) entries are dropped.
+function normalizeLabels(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  let result: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    try {
+      result = addLabelToList(result, entry);
+    } catch {
+      // invalid or duplicate: skip it
+    }
+  }
+  return result;
 }
 
 // Boards saved before archiving have no `archive`; a corrupt one is dropped and invalid cards are skipped.

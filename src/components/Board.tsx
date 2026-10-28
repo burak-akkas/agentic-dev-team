@@ -4,10 +4,12 @@ import { useCallback, useRef, useState, type DragEvent } from "react";
 import {
   addCard,
   archiveDone,
+  boardLabels,
   boardStats,
   COLUMNS,
   deleteArchived,
   deleteCard,
+  filterByLabel,
   filterCards,
   filterOverdue,
   findCard,
@@ -28,6 +30,7 @@ import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "./ArchivePanel";
 import { CardDialog } from "./CardDialog";
 import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
+import { LabelFilter } from "./LabelFilter";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
 import { UndoToast } from "./UndoToast";
@@ -41,8 +44,13 @@ export function Board() {
   const stats = boardStats(board);
   // The filter lapses by itself once nothing is overdue any more.
   const showOverdueOnly = overdueOnly && stats.overdue > 0;
-  const visible = filterCards(showOverdueOnly ? filterOverdue(board) : board, query);
-  const filtering = isFiltering(query) || showOverdueOnly;
+  const [labelFilter, setLabelFilter] = useState<string | null>(null);
+  const labelsInUse = boardLabels(board);
+  // Like the overdue filter, the label filter lapses once no card has the label any more.
+  const activeLabel =
+    labelFilter !== null && labelsInUse.some((l) => l.toLowerCase() === labelFilter.toLowerCase()) ? labelFilter : null;
+  const visible = filterByLabel(filterCards(showOverdueOnly ? filterOverdue(board) : board, query), activeLabel);
+  const filtering = isFiltering(query) || showOverdueOnly || activeLabel !== null;
   const [dragOver, setDragOver] = useState<ColumnId | null>(null);
   const dragSource = useRef<{ id: string; column: ColumnId } | null>(null);
 
@@ -144,6 +152,7 @@ export function Board() {
         <div className="flex-1">
           <SearchBox value={query} onChange={setQuery} />
         </div>
+        <LabelFilter labels={labelsInUse} value={activeLabel} onChange={setLabelFilter} />
         <Button
           aria-expanded={showArchive}
           aria-controls="archive-panel"
@@ -211,6 +220,7 @@ export function Board() {
                       onSetNotes={(notes) => update((b) => setNotes(b, card.id, notes))}
                       onSetPriority={(priority) => update((b) => setPriority(b, card.id, priority))}
                       onOpen={() => setOpenCardId(card.id)}
+                      onFilterLabel={setLabelFilter}
                       onDragStart={() => {
                         dragSource.current = { id: card.id, column: id };
                       }}

@@ -21,4 +21,9 @@ if [ -n "$new" ]; then
   gh api -X POST "repos/$repo/issues/$n/labels" -f "labels[]=$new" >/dev/null
 fi
 
+# A real escalation: assign the configured human so it shows up in their GitHub inbox.
+if [ "$new" = "agent:needs-human" ] && [ -n "${AGENT_ESCALATION_ASSIGNEE:-}" ]; then
+  gh api -X POST "repos/$repo/issues/$n/assignees" -f "assignees[]=$AGENT_ESCALATION_ASSIGNEE" >/dev/null || true
+fi
+
 echo "#$n -> ${new:-<cleared>}"

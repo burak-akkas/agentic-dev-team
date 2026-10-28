@@ -3,10 +3,13 @@ name: "Agent · Reviewer"
 # Triggers:
 #   - agent PRs (branch `agent/*`) are opened, updated or marked ready
 #   - a human applies `agent:review` to any same-repo PR
-# Loop guard: after AGENT_MAX_REVIEW_ROUNDS reviewer summaries (default 3) the PR goes to `agent:needs-human`.
+# Loop guard: after AGENT_MAX_REVIEW_ROUNDS reviewer summaries since the last Lead decision (default 3) the PR goes to the Lead (`agent:needs-decision`).
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, labeled]
+
+env:
+  AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
 
 jobs:
   review:
@@ -55,12 +58,17 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           mkdir -p .agent-out
-          rounds=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
-                     --jq '.[] | select(.body | contains("<!-- agent:reviewer -->")) | .id' | wc -l | tr -d ' ')
+          # Rounds are counted since the latest Lead decision, so a Lead ruling gives the loop a fresh budget.
+          comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments")
+          total=$(echo "$comments" | jq '[.[][] | select(.body | contains("<!-- agent:reviewer -->"))] | length')
+          rounds=$(echo "$comments" | jq '[.[][]] as $c
+            | ([$c | to_entries[] | select(.value.body | contains("<!-- agent:lead -->")) | .key] | max // -1) as $last
+            | [$c | to_entries[] | select(.key > $last and (.value.body | contains("<!-- agent:reviewer -->")))] | length')
+          echo "total=$total" >> "$GITHUB_OUTPUT"
           echo "round=$((rounds + 1))" >> "$GITHUB_OUTPUT"
           if [ "$rounds" -ge "$MAX_ROUNDS" ]; then
-            "$TRUSTED/transition.sh" "$PR" agent:needs-human
-            gh pr comment "$PR" --body "🛑 Reached $MAX_ROUNDS review rounds without approval. Handing over to a human."
+            "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+            gh pr comment "$PR" --body "🛑 Reached $MAX_ROUNDS review rounds without approval. Handing to the Lead."
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -108,14 +116,14 @@ jobs:
         run: |
           verdict=$(echo "${OUT:-null}" | jq -r '.verdict // "error"')
           after=$("$TRUSTED/count-comments.sh" "$PR" reviewer)
-          if [ "$after" -lt "${{ steps.guard.outputs.round }}" ]; then
+          if [ "$after" -le "${{ steps.guard.outputs.total }}" ]; then
             echo "::warning::Reviewer returned '$verdict' but posted no summary comment"
             verdict=missing-comment
           fi
           case "$verdict" in
             approve)         "$TRUSTED/transition.sh" "$PR" agent:approved ;;
             request-changes) "$TRUSTED/transition.sh" "$PR" agent:changes-requested ;;
-            needs-human)     "$TRUSTED/transition.sh" "$PR" agent:needs-human ;;
-            *)               "$TRUSTED/transition.sh" "$PR" agent:needs-human
-                             gh pr comment "$PR" --body "⚠️ Reviewer agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID))." ;;
+            needs-human)     "$TRUSTED/transition.sh" "$PR" agent:needs-decision ;;
+            *)               "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+                             gh pr comment "$PR" --body "⚠️ Reviewer agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
           esac

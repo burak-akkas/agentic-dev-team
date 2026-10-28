@@ -1,0 +1,112 @@
+name: "Agent · Merge"
+
+# Merge gate. When a PR gets `agent:approved` (from the Reviewer or the Lead):
+#   1. Kill switch: does nothing unless AGENT_AUTO_MERGE == 'true'
+#   2. Risk: if the linked issue is `risk:high`, a human merges (unless AGENT_AUTO_MERGE_HIGH_RISK == 'true')
+#   3. Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names, default "CI")
+#   4. Green: squash-merges exactly the approved commit. Red: sends the PR back to the Implementor.
+on:
+  pull_request:
+    types: [labeled]
+
+env:
+  AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
+
+jobs:
+  merge:
+    if: >-
+      ${{ github.event.label.name == 'agent:approved' && vars.AGENT_AUTO_MERGE == 'true' &&
+        github.event.pull_request.head.repo.full_name == github.repository }}
+    concurrency:
+      group: agent-${{ github.event.pull_request.number }}-merge
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      TRUSTED: .agent-trusted/.github/agents
+      REQUIRED: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .agent-trusted
+          sparse-checkout: .github/agents
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Risk gate
+        id: risk
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          HIGH_RISK_OK: ${{ vars.AGENT_AUTO_MERGE_HIGH_RISK }}
+        run: |
+          issue=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
+          risk=unknown
+          if [ -n "$issue" ]; then
+            risk=$(gh api "repos/$GITHUB_REPOSITORY/issues/$issue/labels" --jq '[.[].name | select(startswith("risk:"))][0] // "risk:unknown"' | sed 's/^risk://')
+          fi
+          echo "issue=$issue" >> "$GITHUB_OUTPUT"
+          echo "Linked issue: ${issue:-none}, risk: $risk" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$risk" = "high" ] && [ "$HIGH_RISK_OK" != "true" ]; then
+            "$TRUSTED/transition.sh" "$PR" agent:needs-human
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "✋ Approved by the agents, but the change is **high risk**, so a human merges it."
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for required checks
+        id: checks
+        if: steps.risk.outputs.stop != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          # Poll for up to 30 minutes. Only workflows listed in REQUIRED count,
+          # so the agent workflows themselves (including this one) never block the merge.
+          filter='[.[] | select(.workflow as $w | ($req | split(",") | map(gsub("^ +| +$"; ""))) | index($w))]'
+          for _ in $(seq 1 60); do
+            json=$(gh pr checks "$PR" -R "$GITHUB_REPOSITORY" --json workflow,name,bucket 2>/dev/null || true)
+            checks=$(echo "${json:-[]}" | jq --arg req "$REQUIRED" "$filter")
+            total=$(echo "$checks" | jq 'length')
+            failed=$(echo "$checks" | jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")')
+            pending=$(echo "$checks" | jq '[.[] | select(.bucket == "pending")] | length')
+            if [ -n "$failed" ]; then echo "result=fail" >> "$GITHUB_OUTPUT"; echo "failed=$failed" >> "$GITHUB_OUTPUT"; exit 0; fi
+            if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then echo "result=pass" >> "$GITHUB_OUTPUT"; exit 0; fi
+            sleep 30
+          done
+          echo "result=timeout" >> "$GITHUB_OUTPUT"
+
+      - name: Merge or send back
+        if: ${{ !cancelled() && steps.risk.outputs.stop != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          RESULT: ${{ steps.checks.outputs.result }}
+          FAILED: ${{ steps.checks.outputs.failed }}
+          ISSUE: ${{ steps.risk.outputs.issue }}
+        run: |
+          case "$RESULT" in
+            pass)
+              # --match-head-commit: never merge commits pushed after the approval.
+              if gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$HEAD_SHA"; then
+                "$TRUSTED/transition.sh" "$PR" agent:done
+                if [ -n "$ISSUE" ]; then "$TRUSTED/transition.sh" "$ISSUE" agent:done; fi
+                echo "Merged PR #$PR" >> "$GITHUB_STEP_SUMMARY"
+              else
+                "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+                gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⚠️ Auto-merge failed (conflict or new commits). Lead, please decide."
+              fi ;;
+            fail)
+              "$TRUSTED/transition.sh" "$PR" agent:changes-requested
+              gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
+          ❌ Required checks failed: **$FAILED**. Implementor, please fix ([checks](https://github.com/$GITHUB_REPOSITORY/pull/$PR/checks))." ;;
+            *)
+              "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+              gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⏱️ Required checks ($REQUIRED) did not finish in time. Lead, please decide." ;;
+          esac

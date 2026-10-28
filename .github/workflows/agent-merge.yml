@@ -6,7 +6,7 @@ name: "Agent · Merge"
 #      So does any PR touching AGENT_PROTECTED_PATHS (default .github/, scripts/, templates/)
 #   3. Up to date: if the default branch moved on, updates the PR branch (re-runs CI, review, QA)
 #   4. Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names, default "CI")
-#   5. Green: squash-merges exactly the approved commit. Red: sends the PR back to the Implementor.
+#   5. Green: squash-merges exactly the approved commit (agent approvals name it, see approve.sh). Red: sends the PR back to the Implementor.
 # PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
 # conflicts (GitHub creates no merge commit for those), and it always runs this workflow
 # file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
@@ -57,8 +57,27 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           HIGH_RISK_OK: ${{ vars.AGENT_AUTO_MERGE_HIGH_RISK }}
+          SENDER_TYPE: ${{ github.event.sender.type }}
+          SENDER: ${{ github.event.sender.login }}
           PROTECTED: ${{ vars.AGENT_PROTECTED_PATHS || '.github/,scripts/,templates/' }}
         run: |
+          # An agent approval names the exact commit it approved (scripts/agents/approve.sh). Anything
+          # pushed after it, by anyone, goes through review again. A human applying the label is trusted.
+          if [ "$SENDER_TYPE" = "Bot" ]; then
+            approved=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+              | jq -r --argjson bot "${AGENT_BOT_ID:?AGENT_BOT_ID must be set}" '[.[][] | select(.user.id == $bot) | .body
+                  | capture("<!-- agent:approved-sha (?<s>[0-9a-f]{40}) -->").s] | last // empty')
+            if [ "$approved" != "$HEAD_SHA" ]; then
+              echo "Approval was for ${approved:-nothing}, head is $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+              "$BIN/transition.sh" "$PR" agent:review
+              gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "🔁 $([ -n "$approved" ] && echo "The agents approved \`${approved:0:7}\`, but the PR head is now \`${HEAD_SHA:0:7}\`" || echo "No recorded agent approval for \`${HEAD_SHA:0:7}\`"). Sending it through review again."
+              "$BIN/progress.sh" --pr "$PR" "🚦 **Merge gate**: head moved after approval, back to review"
+              echo "stop=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "Approved by $SENDER" >> "$GITHUB_STEP_SUMMARY"
+          fi
           issue=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
           risk=unknown
           if [ -n "$issue" ]; then

@@ -135,7 +135,7 @@ jobs:
             pr:fix)                 "$BIN/transition.sh" "$N" agent:changes-requested ;;
             pr:re-review)           "$BIN/transition.sh" "$N" agent:review ;;
             pr:qa)                  "$BIN/transition.sh" "$N" agent:qa ;;
-            pr:approve)             "$BIN/transition.sh" "$N" agent:approved ;;
+            pr:approve)             "$BIN/approve.sh" "$N" "${{ github.event.pull_request.head.sha }}" lead ;;
             pr:close)               "$BIN/transition.sh" "$N"
                                     gh pr close "$N" --delete-branch ;;
             *:escalate)             "$BIN/transition.sh" "$N" agent:needs-human ;;

@@ -40,4 +40,7 @@ jobs:
       - name: Unblock sub-issues, close the parent when all are done
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: scripts/agents/subissues.sh "${{ github.event.issue.number }}" | tee -a "$GITHUB_STEP_SUMMARY"
+        # The sweep catches up on closures whose runs GitHub dropped from the shared queue.
+        run: |
+          scripts/agents/subissues.sh "${{ github.event.issue.number }}" | tee -a "$GITHUB_STEP_SUMMARY"
+          scripts/agents/subissues.sh --sweep | tee -a "$GITHUB_STEP_SUMMARY"

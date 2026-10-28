@@ -137,11 +137,19 @@ jobs:
             echo "::warning::Reviewer returned '$verdict' but posted no summary comment"
             verdict=missing-comment
           fi
+          # The PR may have changed while the agent worked (new commits, a conflict flagged by the merge
+          # gate, a Lead decision). Never apply a verdict on top of that.
+          stale=$("$BIN/pr-still-current.sh" "$PR" "${{ github.event.pull_request.head.sha }}")
+          if [ -n "$stale" ]; then
+            echo "Verdict '$verdict' not applied: ${stale#skip=}" | tee -a "$GITHUB_STEP_SUMMARY"
+            "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer** (round ${{ steps.guard.outputs.round }}): verdict not applied, ${stale#skip=}"
+            exit 0
+          fi
           case "$verdict" in
             approve)         if [ "$QA" = "true" ]; then
                                "$BIN/transition.sh" "$PR" agent:qa
                              else
-                               "$BIN/transition.sh" "$PR" agent:approved
+                               "$BIN/approve.sh" "$PR" "${{ github.event.pull_request.head.sha }}" reviewer
                              fi ;;
             request-changes) "$BIN/transition.sh" "$PR" agent:changes-requested ;;
             needs-human)     "$BIN/transition.sh" "$PR" agent:needs-decision ;;

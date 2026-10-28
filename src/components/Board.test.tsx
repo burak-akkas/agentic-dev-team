@@ -1,10 +1,11 @@
-import { createEvent, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, setPriority, todayString } from "@/lib/board";
 import { saveBoard } from "@/lib/storage";
 import { resetBoardStore } from "@/lib/useBoard";
 import { Board } from "./Board";
+import { UNDO_TOAST_MS } from "./UndoToast";
 
 const column = (name: string) => screen.getByRole("region", { name: new RegExp(`^${name}`) });
 
@@ -663,6 +664,94 @@ describe("<Board />", () => {
 
       await user.click(screen.getByRole("button", { name: 'Edit "Beta"' }));
       expect(screen.getByLabelText("Card title").closest("li")).not.toHaveAttribute("draggable");
+    });
+  });
+
+  describe("archive", () => {
+    const seed = () => {
+      let board = addCard(emptyBoard(), "First", { id: "a" });
+      board = addCard(board, "Second", { id: "b" });
+      board = addCard(board, "Third", { id: "c" });
+      board = moveCard(board, "a", "done");
+      board = moveCard(board, "b", "done");
+      saveBoard(board);
+    };
+
+    it("disables Archive done when Done is empty", () => {
+      render(<Board />);
+      expect(screen.getByRole("button", { name: "Archive done" })).toBeDisabled();
+    });
+
+    it("archives Done cards, leaves other columns and shows an Undo notification", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+
+      await user.click(screen.getByRole("button", { name: "Archive done" }));
+      expect(within(column("Done")).getByText("No cards")).toBeInTheDocument();
+      expect(within(column("To do")).getByText("Third")).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("Archived 2 done cards");
+      expect(screen.getByRole("button", { name: "Archived (2)" })).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Undo" }));
+      const titles = within(column("Done"))
+        .getAllByRole("listitem")
+        .map((li) => li.textContent);
+      expect(titles[0]).toContain("First");
+      expect(titles[1]).toContain("Second");
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Archived (0)" })).toBeInTheDocument();
+    });
+
+    it("hides the notification after a few seconds", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        seed();
+        render(<Board />);
+        await user.click(screen.getByRole("button", { name: "Archive done" }));
+        expect(screen.getByRole("status")).toBeInTheDocument();
+        act(() => {
+          vi.advanceTimersByTime(UNDO_TOAST_MS + 100);
+        });
+        expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("toggles the archive list, with an empty state", async () => {
+      const user = userEvent.setup();
+      render(<Board />);
+
+      const toggle = screen.getByRole("button", { name: "Archived (0)" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      toggle.focus();
+      await user.keyboard("{Enter}");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(screen.getByText("No archived cards")).toBeInTheDocument();
+      await user.keyboard(" ");
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByText("No archived cards")).not.toBeInTheDocument();
+    });
+
+    it("restores and permanently deletes archived cards", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+      await user.click(screen.getByRole("button", { name: "Archive done" }));
+      await user.click(screen.getByRole("button", { name: "Archived (2)" }));
+
+      const panel = screen.getByRole("region", { name: "Archived cards" });
+      expect(within(panel).getByText("First")).toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: 'Restore "First"' }));
+      expect(within(column("Done")).getByText("First")).toBeInTheDocument();
+      expect(within(panel).queryByText("First")).not.toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: 'Delete "Second" permanently' }));
+      expect(within(panel).getByText("No archived cards")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Archived (0)" })).toBeInTheDocument();
     });
   });
 

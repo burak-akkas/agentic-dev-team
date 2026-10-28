@@ -36,13 +36,16 @@ function normalizeCard(card: Card): Card {
   return normalized;
 }
 
+// Boards saved before archiving have no `archive`; a corrupt one is dropped and invalid cards are skipped.
 function normalizeBoard(board: Board): Board {
+  const archive: unknown = (board as { archive?: unknown }).archive;
   return {
     columns: {
       todo: board.columns.todo.map(normalizeCard),
       doing: board.columns.doing.map(normalizeCard),
       done: board.columns.done.map(normalizeCard),
     },
+    archive: Array.isArray(archive) ? (archive.filter(isCard) as Card[]).map(normalizeCard) : [],
   };
 }
 

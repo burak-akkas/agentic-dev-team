@@ -17,6 +17,8 @@ export interface Card {
 
 export interface Board {
   columns: Record<ColumnId, Card[]>;
+  // Cards removed from Done with "Archive done", oldest first.
+  archive: Card[];
 }
 
 export const COLUMNS: readonly { id: ColumnId; title: string }[] = [
@@ -38,7 +40,7 @@ export const MAX_TITLE_LENGTH = 120;
 export const MAX_NOTES_LENGTH = 1000;
 
 export function emptyBoard(): Board {
-  return { columns: { todo: [], doing: [], done: [] } };
+  return { columns: { todo: [], doing: [], done: [] }, archive: [] };
 }
 
 function normalizeTitle(title: string): string {
@@ -63,7 +65,7 @@ export function addCard(
     createdAt: now.toISOString(),
     priority: DEFAULT_PRIORITY,
   };
-  return { columns: { ...board.columns, todo: [...board.columns.todo, card] } };
+  return { ...board, columns: { ...board.columns, todo: [...board.columns.todo, card] } };
 }
 
 export function setPriority(board: Board, cardId: string, priority: Priority): Board {
@@ -75,6 +77,7 @@ export function setPriority(board: Board, cardId: string, priority: Priority): B
     return board;
   }
   return {
+    ...board,
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? { ...c, priority } : c)),
@@ -92,6 +95,7 @@ export function renameCard(board: Board, cardId: string, title: string): Board {
     return board;
   }
   return {
+    ...board,
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? { ...c, title: trimmed } : c)),
@@ -118,6 +122,7 @@ export function moveCard(board: Board, cardId: string, to: ColumnId): Board {
     return board;
   }
   return {
+    ...board,
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].filter((c) => c.id !== cardId),
@@ -132,10 +137,56 @@ export function deleteCard(board: Board, cardId: string): Board {
     throw new Error(`Card ${cardId} not found`);
   }
   return {
+    ...board,
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].filter((c) => c.id !== cardId),
     },
+  };
+}
+
+// Moves every Done card to the end of the archive. Returns the same board when Done is empty.
+export function archiveDone(board: Board): Board {
+  if (board.columns.done.length === 0) {
+    return board;
+  }
+  return {
+    columns: { ...board.columns, done: [] },
+    archive: [...board.archive, ...board.columns.done],
+  };
+}
+
+// Moves an archived card to the end of Done.
+export function restoreCard(board: Board, cardId: string): Board {
+  const card = board.archive.find((c) => c.id === cardId);
+  if (!card) {
+    throw new Error(`Archived card ${cardId} not found`);
+  }
+  return {
+    columns: { ...board.columns, done: [...board.columns.done, card] },
+    archive: board.archive.filter((c) => c.id !== cardId),
+  };
+}
+
+export function deleteArchived(board: Board, cardId: string): Board {
+  if (!board.archive.some((c) => c.id === cardId)) {
+    throw new Error(`Archived card ${cardId} not found`);
+  }
+  return { ...board, archive: board.archive.filter((c) => c.id !== cardId) };
+}
+
+// Undoes `archiveDone`: puts the given cards back at the start of Done, in order.
+// Cards no longer in the archive (restored or deleted meanwhile) are skipped.
+export function undoArchive(board: Board, cards: Card[]): Board {
+  const inArchive = new Set(board.archive.map((c) => c.id));
+  const back = cards.filter((c) => inArchive.has(c.id));
+  if (back.length === 0) {
+    return board;
+  }
+  const ids = new Set(back.map((c) => c.id));
+  return {
+    columns: { ...board.columns, done: [...back, ...board.columns.done] },
+    archive: board.archive.filter((c) => !ids.has(c.id)),
   };
 }
 
@@ -166,6 +217,7 @@ export function setDueDate(board: Board, cardId: string, date: string | undefine
     delete updated.dueDate;
   }
   return {
+    ...board,
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? updated : c)),
@@ -191,6 +243,7 @@ export function setNotes(board: Board, cardId: string, notes: string | undefined
     delete updated.notes;
   }
   return {
+    ...board,
     columns: {
       ...board.columns,
       [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? updated : c)),
@@ -227,6 +280,7 @@ export function filterCards(board: Board, query: string): Board {
   }
   const q = query.trim().toLowerCase();
   return {
+    ...board,
     columns: {
       todo: board.columns.todo.filter((c) => c.title.toLowerCase().includes(q)),
       doing: board.columns.doing.filter((c) => c.title.toLowerCase().includes(q)),
@@ -267,6 +321,7 @@ export function boardStats(board: Board, today: string = todayString()): BoardSt
 // Only the overdue cards (due before today, not in Done).
 export function filterOverdue(board: Board, today: string = todayString()): Board {
   return {
+    ...board,
     columns: {
       todo: board.columns.todo.filter((c) => isOverdue(c, "todo", today)),
       doing: board.columns.doing.filter((c) => isOverdue(c, "doing", today)),

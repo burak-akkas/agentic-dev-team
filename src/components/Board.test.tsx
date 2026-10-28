@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, todayString } from "@/lib/board";
+import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, todayString } from "@/lib/board";
 import { saveBoard } from "@/lib/storage";
 import { resetBoardStore } from "@/lib/useBoard";
 import { Board } from "./Board";
@@ -295,6 +295,139 @@ describe("<Board />", () => {
       await user.type(screen.getByLabelText("Card title"), " 2{Enter}");
       await user.click(screen.getByRole("button", { name: 'Move "Task 2" to Doing' }));
       expect(badge("Task 2")).toHaveTextContent("High");
+    });
+  });
+
+  describe("notes", () => {
+    const seed = (notes?: string) => {
+      const board = addCard(emptyBoard(), "Plan trip", { id: "a" });
+      saveBoard(notes ? setNotes(board, "a", notes) : board);
+    };
+    const textarea = () => screen.getByLabelText('Notes for "Plan trip"');
+    const openButton = (name: string) => screen.getByRole("button", { name: `${name} notes for "Plan trip"` });
+
+    it("shows no indicator or preview on cards without notes", () => {
+      seed();
+      render(<Board />);
+      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("notes-preview")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Show notes/ })).not.toBeInTheDocument();
+    });
+
+    it("adds notes, with Enter inserting a newline, and shows indicator and first-line preview", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+
+      await user.click(openButton("Add"));
+      expect(textarea()).toHaveAttribute("maxLength", "1000");
+      expect(textarea()).toHaveFocus();
+      await user.type(textarea(), "Book flights{Enter}Pack bags");
+      expect(textarea()).toHaveValue("Book flights\nPack bags");
+
+      await user.click(screen.getByRole("button", { name: "Save notes" }));
+      expect(screen.getByText("Has notes")).toBeInTheDocument();
+      expect(screen.getByTestId("notes-preview")).toHaveTextContent("Book flights");
+      expect(screen.getByTestId("notes-preview")).not.toHaveTextContent("Pack bags");
+      expect(openButton("Edit")).toHaveFocus();
+    });
+
+    it("expands to the full text and collapses again", async () => {
+      const user = userEvent.setup();
+      seed("Line one\nLine two");
+      render(<Board />);
+
+      const toggle = screen.getByRole("button", { name: "Show notes" });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      expect(toggle).toHaveTextContent("Hide notes");
+      const full = document.getElementById(toggle.getAttribute("aria-controls") as string);
+      expect(full?.textContent).toBe("Line one\nLine two");
+      await user.click(toggle);
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(screen.getByTestId("notes-preview")).toHaveTextContent("Line one");
+    });
+
+    it("cancels with Escape, restoring focus and keeping the old notes", async () => {
+      const user = userEvent.setup();
+      seed("Original");
+      render(<Board />);
+
+      await user.click(openButton("Edit"));
+      await user.clear(textarea());
+      await user.type(textarea(), "Changed{Escape}");
+      expect(screen.queryByLabelText('Notes for "Plan trip"')).not.toBeInTheDocument();
+      expect(screen.getByTestId("notes-preview")).toHaveTextContent("Original");
+      expect(openButton("Edit")).toHaveFocus();
+    });
+
+    it("cancels with the Cancel button", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+
+      await user.click(openButton("Add"));
+      await user.type(textarea(), "Draft");
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
+      expect(openButton("Add")).toHaveFocus();
+    });
+
+    it("edits existing notes", async () => {
+      const user = userEvent.setup();
+      seed("Old");
+      render(<Board />);
+
+      await user.click(openButton("Edit"));
+      expect(textarea()).toHaveValue("Old");
+      await user.clear(textarea());
+      await user.type(textarea(), "New");
+      await user.click(screen.getByRole("button", { name: "Save notes" }));
+      expect(screen.getByTestId("notes-preview")).toHaveTextContent("New");
+    });
+
+    it("removes notes by saving blank text or with Remove notes", async () => {
+      const user = userEvent.setup();
+      seed("Something");
+      render(<Board />);
+
+      await user.click(openButton("Edit"));
+      await user.clear(textarea());
+      await user.click(screen.getByRole("button", { name: "Save notes" }));
+      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
+
+      await user.click(openButton("Add"));
+      expect(screen.queryByRole("button", { name: "Remove notes" })).not.toBeInTheDocument();
+      await user.type(textarea(), "Again");
+      await user.click(screen.getByRole("button", { name: "Save notes" }));
+      await user.click(openButton("Edit"));
+      await user.click(screen.getByRole("button", { name: "Remove notes" }));
+      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
+      expect(openButton("Add")).toHaveFocus();
+    });
+
+    it("renders HTML-like text literally", async () => {
+      const user = userEvent.setup();
+      seed("<b>x</b>");
+      render(<Board />);
+      await user.click(screen.getByRole("button", { name: "Show notes" }));
+      expect(screen.getByText("<b>x</b>")).toBeInTheDocument();
+      expect(document.querySelector("b")).toBeNull();
+    });
+
+    it("persists across reloads and survives rename and move", async () => {
+      const user = userEvent.setup();
+      seed("Keep me");
+      const { unmount } = render(<Board />);
+      await user.click(screen.getByRole("button", { name: 'Edit "Plan trip"' }));
+      await user.type(screen.getByLabelText("Card title"), " 2{Enter}");
+      await user.click(screen.getByRole("button", { name: 'Move "Plan trip 2" to Doing' }));
+      unmount();
+
+      resetBoardStore();
+      render(<Board />);
+      expect(within(column("Doing")).getByTestId("notes-preview")).toHaveTextContent("Keep me");
     });
   });
 

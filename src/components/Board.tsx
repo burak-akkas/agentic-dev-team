@@ -10,6 +10,7 @@ import {
   moveCard,
   renameCard,
   setDueDate,
+  setNotes,
   setPriority,
 } from "@/lib/board";
 import { useBoard } from "@/lib/useBoard";
@@ -59,6 +60,7 @@ export function Board() {
                       onDelete={() => update((b) => deleteCard(b, card.id))}
                       onRename={(title) => update((b) => renameCard(b, card.id, title))}
                       onSetDueDate={(date) => update((b) => setDueDate(b, card.id, date))}
+                      onSetNotes={(notes) => update((b) => setNotes(b, card.id, notes))}
                       onSetPriority={(priority) => update((b) => setPriority(b, card.id, priority))}
                     />
                   ))}

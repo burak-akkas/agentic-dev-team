@@ -11,6 +11,8 @@ export interface Card {
   priority: Priority;
   // Optional date-only due date, `YYYY-MM-DD` (local calendar day).
   dueDate?: string;
+  // Optional multi-line plain-text notes (trimmed, at most MAX_NOTES_LENGTH characters).
+  notes?: string;
 }
 
 export interface Board {
@@ -32,6 +34,8 @@ export const PRIORITIES: readonly { id: Priority; label: string }[] = [
 export const DEFAULT_PRIORITY: Priority = "medium";
 
 export const MAX_TITLE_LENGTH = 120;
+
+export const MAX_NOTES_LENGTH = 1000;
 
 export function emptyBoard(): Board {
   return { columns: { todo: [], doing: [], done: [] } };
@@ -160,6 +164,31 @@ export function setDueDate(board: Board, cardId: string, date: string | undefine
   const updated: Card = { ...found.card, dueDate: date };
   if (date === undefined) {
     delete updated.dueDate;
+  }
+  return {
+    columns: {
+      ...board.columns,
+      [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? updated : c)),
+    },
+  };
+}
+
+// Sets, changes or clears a card's notes. Blank notes (or `undefined`) clear them.
+export function setNotes(board: Board, cardId: string, notes: string | undefined): Board {
+  const found = findCard(board, cardId);
+  if (!found) {
+    throw new Error(`Card ${cardId} not found`);
+  }
+  const trimmed = notes?.trim() || undefined;
+  if (trimmed !== undefined && trimmed.length > MAX_NOTES_LENGTH) {
+    throw new Error(`Card notes must be at most ${MAX_NOTES_LENGTH} characters`);
+  }
+  if (found.card.notes === trimmed) {
+    return board;
+  }
+  const updated: Card = { ...found.card, notes: trimmed };
+  if (trimmed === undefined) {
+    delete updated.notes;
   }
   return {
     columns: {

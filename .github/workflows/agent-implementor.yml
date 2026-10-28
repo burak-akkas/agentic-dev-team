@@ -6,10 +6,13 @@ name: "Agent · Implementor"
 #
 # Project build/test commands the agent may run come from the repo variable
 # AGENT_BUILD_TOOLS, e.g.  Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)
+# PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
+# conflicts (GitHub creates no merge commit for those), and it always runs this workflow
+# file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
 on:
   issues:
     types: [labeled]
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 env:
@@ -120,7 +123,7 @@ jobs:
 
   fix:
     if: >-
-      github.event_name == 'pull_request' &&
+      github.event_name == 'pull_request_target' &&
       github.event.label.name == 'agent:changes-requested' &&
       github.event.pull_request.head.repo.full_name == github.repository
     concurrency:

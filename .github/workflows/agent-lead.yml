@@ -4,10 +4,13 @@ name: "Agent · Lead"
 # (open questions, high-risk design, review deadlock, agent failure).
 # It picks one action that unblocks the team, or escalates to a human (`agent:needs-human`).
 # Budget: AGENT_MAX_LEAD_DECISIONS per item (default 3), then it always escalates.
+# PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
+# conflicts (GitHub creates no merge commit for those), and it always runs this workflow
+# file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
 on:
   issues:
     types: [labeled]
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 env:

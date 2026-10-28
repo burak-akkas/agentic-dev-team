@@ -43,6 +43,10 @@ jobs:
           fetch-depth: 1
           token: ${{ steps.app.outputs.token }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.AGENT_NODE_VERSION || '22' }}
+
       - name: Prepare
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
@@ -143,6 +147,10 @@ jobs:
           path: .agent-trusted
           sparse-checkout: .github/agents
           token: ${{ steps.app.outputs.token }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.AGENT_NODE_VERSION || '22' }}
 
       - name: Prepare
         env:

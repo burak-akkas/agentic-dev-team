@@ -69,6 +69,15 @@ export function selectBoard(list: BoardList, id: string): BoardList {
   return { ...list, currentId: id };
 }
 
+// Which board a ?board= value points at: a known id wins, an unknown id falls back to the first board,
+// and no value keeps the remembered current board.
+export function resolveBoardId(list: { boards: { id: string }[]; currentId: string }, param: string | null): string {
+  if (param === null) {
+    return list.currentId;
+  }
+  return list.boards.some((b) => b.id === param) ? param : list.boards[0].id;
+}
+
 export function currentEntry(list: BoardList): BoardEntry {
   return list.boards.find((b) => b.id === list.currentId) ?? list.boards[0];
 }

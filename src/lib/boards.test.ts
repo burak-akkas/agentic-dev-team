@@ -7,6 +7,7 @@ import {
   initialBoardList,
   MAX_BOARD_NAME_LENGTH,
   renameBoard,
+  resolveBoardId,
   selectBoard,
   updateCurrentBoard,
   validateBoardName,
@@ -50,6 +51,22 @@ describe("validateBoardName", () => {
   it("lets a board be renamed to its own name with different casing", () => {
     expect(validateBoardName("WORK", boards, "a")).toEqual({ ok: true, name: "WORK" });
     expect(validateBoardName("home", boards, "a").ok).toBe(false);
+  });
+});
+
+describe("resolveBoardId", () => {
+  const list = createBoardEntry(initialBoardList("a"), "Work", "b");
+
+  it("returns a known id", () => {
+    expect(resolveBoardId(list, "a")).toBe("a");
+  });
+
+  it("falls back to the first board for an unknown id", () => {
+    expect(resolveBoardId(list, "nope")).toBe("a");
+  });
+
+  it("keeps the current board without a param", () => {
+    expect(resolveBoardId(list, null)).toBe("b");
   });
 });
 

@@ -23,6 +23,12 @@ test("shows cycle time and overdue cards and opens an overdue card", async ({ pa
   await expect(panel.getByText("Average")).toBeVisible();
   await expect(panel.getByRole("button", { name: /^Open "Pay rent" \(due / })).toBeVisible();
 
+  const throughput = panel.getByRole("region", { name: "Throughput" });
+  await expect(throughput.getByRole("table", { name: "Cards moved to Done per week" }).getByRole("row")).toHaveCount(9);
+  await expect(throughput.getByRole("row").last().getByRole("cell")).toHaveText("1");
+  const wip = panel.getByRole("region", { name: "WIP over time" });
+  await expect(wip.getByRole("table", { name: "Cards in Doing per day" }).getByRole("row")).toHaveCount(15);
+
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
   await expect(opener).toBeFocused();
@@ -38,7 +44,12 @@ test("does not scroll horizontally on a phone-width screen", async ({ page }) =>
   await page.getByLabel("New card title").fill("A very long card title that should wrap instead of overflowing the dialog");
   await page.getByRole("button", { name: "Add card" }).click();
   await page.getByRole("button", { name: "Board insights" }).click();
-  await expect(page.getByRole("dialog", { name: "Board insights" })).toBeVisible();
+  const panel = page.getByRole("dialog", { name: "Board insights" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("region", { name: "Throughput" })).toBeAttached();
+  await expect(panel.getByRole("region", { name: "WIP over time" })).toBeAttached();
+  const dialogOverflow = await panel.evaluate((el) => el.scrollWidth > el.clientWidth);
+  expect(dialogOverflow).toBe(false);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflow).toBe(false);
 });

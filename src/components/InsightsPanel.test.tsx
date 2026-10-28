@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, moveCard, setDueDate } from "@/lib/board";
 import type { Board } from "@/lib/board";
+import { dailyWip, weeklyThroughput } from "@/lib/insights";
 import { InsightsPanel } from "./InsightsPanel";
 
 const NOW = new Date(2026, 5, 10, 12, 0, 0);
@@ -77,6 +78,53 @@ describe("<InsightsPanel />", () => {
     renderPanel(board);
     expect(screen.getByText("No overdue cards")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Open "A"/ })).not.toBeInTheDocument();
+  });
+
+  it("lists weekly throughput in a table matching the data, with the chart hidden from assistive tech", () => {
+    const board = finished(emptyBoard(), "a", "A", 2);
+    renderPanel(board);
+    const section = screen.getByRole("region", { name: "Throughput" });
+    const table = within(section).getByRole("table", { name: "Cards moved to Done per week" });
+    const expected = weeklyThroughput(board, { now: NOW });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(8);
+    rows.forEach((row, i) => {
+      expect(within(row).getByRole("rowheader")).toHaveTextContent(expected[i].label);
+      expect(within(row).getByRole("cell")).toHaveTextContent(String(expected[i].count));
+    });
+    expect(expected[7].count).toBe(1);
+    expect(section.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+    expect(within(section).queryByText(/No cards moved to Done/)).not.toBeInTheDocument();
+  });
+
+  it("shows a zero state for throughput but keeps all rows", () => {
+    renderPanel(emptyBoard());
+    const section = screen.getByRole("region", { name: "Throughput" });
+    expect(within(section).getByText("No cards moved to Done in the last 8 weeks")).toBeInTheDocument();
+    expect(within(section).getAllByRole("row")).toHaveLength(9);
+  });
+
+  it("lists daily WIP in a table matching the data, with the chart hidden from assistive tech", () => {
+    let board = addCard(emptyBoard(), "W", { id: "w", now: new Date(2026, 5, 5, 8, 0, 0) });
+    board = moveCard(board, "w", "doing", { now: new Date(2026, 5, 6, 8, 0, 0) });
+    renderPanel(board);
+    const section = screen.getByRole("region", { name: "WIP over time" });
+    const table = within(section).getByRole("table", { name: "Cards in Doing per day" });
+    const expected = dailyWip(board, { now: NOW });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(14);
+    rows.forEach((row, i) => {
+      expect(within(row).getByRole("cell")).toHaveTextContent(String(expected[i].count));
+    });
+    expect(expected[13].count).toBe(1);
+    expect(section.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("shows a zero state for WIP but keeps all rows", () => {
+    renderPanel(emptyBoard());
+    const section = screen.getByRole("region", { name: "WIP over time" });
+    expect(within(section).getByText("No cards in Doing in the last 14 days")).toBeInTheDocument();
+    expect(within(section).getAllByRole("row")).toHaveLength(15);
   });
 
   it("calls onClose from the Close button", async () => {

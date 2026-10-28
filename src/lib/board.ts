@@ -80,6 +80,25 @@ export function deleteCard(board: Board, cardId: string): Board {
   };
 }
 
+export function isFiltering(query: string): boolean {
+  return query.trim() !== "";
+}
+
+// Cards whose title contains the query (case-insensitive, trimmed). A blank query returns the same board.
+export function filterCards(board: Board, query: string): Board {
+  if (!isFiltering(query)) {
+    return board;
+  }
+  const q = query.trim().toLowerCase();
+  return {
+    columns: {
+      todo: board.columns.todo.filter((c) => c.title.toLowerCase().includes(q)),
+      doing: board.columns.doing.filter((c) => c.title.toLowerCase().includes(q)),
+      done: board.columns.done.filter((c) => c.title.toLowerCase().includes(q)),
+    },
+  };
+}
+
 // Neighbouring column, for the "move left / right" buttons.
 export function adjacentColumn(column: ColumnId, direction: -1 | 1): ColumnId | undefined {
   const index = COLUMNS.findIndex((c) => c.id === column);

@@ -1,20 +1,27 @@
 "use client";
 
-import { addCard, COLUMNS, deleteCard, moveCard } from "@/lib/board";
+import { useState } from "react";
+import { addCard, COLUMNS, deleteCard, filterCards, isFiltering, moveCard } from "@/lib/board";
 import { useBoard } from "@/lib/useBoard";
 import { AddCardForm } from "./AddCardForm";
 import { CardItem } from "./CardItem";
+import { SearchBox } from "./SearchBox";
 
 export function Board() {
   const [board, update] = useBoard();
+  const [query, setQuery] = useState("");
+  const visible = filterCards(board, query);
+  const filtering = isFiltering(query);
 
   return (
     <div className="flex flex-col gap-6">
       <AddCardForm onAdd={(title) => update((b) => addCard(b, title))} />
 
+      <SearchBox value={query} onChange={setQuery} />
+
       <div className="grid gap-4 md:grid-cols-3">
         {COLUMNS.map(({ id, title }) => {
-          const cards = board.columns[id];
+          const cards = visible.columns[id];
           return (
             <section
               key={id}
@@ -28,7 +35,9 @@ export function Board() {
                 </span>
               </h2>
               {cards.length === 0 ? (
-                <p className="px-1 py-4 text-center text-xs text-zinc-500">No cards</p>
+                <p className="px-1 py-4 text-center text-xs text-zinc-500">
+                  {filtering ? "No matching cards" : "No cards"}
+                </p>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {cards.map((card) => (

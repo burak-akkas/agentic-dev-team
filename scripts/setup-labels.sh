@@ -34,3 +34,4 @@ label "agent:done"            "0e8a16" "Merged by the agent team"
 label "risk:low"              "c2e0c6" "Architect: low risk"
 label "risk:medium"           "fbca04" "Architect: medium risk"
 label "risk:high"             "b60205" "Architect: high risk; a human merges"
+# test: stale-head skip

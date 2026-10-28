@@ -166,13 +166,8 @@ jobs:
           files=(.agent-out/screenshots/*.png .agent-out/screenshots/*.jpeg .agent-out/screenshots/*.jpg)
           [ ${#files[@]} -eq 0 ] && { echo "No screenshots"; exit 0; }
           dir="qa/pr-$PR/$GITHUB_RUN_ID"
-          git clone -q --depth 1 --branch gh-pages \
-            "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" .gh-pages
-          mkdir -p ".gh-pages/$dir" && cp "${files[@]}" ".gh-pages/$dir/"
-          git -C .gh-pages add "$dir"
-          git -C .gh-pages -c user.name="$BOT" -c user.email="${{ vars.AGENT_BOT_ID }}+$BOT@users.noreply.github.com" \
-            commit -qm "qa: screenshots for PR #$PR"
-          git -C .gh-pages push -q
+          mkdir -p .agent-out/publish && cp "${files[@]}" .agent-out/publish/
+          "$TRUSTED/publish-pages.sh" .agent-out/publish "$dir" "qa: screenshots for PR #$PR"
           base="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/gh-pages/$dir"
           {
             echo "<!-- agent:qa-screenshots -->"

@@ -1,9 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { adjacentColumn, COLUMNS, MAX_TITLE_LENGTH, type Card, type ColumnId } from "@/lib/board";
+import {
+  adjacentColumn,
+  COLUMNS,
+  MAX_TITLE_LENGTH,
+  PRIORITIES,
+  type Card,
+  type ColumnId,
+  type Priority,
+} from "@/lib/board";
 
 const columnTitle = (id: ColumnId) => COLUMNS.find((c) => c.id === id)?.title ?? id;
+const priorityLabel = (id: Priority) => PRIORITIES.find((p) => p.id === id)?.label ?? id;
+
+const badgeStyles: Record<Priority, string> = {
+  low: "bg-zinc-200 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  medium: "bg-amber-100 font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  high: "bg-red-600 font-bold text-white dark:bg-red-500 dark:text-white",
+};
 
 const iconButton =
   "rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
@@ -14,12 +29,14 @@ export function CardItem({
   onMove,
   onDelete,
   onRename,
+  onSetPriority,
 }: {
   card: Card;
   column: ColumnId;
   onMove: (to: ColumnId) => void;
   onDelete: () => void;
   onRename: (title: string) => void;
+  onSetPriority: (priority: Priority) => void;
 }) {
   const previous = adjacentColumn(column, -1);
   const next = adjacentColumn(column, 1);
@@ -96,8 +113,28 @@ export function CardItem({
 
   return (
     <li className="group rounded-lg border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="break-words text-sm">{card.title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="break-words text-sm">{card.title}</p>
+        <span
+          data-testid="priority-badge"
+          className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${badgeStyles[card.priority]}`}
+        >
+          {priorityLabel(card.priority)}
+        </span>
+      </div>
       <div className="mt-2 flex items-center gap-1">
+        <select
+          aria-label={`Priority of "${card.title}"`}
+          value={card.priority}
+          onChange={(event) => onSetPriority(event.target.value as Priority)}
+          className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+        >
+          {PRIORITIES.map(({ id, label }) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
         {previous && (
           <button
             type="button"

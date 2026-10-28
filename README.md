@@ -77,6 +77,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_AUTO_MERGE_HIGH_RISK` | – | – | `true` lets the agents merge `risk:high` changes too (not recommended) |
 | `AGENT_REQUIRED_CHECKS` | | `CI` | Comma-separated workflow names that must pass before merge |
 | `AGENT_MAX_REVIEW_ROUNDS` | `3` | `3` | Review rounds before the Lead steps in |
+| `AGENT_QA_SCREENSHOT_DAYS` | `7` | `7` | Days QA screenshots stay after a PR closes ([pages-janitor.yml](.github/workflows/pages-janitor.yml) also squashes `gh-pages` weekly) |
 | `AGENT_MAX_QA_ROUNDS` | `3` | `3` | Failed QA rounds before the Lead steps in |
 | `AGENT_MAX_LEAD_DECISIONS` | `3` | `3` | Lead decisions per item before a human is assigned |
 | `AGENT_PREVIEW_URL` | | | Preview URL template for QA, default `https://{owner}.github.io/{repo}/pr-{pr}/`. The preview must serve `version.txt` containing the PR head SHA |

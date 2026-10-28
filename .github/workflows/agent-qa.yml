@@ -154,13 +154,14 @@ jobs:
           fi
 
       # Screenshots are committed to gh-pages (qa/pr-N/<run>/) and embedded via raw URLs,
-      # so they show up in the PR right away. They are kept after the PR closes, as test evidence.
+      # so they show up in the PR right away. pages-janitor.yml removes them AGENT_QA_SCREENSHOT_DAYS (default 7) after the PR closes.
       - name: Publish screenshots
         if: ${{ !cancelled() && steps.agent.outcome != 'skipped' }}
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           OUT: ${{ steps.agent.outputs.structured_output }}
           BOT: ${{ vars.AGENT_BOT_LOGIN }}
+          KEEP_DAYS: ${{ vars.AGENT_QA_SCREENSHOT_DAYS || '7' }}
         run: |
           shopt -s nullglob
           files=(.agent-out/screenshots/*.png .agent-out/screenshots/*.jpeg .agent-out/screenshots/*.jpg)
@@ -177,6 +178,7 @@ jobs:
               caption=$(echo "${OUT:-null}" | jq -r --arg n "$name" '[.screenshots[]? | select(.file | endswith($n)) | .caption][0] // $n')
               printf '\n**%s**\n\n![%s](%s/%s)\n' "$caption" "$name" "$base" "$name"
             done
+            printf '\n_Screenshots are kept for %s days after this PR closes (full set in the run artifacts for 14 days)._\n' "$KEEP_DAYS"
           } > .agent-out/gallery.md
           gh pr comment "$PR" --body-file .agent-out/gallery.md
 

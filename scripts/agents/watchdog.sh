@@ -10,13 +10,14 @@
 #
 # Usage: watchdog.sh [--dry-run]
 # Needs GH_TOKEN (the App token, so label events trigger workflows), GITHUB_REPOSITORY, AGENT_BOT_ID.
-# AGENT_WATCHDOG_MINUTES (default 90) must exceed the longest job timeout (Implementor: 60).
+# AGENT_WATCHDOG_MINUTES (default 10): items with a queued or running agent run are never touched,
+# so the threshold only has to cover the gap between a label change and its run starting.
 set -euo pipefail
 
 dry="${1:-}"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 bot="${AGENT_BOT_ID:?AGENT_BOT_ID must be set}"
-minutes="${AGENT_WATCHDOG_MINUTES:-90}"
+minutes="${AGENT_WATCHDOG_MINUTES:-10}"
 retries="${AGENT_WATCHDOG_RETRIES:-2}"
 here="$(dirname "$0")"
 now=$(date -u +%s)

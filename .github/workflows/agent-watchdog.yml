@@ -1,17 +1,17 @@
 name: "Agent · Watchdog"
 
-# Every 30 minutes: finds issues and PRs whose agent state hasn't moved for AGENT_WATCHDOG_MINUTES
-# (default 90, longer than any job can run) while no agent run is active for them, e.g. after a
-# cancelled or crashed run. Re-triggers them up to AGENT_WATCHDOG_RETRIES times (default 2) since
+# Every 10 minutes: finds issues and PRs whose agent state hasn't moved for AGENT_WATCHDOG_MINUTES
+# (default 10) while no agent run is queued or running for them, e.g. after a cancelled or crashed
+# run, or a pending run GitHub dropped from the concurrency queue. Re-triggers them up to AGENT_WATCHDOG_RETRIES times (default 2) since
 # the last Lead decision, then hands them to the Lead (or a human, if the Lead is what stalls).
 # See scripts/agents/watchdog.sh. Manual runs can override the threshold and do a dry run.
 on:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "*/10 * * * *"
   workflow_dispatch:
     inputs:
       minutes:
-        description: "Stall threshold in minutes (default: AGENT_WATCHDOG_MINUTES or 90)"
+        description: "Stall threshold in minutes (default: AGENT_WATCHDOG_MINUTES or 10)"
         required: false
       dry_run:
         description: "Only report, change nothing"
@@ -49,6 +49,6 @@ jobs:
         env:
           # The App token, so the re-applied labels trigger the agent workflows.
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          AGENT_WATCHDOG_MINUTES: ${{ inputs.minutes || vars.AGENT_WATCHDOG_MINUTES || '90' }}
+          AGENT_WATCHDOG_MINUTES: ${{ inputs.minutes || vars.AGENT_WATCHDOG_MINUTES || '10' }}
           AGENT_WATCHDOG_RETRIES: ${{ vars.AGENT_WATCHDOG_RETRIES || '2' }}
         run: scripts/agents/watchdog.sh ${{ inputs.dry_run && '--dry-run' || '' }} | tee -a "$GITHUB_STEP_SUMMARY"

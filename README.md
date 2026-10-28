@@ -80,7 +80,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_MAX_REVIEW_ROUNDS` | `3` | `3` | Review rounds before the Lead steps in |
 | `AGENT_QA_SCREENSHOT_DAYS` | `7` | `7` | Days QA screenshots stay after a PR closes ([pages-janitor.yml](.github/workflows/pages-janitor.yml) also squashes `gh-pages` weekly) |
 | `AGENT_MAX_QA_ROUNDS` | `3` | `3` | Failed QA rounds before the Lead steps in |
-| `AGENT_WATCHDOG_MINUTES` | `90` | `90` | The [watchdog](.github/workflows/agent-watchdog.yml) re-triggers items whose state hasn't moved this long with no agent run active (keep it above the longest job timeout, 60) |
+| `AGENT_WATCHDOG_MINUTES` | `10` | `10` | The [watchdog](.github/workflows/agent-watchdog.yml) (every 10 minutes) re-triggers items whose state hasn't moved this long while no agent run is queued or running for them |
 | `AGENT_WATCHDOG_RETRIES` | `2` | `2` | Watchdog retries per item (since the last Lead decision) before it goes to the Lead |
 | `AGENT_IMPLEMENTOR_MAX_TURNS` | `150` | `150` | Turn budget of an Implementor run |
 | `AGENT_MAX_LEAD_DECISIONS` | `3` | `3` | Lead decisions per item before a human is assigned |
@@ -113,7 +113,8 @@ You don't need to do anything in autonomous mode. These are overrides:
 - Issue and PR text is treated as data, never as instructions (stated in every role prompt).
 - The merge gate only merges the **exact commit that was approved** (`--match-head-commit`), only after the required checks pass, and never `risk:high` by default.
 - **Parallel PRs stay correct:** the merge gate only merges PRs that include the latest default branch (otherwise it updates them, which re-runs CI, review and QA). After every merge it flags other agent PRs that now conflict, and the Implementor merges the base and resolves them. PR-driven agent workflows use `pull_request_target`, because GitHub runs no `pull_request` workflows for conflicting PRs. They only act on same-repo PRs. Queued Reviewer and QA runs first re-check the live PR (`pr-still-current.sh`) and skip when it has newer commits, a pending verdict or a conflict, so no round is spent on stale code.
-- **Nothing stalls silently:** a cancelled or crashed run leaves its state label behind with nothing working on it. Every 30 minutes the watchdog finds such items, re-triggers them (twice by default), then hands them to the Lead, or to a human if the Lead is what stalls.
+- **Dropped runs are re-queued.** GitHub keeps only one pending run per concurrency group and silently cancels the older one. When a Reviewer or QA run skips because the PR waits in another agent's state, it re-applies that state, so a dropped handler gets queued again.
+- **Nothing stalls silently:** a cancelled or crashed run leaves its state label behind with nothing working on it. Every 10 minutes the watchdog finds such items, re-triggers them (twice by default), then hands them to the Lead, or to a human if the Lead is what stalls.
 - **Budgets everywhere:** review rounds, Lead decisions, `--max-turns` per role, `timeout-minutes` per job, one run at a time per issue or PR (`concurrency`).
 - Every decision is a comment, so the issue and PR history is a complete audit trail.
 

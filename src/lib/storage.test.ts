@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCard, emptyBoard, setDueDate, setNotes, setPriority } from "./board";
+import { addCard, archiveDone, emptyBoard, moveCard, setDueDate, setNotes, setPriority } from "./board";
 import { loadBoard, saveBoard, STORAGE_KEY } from "./storage";
 
 describe("storage", () => {
@@ -19,6 +19,30 @@ describe("storage", () => {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns: { todo: [{ id: 1 }] } }));
     expect(loadBoard()).toEqual(emptyBoard());
+  });
+
+  it("loads a board saved before archiving with an empty archive", () => {
+    const old = { id: "a", title: "Old", createdAt: "2024-01-01T00:00:00.000Z", priority: "medium" };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns: { todo: [old], doing: [], done: [] } }));
+    const board = loadBoard();
+    expect(board.archive).toEqual([]);
+    expect(board.columns.todo).toEqual([old]);
+  });
+
+  it("round-trips the archive", () => {
+    const board = archiveDone(moveCard(addCard(emptyBoard(), "Done one", { id: "a" }), "a", "done"));
+    saveBoard(board);
+    expect(loadBoard()).toEqual(board);
+  });
+
+  it("ignores a corrupt archive and drops invalid archived cards", () => {
+    const columns = { todo: [], doing: [], done: [] };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns, archive: "nope" }));
+    expect(loadBoard().archive).toEqual([]);
+
+    const good = { id: "a", title: "Good", createdAt: "2024-01-01T00:00:00.000Z", priority: "low" };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns, archive: [good, { id: 1 }, null] }));
+    expect(loadBoard().archive).toEqual([good]);
   });
 
   it("loads cards saved before due dates existed", () => {

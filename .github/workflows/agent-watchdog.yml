@@ -52,3 +52,9 @@ jobs:
           AGENT_WATCHDOG_MINUTES: ${{ inputs.minutes || vars.AGENT_WATCHDOG_MINUTES || '10' }}
           AGENT_WATCHDOG_RETRIES: ${{ vars.AGENT_WATCHDOG_RETRIES || '2' }}
         run: scripts/agents/watchdog.sh ${{ inputs.dry_run && '--dry-run' || '' }} | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Advance split issues
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: scripts/agents/subissues.sh --sweep | tee -a "$GITHUB_STEP_SUMMARY"

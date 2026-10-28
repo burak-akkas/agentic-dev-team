@@ -222,8 +222,16 @@ jobs:
             echo "::warning::QA returned '$verdict' but posted no report"
             verdict=missing-comment
           fi
+          # The PR may have changed while the agent worked (new commits, a conflict flagged by the merge
+          # gate, a Lead decision). Never apply a verdict on top of that.
+          stale=$("$BIN/pr-still-current.sh" "$PR" "$HEAD_SHA" agent:qa)
+          if [ -n "$stale" ]; then
+            echo "Verdict '$verdict' not applied: ${stale#skip=}" | tee -a "$GITHUB_STEP_SUMMARY"
+            "$BIN/progress.sh" --pr "$PR" "🧪 **QA** (round ${{ steps.guard.outputs.round }}): verdict not applied, ${stale#skip=}"
+            exit 0
+          fi
           case "$verdict" in
-            pass)        "$BIN/transition.sh" "$PR" agent:approved ;;
+            pass)        "$BIN/approve.sh" "$PR" "$HEAD_SHA" qa ;;
             fail)        "$BIN/transition.sh" "$PR" agent:changes-requested ;;
             needs-human) "$BIN/transition.sh" "$PR" agent:needs-decision ;;
             *)           "$BIN/transition.sh" "$PR" agent:needs-decision

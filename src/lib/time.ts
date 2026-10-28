@@ -1,35 +1,32 @@
-// Time helpers. No React and no board imports.
-
 const MINUTE = 60;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+const MONTH = 30 * DAY;
+const YEAR = 365 * DAY;
 
-const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-
-// "just now", "5 minutes ago", "yesterday", "2 weeks ago" ... Never throws:
-// future dates read "just now" and an unparsable string is returned as is.
+// Relative time such as "just now", "5 minutes ago" or "yesterday". Future times read as "in 2 hours".
 export function formatRelativeTime(iso: string, now: Date = new Date()): string {
-  const time = new Date(iso).getTime();
-  if (Number.isNaN(time)) {
-    return iso;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) {
+    return "";
   }
-  const seconds = Math.floor((now.getTime() - time) / 1000);
-  if (seconds < 45) {
+  const seconds = Math.round((then - now.getTime()) / 1000);
+  const abs = Math.abs(seconds);
+  const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  if (abs < 45) {
     return "just now";
   }
-  const units: [Intl.RelativeTimeFormatUnit, number][] = [
-    ["year", 365 * DAY],
-    ["month", 30 * DAY],
-    ["week", 7 * DAY],
-    ["day", DAY],
-    ["hour", HOUR],
-    ["minute", MINUTE],
-  ];
-  for (const [unit, size] of units) {
-    if (seconds >= size) {
-      return formatter.format(-Math.floor(seconds / size), unit);
-    }
+  if (abs < HOUR) {
+    return formatter.format(Math.round(seconds / MINUTE), "minute");
   }
-  // 45 to 59 seconds
-  return formatter.format(-1, "minute");
+  if (abs < DAY) {
+    return formatter.format(Math.round(seconds / HOUR), "hour");
+  }
+  if (abs < MONTH) {
+    return formatter.format(Math.round(seconds / DAY), "day");
+  }
+  if (abs < YEAR) {
+    return formatter.format(Math.round(seconds / MONTH), "month");
+  }
+  return formatter.format(Math.round(seconds / YEAR), "year");
 }

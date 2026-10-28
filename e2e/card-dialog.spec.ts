@@ -17,7 +17,7 @@ test("edits every field in the dialog, saves, and persists", async ({ page }) =>
   const dialog = page.getByRole("dialog", { name: "Plan trip" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "Plan trip" })).toBeVisible();
-  await expect(dialog.getByText(/^Created/)).toBeVisible();
+  await expect(dialog.getByText(/^Created \d/)).toBeVisible();
 
   await dialog.getByLabel("Title").fill("Plan holiday");
   await dialog.getByLabel("Description").fill("Book flights\nPack bags");

@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAX_LABEL_LENGTH, MAX_NOTES_LENGTH, type Card } from "@/lib/board";
@@ -32,6 +32,27 @@ function setup(overrides: Partial<Card> = {}) {
 }
 
 afterEach(() => vi.restoreAllMocks());
+
+describe("<CardDialog /> activity", () => {
+  it("shows the stored log read-only and unaffected by editing the draft", async () => {
+    const { user } = setup({
+      activity: [
+        { id: "2", at: "2030-01-01T11:00:00.000Z", type: "priority", from: "low", to: "medium" },
+        { id: "1", at: "2030-01-01T10:00:00.000Z", type: "created" },
+      ],
+    });
+    const log = screen.getByRole("list", { name: "Activity" });
+    expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
+    expect(within(log).getAllByRole("listitem")).toHaveLength(2);
+    await user.selectOptions(screen.getByLabelText("Priority"), "high");
+    expect(within(log).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("says there is no activity for cards without a log", () => {
+    setup();
+    expect(screen.getByText("No activity yet")).toBeInTheDocument();
+  });
+});
 
 describe("<CardDialog />", () => {
   it("is a dialog named by the card title with a heading", () => {

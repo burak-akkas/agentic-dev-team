@@ -1,5 +1,23 @@
 import { DEFAULT_BOARD_NAME, initialBoardList, type BoardEntry, type BoardList } from "./boards";
-import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, isValidDueDate, isValidWipLimit, MAX_COMMENT_LENGTH, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card, type CardComment, type ColumnId } from "./board";
+import {
+  ACTIVITY_TYPES,
+  addLabelToList,
+  COLUMNS,
+  DEFAULT_PRIORITY,
+  isValidDueDate,
+  isValidWipLimit,
+  MAX_ACTIVITY_ENTRIES,
+  MAX_COMMENT_LENGTH,
+  MAX_NOTES_LENGTH,
+  PRIORITIES,
+  todayString,
+  type ActivityEntry,
+  type ActivityType,
+  type Board,
+  type Card,
+  type CardComment,
+  type ColumnId,
+} from "./board";
 
 export const STORAGE_KEY = "kanban-boards-v2";
 // Only read, to migrate old data; never written or removed.
@@ -29,7 +47,12 @@ export function isBoard(value: unknown): value is Board {
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const { notes, labels, comments, ...rest } = card as Card & { notes?: unknown; labels?: unknown; comments?: unknown };
+  const { notes, labels, comments, activity, ...rest } = card as Card & {
+    notes?: unknown;
+    labels?: unknown;
+    comments?: unknown;
+    activity?: unknown;
+  };
   const priority = PRIORITIES.some((p) => p.id === card.priority) ? card.priority : DEFAULT_PRIORITY;
   const trimmed = typeof notes === "string" ? notes.trim() : "";
   const normalized: Card = { ...rest, priority };
@@ -43,6 +66,10 @@ function normalizeCard(card: Card): Card {
   const cleanComments = normalizeComments(comments);
   if (cleanComments.length > 0) {
     normalized.comments = cleanComments;
+  }
+  const cleanActivity = normalizeActivity(activity);
+  if (cleanActivity.length > 0) {
+    normalized.activity = cleanActivity;
   }
   return normalized;
 }
@@ -74,6 +101,41 @@ function normalizeComments(value: unknown): CardComment[] {
     result.push(comment);
   }
   return result;
+}
+
+// Keeps well-formed entries only (known type, valid date, string id, unique ids), in order, capped.
+function normalizeActivity(value: unknown): ActivityEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: ActivityEntry[] = [];
+  for (const entry of value) {
+    const e = entry as Record<string, unknown> | null;
+    if (
+      typeof e !== "object" ||
+      e === null ||
+      typeof e.id !== "string" ||
+      seen.has(e.id) ||
+      typeof e.at !== "string" ||
+      Number.isNaN(new Date(e.at).getTime()) ||
+      !ACTIVITY_TYPES.some((t) => t === e.type) ||
+      (e.from !== undefined && typeof e.from !== "string") ||
+      (e.to !== undefined && typeof e.to !== "string")
+    ) {
+      continue;
+    }
+    seen.add(e.id);
+    const clean: ActivityEntry = { id: e.id, at: e.at, type: e.type as ActivityType };
+    if (e.from !== undefined) {
+      clean.from = e.from as string;
+    }
+    if (e.to !== undefined) {
+      clean.to = e.to as string;
+    }
+    result.push(clean);
+  }
+  return result.slice(0, MAX_ACTIVITY_ENTRIES);
 }
 
 // Keeps valid labels only: non-strings, blank, over-long and duplicate (case-insensitive) entries are dropped.

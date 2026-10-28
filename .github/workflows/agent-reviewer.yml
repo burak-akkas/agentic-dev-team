@@ -63,6 +63,13 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           mkdir -p .agent-out
+          # A queued run may be stale by now (new commits, merge-gate verdict, conflict): don't spend a round on it.
+          skip=$("$TRUSTED/pr-still-current.sh" "$PR" "${{ github.event.pull_request.head.sha }}")
+          if [ -n "$skip" ]; then
+            echo "Skipped review: ${skip#skip=}" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Rounds are counted since the latest Lead decision, so a Lead ruling gives the loop a fresh budget.
           comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
                        | jq --arg bot "$AGENT_BOT_LOGIN" '[[.[][] | select($bot == "" or .user.login == $bot)]]')

@@ -62,6 +62,13 @@ jobs:
         run: |
           mkdir -p .agent-out/screenshots
           printf '.agent-out/\n.agent-trusted/\n.gh-pages/\n' >> .git/info/exclude
+          # A queued run may be stale by now (new commits, merge-gate verdict, conflict): don't spend a round on it.
+          skip=$("$TRUSTED/pr-still-current.sh" "$PR" "$HEAD_SHA" agent:qa)
+          if [ -n "$skip" ]; then
+            echo "Skipped QA: ${skip#skip=}" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           url=$(echo "$URL_TEMPLATE" | sed -e "s|{owner}|${GITHUB_REPOSITORY_OWNER}|g" \
                 -e "s|{repo}|${GITHUB_REPOSITORY#*/}|g" -e "s|{pr}|$PR|g")
           echo "url=$url" >> "$GITHUB_OUTPUT"

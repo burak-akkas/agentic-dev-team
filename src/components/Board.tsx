@@ -33,6 +33,7 @@ import { ArchivePanel } from "./ArchivePanel";
 import { CardDialog } from "./CardDialog";
 import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
 import { ColumnHeader } from "./ColumnHeader";
+import { InsightsPanel } from "./InsightsPanel";
 import { LabelFilter } from "./LabelFilter";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
@@ -58,6 +59,13 @@ export function Board() {
   const dragSource = useRef<{ id: string; column: ColumnId } | null>(null);
 
   const [showArchive, setShowArchive] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
+  const insightsButtonRef = useRef<HTMLButtonElement>(null);
+
+  function closeInsights() {
+    setShowInsights(false);
+    requestAnimationFrame(() => insightsButtonRef.current?.focus());
+  }
   const [undo, setUndo] = useState<{ cards: Card[]; message: string } | null>(null);
   const dismissUndo = useCallback(() => setUndo(null), []);
 
@@ -171,7 +179,20 @@ export function Board() {
         >
           Archived ({board.archive.length})
         </Button>
+        <Button ref={insightsButtonRef} aria-haspopup="dialog" onClick={() => setShowInsights(true)} className="bg-surface">
+          Board insights
+        </Button>
       </div>
+      {showInsights && (
+        <InsightsPanel
+          board={board}
+          onClose={closeInsights}
+          onOpenCard={(cardId) => {
+            setShowInsights(false);
+            setOpenCardId(cardId);
+          }}
+        />
+      )}
 
       {showArchive && (
         <ArchivePanel

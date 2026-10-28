@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import {
   COLUMNS,
   hasChanges,
@@ -14,11 +14,9 @@ import {
   type Priority,
 } from "@/lib/board";
 
-const fieldStyles =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:[color-scheme:dark]";
-const labelStyles = "text-xs font-medium text-zinc-600 dark:text-zinc-400";
-const buttonStyles =
-  "rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
+import { Button, Dialog, Input, Select, Textarea } from "./ui";
+
+const labelStyles = "text-xs font-medium text-subtle";
 
 export function CardDialog({
   card,
@@ -33,20 +31,12 @@ export function CardDialog({
   onDelete: () => void;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [title, setTitle] = useState(card.title);
   const [notes, setNotes] = useState(card.notes ?? "");
   const [priority, setPriority] = useState<Priority>(card.priority);
   const [dueDate, setDueDate] = useState(card.dueDate ?? "");
   const [status, setStatus] = useState<ColumnId>(column);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) {
-      dialog.showModal();
-    }
-  }, []);
 
   const titleInvalid = !title.trim();
   const dueDateInvalid = dueDate !== "" && !isValidDueDate(dueDate);
@@ -68,12 +58,6 @@ export function CardDialog({
     onClose();
   }
 
-  function handleCancel(event: SyntheticEvent<HTMLDialogElement>) {
-    // Escape: take over from the browser so unsaved changes can be confirmed first.
-    event.preventDefault();
-    requestClose();
-  }
-
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (invalid) {
@@ -89,18 +73,8 @@ export function CardDialog({
   }
 
   return (
-    // A click whose target is the <dialog> itself can only land on the backdrop (padding lives on the inner form).
-    <dialog
-      ref={dialogRef}
-      aria-labelledby={headingId}
-      onCancel={handleCancel}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          requestClose();
-        }
-      }}
-      className="m-auto max-h-[90dvh] w-[calc(100%-1rem)] max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
-    >
+    // Escape and backdrop clicks go through requestClose so unsaved changes can be confirmed first.
+    <Dialog labelledBy={headingId} onRequestClose={requestClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
         <h2 id={headingId} className="break-words text-lg font-semibold">
           {card.title}
@@ -110,17 +84,17 @@ export function CardDialog({
           <label htmlFor={`${headingId}-title`} className={labelStyles}>
             Title
           </label>
-          <input
+          <Input
             id={`${headingId}-title`}
             value={title}
             maxLength={MAX_TITLE_LENGTH}
             aria-invalid={titleInvalid}
             aria-describedby={titleInvalid ? `${headingId}-title-error` : undefined}
             onChange={(event) => setTitle(event.target.value)}
-            className={fieldStyles}
+            className="w-full"
           />
           {titleInvalid && (
-            <p id={`${headingId}-title-error`} role="alert" className="text-xs text-red-600 dark:text-red-400">
+            <p id={`${headingId}-title-error`} role="alert" className="text-xs text-danger">
               Title must not be empty
             </p>
           )}
@@ -130,15 +104,15 @@ export function CardDialog({
           <label htmlFor={`${headingId}-description`} className={labelStyles}>
             Description
           </label>
-          <textarea
+          <Textarea
             id={`${headingId}-description`}
             value={notes}
             maxLength={MAX_NOTES_LENGTH}
             rows={5}
             onChange={(event) => setNotes(event.target.value)}
-            className={fieldStyles}
+            className="w-full"
           />
-          <span className="self-end text-xs text-zinc-500" aria-hidden="true">
+          <span className="self-end text-xs text-muted" aria-hidden="true">
             {notes.length}/{MAX_NOTES_LENGTH}
           </span>
         </div>
@@ -148,35 +122,35 @@ export function CardDialog({
             <label htmlFor={`${headingId}-status`} className={labelStyles}>
               Status
             </label>
-            <select
+            <Select
               id={`${headingId}-status`}
               value={status}
               onChange={(event) => setStatus(event.target.value as ColumnId)}
-              className={fieldStyles}
+              className="w-full"
             >
               {COLUMNS.map(({ id, title: name }) => (
                 <option key={id} value={id}>
                   {name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="flex flex-col gap-1">
             <label htmlFor={`${headingId}-priority`} className={labelStyles}>
               Priority
             </label>
-            <select
+            <Select
               id={`${headingId}-priority`}
               value={priority}
               onChange={(event) => setPriority(event.target.value as Priority)}
-              className={fieldStyles}
+              className="w-full"
             >
               {PRIORITIES.map(({ id, label }) => (
                 <option key={id} value={id}>
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -185,45 +159,37 @@ export function CardDialog({
             Due date
           </label>
           <div className="flex items-center gap-2">
-            <input
+            <Input
               id={`${headingId}-due`}
               type="date"
               value={dueDate}
               onChange={(event) => setDueDate(event.target.value)}
-              className={fieldStyles}
+              className="w-full"
             />
             {dueDate && (
-              <button type="button" className={buttonStyles} onClick={() => setDueDate("")}>
+              <Button variant="ghost" size="sm" onClick={() => setDueDate("")}>
                 Clear due date
-              </button>
+              </Button>
             )}
           </div>
         </div>
 
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-muted">
           Created <time dateTime={card.createdAt}>{new Date(card.createdAt).toLocaleString()}</time>
         </p>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="submit"
-            disabled={invalid}
-            className="rounded-md bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" size="sm" disabled={invalid}>
             Save
-          </button>
-          <button type="button" className={buttonStyles} onClick={requestClose}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={requestClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            className={`${buttonStyles} ml-auto hover:text-red-600 dark:hover:text-red-400`}
-            onClick={handleDelete}
-          >
+          </Button>
+          <Button variant="danger" size="sm" className="ml-auto" onClick={handleDelete}>
             Delete card
-          </button>
+          </Button>
         </div>
       </form>
-    </dialog>
+    </Dialog>
   );
 }

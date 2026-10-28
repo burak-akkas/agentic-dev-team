@@ -14,6 +14,7 @@ import {
   type ColumnId,
   type Priority,
 } from "@/lib/board";
+import { Button, Input, Select, Textarea } from "./ui";
 
 export const CARD_DRAG_TYPE = "application/x-kanban-card";
 
@@ -26,8 +27,7 @@ const badgeStyles: Record<Priority, string> = {
   high: "bg-red-600 font-bold text-white dark:bg-red-500 dark:text-white",
 };
 
-const iconButton =
-  "rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
+const cardSurface = "group rounded-lg border border-line bg-surface p-3 shadow-sm";
 
 export function CardItem({
   card,
@@ -165,28 +165,24 @@ export function CardItem({
 
   if (editing) {
     return (
-      <li className="group rounded-lg border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <li className={cardSurface}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <input
+          <Input
             ref={inputRef}
             aria-label="Card title"
             value={draft}
             maxLength={MAX_TITLE_LENGTH}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={handleKeyDown}
-            className="min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900"
+            className="min-w-0"
           />
           <div className="flex items-center gap-1">
-            <button
-              type="submit"
-              disabled={!draft.trim()}
-              className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" size="xs" disabled={!draft.trim()}>
               Save
-            </button>
-            <button type="button" className={iconButton} onClick={stopEditing}>
+            </Button>
+            <Button variant="ghost" size="xs" onClick={stopEditing}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       </li>
@@ -199,7 +195,7 @@ export function CardItem({
       draggable
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
-      className="group cursor-grab rounded-lg border border-zinc-200 bg-white p-3 shadow-sm active:cursor-grabbing dark:border-zinc-800 dark:bg-zinc-900"
+      className={`${cardSurface} cursor-grab active:cursor-grabbing`}
     >
       <div className="flex items-start justify-between gap-2">
         <button
@@ -217,14 +213,14 @@ export function CardItem({
           {priorityLabel(card.priority)}
         </span>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-        <input
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+        <Input
           ref={dateRef}
           type="date"
+          fieldSize="sm"
           aria-label={`Due date for "${card.title}"`}
           value={card.dueDate ?? ""}
           onChange={handleDueDateChange}
-          className="rounded-md border border-zinc-300 bg-white px-1.5 py-0.5 text-xs outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:[color-scheme:dark]"
         />
         {card.dueDate && (
           <>
@@ -234,20 +230,20 @@ export function CardItem({
                 <span aria-hidden="true">⚠ </span>Overdue
               </span>
             )}
-            <button
-              type="button"
-              className={iconButton}
+            <Button
+              variant="ghost"
+              size="xs"
               aria-label={`Clear due date for "${card.title}"`}
               onClick={clearDueDate}
             >
               Clear
-            </button>
+            </Button>
           </>
         )}
       </div>
       {editingNotes ? (
         <form onSubmit={handleNotesSubmit} className="mt-2 flex flex-col gap-2">
-          <textarea
+          <Textarea
             ref={notesRef}
             aria-label={`Notes for "${card.title}"`}
             value={notesDraft}
@@ -255,64 +251,57 @@ export function CardItem({
             rows={4}
             onChange={(event) => setNotesDraft(event.target.value)}
             onKeyDown={handleNotesKeyDown}
-            className="min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900"
+            className="min-w-0"
           />
           <div className="flex items-center gap-1">
-            <button
-              type="submit"
-              className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500"
-            >
+            <Button type="submit" variant="primary" size="xs">
               Save notes
-            </button>
-            <button type="button" className={iconButton} onClick={stopEditingNotes}>
+            </Button>
+            <Button variant="ghost" size="xs" onClick={stopEditingNotes}>
               Cancel
-            </button>
+            </Button>
             {card.notes && (
-              <button
-                type="button"
-                className={`${iconButton} hover:text-red-600 dark:hover:text-red-400`}
-                onClick={removeNotes}
-              >
+              <Button variant="danger" size="xs" onClick={removeNotes}>
                 Remove notes
-              </button>
+              </Button>
             )}
-            <span className="ml-auto text-xs text-zinc-500" aria-hidden="true">
+            <span className="ml-auto text-xs text-muted" aria-hidden="true">
               {notesDraft.length}/{MAX_NOTES_LENGTH}
             </span>
           </div>
         </form>
       ) : (
-        <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500">
+        <div className="mt-2 flex flex-col gap-1 text-xs text-muted">
           <div className="flex items-center gap-1">
             {card.notes && (
               <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
                 <span aria-hidden="true">📝 </span>Has notes
               </span>
             )}
-            <button
+            <Button
               ref={notesButtonRef}
-              type="button"
-              className={iconButton}
+              variant="ghost"
+              size="xs"
               aria-label={`${card.notes ? "Edit" : "Add"} notes for "${card.title}"`}
               onClick={startEditingNotes}
             >
               {card.notes ? "Edit notes" : "Add notes"}
-            </button>
+            </Button>
             {card.notes && (
-              <button
-                type="button"
-                className={iconButton}
+              <Button
+                variant="ghost"
+                size="xs"
                 aria-expanded={expanded}
                 aria-controls={notesId}
                 onClick={() => setExpanded(!expanded)}
               >
                 {expanded ? "Hide notes" : "Show notes"}
-              </button>
+              </Button>
             )}
           </div>
           {card.notes &&
             (expanded ? (
-              <p id={notesId} className="whitespace-pre-wrap break-words text-sm text-zinc-700 dark:text-zinc-300">
+              <p id={notesId} className="whitespace-pre-wrap break-words text-sm text-subtle">
                 {card.notes}
               </p>
             ) : (
@@ -323,55 +312,51 @@ export function CardItem({
         </div>
       )}
       <div className="mt-2 flex items-center gap-1">
-        <select
+        <Select
+          fieldSize="sm"
           aria-label={`Priority of "${card.title}"`}
           value={card.priority}
           onChange={(event) => onSetPriority(event.target.value as Priority)}
-          className="rounded-md border border-zinc-300 bg-white px-1 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
         >
           {PRIORITIES.map(({ id, label }) => (
             <option key={id} value={id}>
               {label}
             </option>
           ))}
-        </select>
+        </Select>
         {previous && (
-          <button
-            type="button"
-            className={iconButton}
+          <Button
+            variant="ghost"
+            size="xs"
             aria-label={`Move "${card.title}" to ${columnTitle(previous)}`}
             onClick={() => onMove(previous)}
           >
             ←
-          </button>
+          </Button>
         )}
         {next && (
-          <button
-            type="button"
-            className={iconButton}
+          <Button
+            variant="ghost"
+            size="xs"
             aria-label={`Move "${card.title}" to ${columnTitle(next)}`}
             onClick={() => onMove(next)}
           >
             →
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           ref={editRef}
-          type="button"
-          className={`${iconButton} ml-auto`}
+          variant="ghost"
+          size="xs"
+          className="ml-auto"
           aria-label={`Edit "${card.title}"`}
           onClick={startEditing}
         >
           Edit
-        </button>
-        <button
-          type="button"
-          className={`${iconButton} hover:text-red-600 dark:hover:text-red-400`}
-          aria-label={`Delete "${card.title}"`}
-          onClick={onDelete}
-        >
+        </Button>
+        <Button variant="danger" size="xs" aria-label={`Delete "${card.title}"`} onClick={onDelete}>
           Delete
-        </button>
+        </Button>
       </div>
     </li>
   );

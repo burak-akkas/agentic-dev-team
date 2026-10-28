@@ -1,4 +1,4 @@
-import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, PRIORITIES, todayString, type Board, type Card } from "./board";
+import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card } from "./board";
 
 export const STORAGE_KEY = "kanban-board-v1";
 
@@ -24,9 +24,16 @@ export function isBoard(value: unknown): value is Board {
   );
 }
 
+// Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const valid = PRIORITIES.some((p) => p.id === card.priority);
-  return valid ? card : { ...card, priority: DEFAULT_PRIORITY };
+  const { notes, ...rest } = card as Card & { notes?: unknown };
+  const priority = PRIORITIES.some((p) => p.id === card.priority) ? card.priority : DEFAULT_PRIORITY;
+  const trimmed = typeof notes === "string" ? notes.trim() : "";
+  const normalized: Card = { ...rest, priority };
+  if (trimmed && trimmed.length <= MAX_NOTES_LENGTH) {
+    normalized.notes = trimmed;
+  }
+  return normalized;
 }
 
 function normalizeBoard(board: Board): Board {

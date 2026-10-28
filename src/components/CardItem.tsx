@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent,type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   adjacentColumn,
   COLUMNS,
   formatDueDate,
   isOverdue,
   isValidDueDate,
+  MAX_NOTES_LENGTH,
   MAX_TITLE_LENGTH,
   PRIORITIES,
   type Card,
@@ -35,6 +36,7 @@ export function CardItem({
   onDelete,
   onRename,
   onSetDueDate,
+  onSetNotes,
   onSetPriority,
   onDragStart,
   onDragEnd,
@@ -45,6 +47,7 @@ export function CardItem({
   onDelete: () => void;
   onRename: (title: string) => void;
   onSetDueDate: (date: string | undefined) => void;
+  onSetNotes: (notes: string | undefined) => void;
   onSetPriority: (priority: Priority) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
@@ -58,6 +61,50 @@ export function CardItem({
   const dateRef = useRef<HTMLInputElement>(null);
   const restoreFocus = useRef(false);
   const overdue = isOverdue(card, column);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(card.notes ?? "");
+  const [expanded, setExpanded] = useState(false);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const notesButtonRef = useRef<HTMLButtonElement>(null);
+  const restoreNotesFocus = useRef(false);
+  const notesId = useId();
+
+  useEffect(() => {
+    if (editingNotes) {
+      notesRef.current?.focus();
+    } else if (restoreNotesFocus.current) {
+      restoreNotesFocus.current = false;
+      notesButtonRef.current?.focus();
+    }
+  }, [editingNotes]);
+
+  function startEditingNotes() {
+    setNotesDraft(card.notes ?? "");
+    setEditingNotes(true);
+  }
+
+  function stopEditingNotes() {
+    restoreNotesFocus.current = true;
+    setEditingNotes(false);
+  }
+
+  function handleNotesSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onSetNotes(notesDraft.trim() || undefined);
+    stopEditingNotes();
+  }
+
+  function removeNotes() {
+    onSetNotes(undefined);
+    stopEditingNotes();
+  }
+
+  function handleNotesKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      stopEditingNotes();
+    }
+  }
 
   useEffect(() => {
     if (editing) {
@@ -188,6 +235,83 @@ export function CardItem({
           </>
         )}
       </div>
+      {editingNotes ? (
+        <form onSubmit={handleNotesSubmit} className="mt-2 flex flex-col gap-2">
+          <textarea
+            ref={notesRef}
+            aria-label={`Notes for "${card.title}"`}
+            value={notesDraft}
+            maxLength={MAX_NOTES_LENGTH}
+            rows={4}
+            onChange={(event) => setNotesDraft(event.target.value)}
+            onKeyDown={handleNotesKeyDown}
+            className="min-w-0 rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+          <div className="flex items-center gap-1">
+            <button
+              type="submit"
+              className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500"
+            >
+              Save notes
+            </button>
+            <button type="button" className={iconButton} onClick={stopEditingNotes}>
+              Cancel
+            </button>
+            {card.notes && (
+              <button
+                type="button"
+                className={`${iconButton} hover:text-red-600 dark:hover:text-red-400`}
+                onClick={removeNotes}
+              >
+                Remove notes
+              </button>
+            )}
+            <span className="ml-auto text-xs text-zinc-500" aria-hidden="true">
+              {notesDraft.length}/{MAX_NOTES_LENGTH}
+            </span>
+          </div>
+        </form>
+      ) : (
+        <div className="mt-2 flex flex-col gap-1 text-xs text-zinc-500">
+          <div className="flex items-center gap-1">
+            {card.notes && (
+              <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+                <span aria-hidden="true">📝 </span>Has notes
+              </span>
+            )}
+            <button
+              ref={notesButtonRef}
+              type="button"
+              className={iconButton}
+              aria-label={`${card.notes ? "Edit" : "Add"} notes for "${card.title}"`}
+              onClick={startEditingNotes}
+            >
+              {card.notes ? "Edit notes" : "Add notes"}
+            </button>
+            {card.notes && (
+              <button
+                type="button"
+                className={iconButton}
+                aria-expanded={expanded}
+                aria-controls={notesId}
+                onClick={() => setExpanded(!expanded)}
+              >
+                {expanded ? "Hide notes" : "Show notes"}
+              </button>
+            )}
+          </div>
+          {card.notes &&
+            (expanded ? (
+              <p id={notesId} className="whitespace-pre-wrap break-words text-sm text-zinc-700 dark:text-zinc-300">
+                {card.notes}
+              </p>
+            ) : (
+              <p id={notesId} data-testid="notes-preview" className="truncate">
+                {card.notes.split("\n")[0]}
+              </p>
+            ))}
+        </div>
+      )}
       <div className="mt-2 flex items-center gap-1">
         <select
           aria-label={`Priority of "${card.title}"`}

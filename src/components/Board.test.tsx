@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, todayString } from "@/lib/board";
@@ -525,6 +525,144 @@ describe("<Board />", () => {
       await user.type(screen.getByLabelText("Search cards"), "docs");
 
       expect(JSON.stringify(localStorage)).toBe(before);
+    });
+  });
+
+  describe("drag and drop", () => {
+    const TYPE = "application/x-kanban-card";
+    const makeTransfer = (types: string[] = [], data: Record<string, string> = {}) => {
+      const store = { ...data };
+      return {
+        types,
+        effectAllowed: "",
+        dropEffect: "",
+        setData(type: string, value: string) {
+          store[type] = value;
+          if (!this.types.includes(type)) this.types.push(type);
+        },
+        getData: (type: string) => store[type] ?? "",
+      };
+    };
+    const card = (title: string) => screen.getByText(title).closest("li") as HTMLElement;
+    const seed = () => {
+      let b = addCard(emptyBoard(), "Alpha", { id: "a" });
+      b = addCard(b, "Beta", { id: "b" });
+      saveBoard(b);
+    };
+    const startDrag = (title: string) => {
+      const dataTransfer = makeTransfer();
+      fireEvent.dragStart(card(title), { dataTransfer });
+      return dataTransfer;
+    };
+    const storedColumn = (id: string) =>
+      (JSON.parse(localStorage.getItem(localStorage.key(0) as string) as string) as {
+        columns: Record<string, { id: string }[]>;
+      }).columns[id].map((c) => c.id);
+
+    it("moves a card to the end of another column and persists it", () => {
+      seed();
+      render(<Board />);
+      const dt = startDrag("Alpha");
+      fireEvent.drop(column("Done"), { dataTransfer: dt });
+
+      expect(within(column("Done")).getByText("Alpha")).toBeInTheDocument();
+      expect(within(column("To do")).queryByText("Alpha")).not.toBeInTheDocument();
+      expect(storedColumn("done")).toEqual(["a"]);
+    });
+
+    it("accepts drops on the header and the empty state", () => {
+      seed();
+      render(<Board />);
+      fireEvent.drop(within(column("Doing")).getByRole("heading"), { dataTransfer: startDrag("Alpha") });
+      expect(within(column("Doing")).getByText("Alpha")).toBeInTheDocument();
+
+      fireEvent.drop(within(column("Done")).getByText("No cards"), { dataTransfer: startDrag("Beta") });
+      expect(within(column("Done")).getByText("Beta")).toBeInTheDocument();
+    });
+
+    it("moves the real card while a search filter is active", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+      await user.type(screen.getByLabelText("Search cards"), "alpha");
+      fireEvent.drop(column("Doing"), { dataTransfer: startDrag("Alpha") });
+      await user.clear(screen.getByLabelText("Search cards"));
+
+      expect(within(column("Doing")).getByText("Alpha")).toBeInTheDocument();
+      expect(within(column("To do")).getByText("Beta")).toBeInTheDocument();
+    });
+
+    it("highlights the target column and clears it on leave, drop and dragend", () => {
+      seed();
+      render(<Board />);
+      const dt = startDrag("Alpha");
+      const done = column("Done");
+
+      fireEvent.dragEnter(done, { dataTransfer: dt });
+      expect(done).toHaveClass("ring-2");
+      fireEvent.dragLeave(done, { dataTransfer: dt });
+      expect(done).not.toHaveClass("ring-2");
+
+      fireEvent.dragOver(done, { dataTransfer: dt });
+      // jsdom has no DragEvent, so relatedTarget has to be set by hand
+      const leave = createEvent.dragLeave(done, { dataTransfer: dt });
+      Object.defineProperty(leave, "relatedTarget", { value: within(done).getByRole("heading") });
+      fireEvent(done, leave);
+      expect(done).toHaveClass("ring-2");
+
+      fireEvent.dragEnd(card("Alpha"));
+      expect(done).not.toHaveClass("ring-2");
+
+      fireEvent.dragOver(done, { dataTransfer: dt });
+      expect(done).not.toHaveClass("ring-2"); // dragend cleared the source
+
+      const dt2 = startDrag("Alpha");
+      fireEvent.dragOver(done, { dataTransfer: dt2 });
+      expect(done).toHaveClass("ring-2");
+      fireEvent.drop(done, { dataTransfer: dt2 });
+      expect(screen.getByRole("region", { name: /^Done/ })).not.toHaveClass("ring-2");
+    });
+
+    it("ignores drops on the source column and shows no highlight", () => {
+      seed();
+      render(<Board />);
+      const dt = startDrag("Alpha");
+      const todo = column("To do");
+      fireEvent.dragOver(todo, { dataTransfer: dt });
+      expect(todo).not.toHaveClass("ring-2");
+      fireEvent.drop(todo, { dataTransfer: dt });
+      const titles = within(todo).getAllByRole("listitem").map((li) => li.textContent);
+      expect(titles[0]).toContain("Alpha");
+      expect(titles[1]).toContain("Beta");
+    });
+
+    it("ignores foreign drags and unknown card ids", () => {
+      seed();
+      render(<Board />);
+      const done = column("Done");
+      expect(() => {
+        fireEvent.dragOver(done, { dataTransfer: makeTransfer(["text/plain"], { "text/plain": "a" }) });
+        fireEvent.drop(done, { dataTransfer: makeTransfer(["Files"]) });
+      }).not.toThrow();
+      expect(done).not.toHaveClass("ring-2");
+      expect(within(done).getByText("No cards")).toBeInTheDocument();
+
+      startDrag("Alpha");
+      fireEvent.drop(done, { dataTransfer: makeTransfer([TYPE], { [TYPE]: "missing" }) });
+      expect(within(done).getByText("No cards")).toBeInTheDocument();
+    });
+
+    it("keeps the move buttons and does not make an editing card draggable", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+      expect(card("Alpha")).toHaveAttribute("draggable", "true");
+
+      await user.click(screen.getByRole("button", { name: 'Move "Alpha" to Doing' }));
+      expect(within(column("Doing")).getByText("Alpha")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: 'Edit "Beta"' }));
+      expect(screen.getByLabelText("Card title").closest("li")).not.toHaveAttribute("draggable");
     });
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   adjacentColumn,
   COLUMNS,
@@ -15,7 +15,9 @@ import {
   type Priority,
 } from "@/lib/board";
 
-const columnTitle = (id: ColumnId) => COLUMNS.find((c) => c.id === id)?.title ?? id;
+export const CARD_DRAG_TYPE = "application/x-kanban-card";
+
+const columnTitle =(id: ColumnId) => COLUMNS.find((c) => c.id === id)?.title ?? id;
 const priorityLabel = (id: Priority) => PRIORITIES.find((p) => p.id === id)?.label ?? id;
 
 const badgeStyles: Record<Priority, string> = {
@@ -36,6 +38,8 @@ export function CardItem({
   onSetDueDate,
   onSetNotes,
   onSetPriority,
+  onDragStart,
+  onDragEnd,
 }: {
   card: Card;
   column: ColumnId;
@@ -45,6 +49,8 @@ export function CardItem({
   onSetDueDate: (date: string | undefined) => void;
   onSetNotes: (notes: string | undefined) => void;
   onSetPriority: (priority: Priority) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 }) {
   const previous = adjacentColumn(column, -1);
   const next = adjacentColumn(column, 1);
@@ -142,6 +148,12 @@ export function CardItem({
     stopEditing();
   }
 
+  function handleDragStart(event: DragEvent<HTMLLIElement>) {
+    event.dataTransfer.setData(CARD_DRAG_TYPE, card.id);
+    event.dataTransfer.effectAllowed = "move";
+    onDragStart?.();
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -180,7 +192,12 @@ export function CardItem({
   }
 
   return (
-    <li className="group rounded-lg border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <li
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
+      className="group cursor-grab rounded-lg border border-zinc-200 bg-white p-3 shadow-sm active:cursor-grabbing dark:border-zinc-800 dark:bg-zinc-900"
+    >
       <div className="flex items-start justify-between gap-2">
         <p className="break-words text-sm">{card.title}</p>
         <span

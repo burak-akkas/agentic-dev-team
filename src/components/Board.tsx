@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { addCard, COLUMNS, deleteCard, filterCards, isFiltering, moveCard, renameCard } from "@/lib/board";
+import { addCard, COLUMNS, deleteCard, filterCards, isFiltering, moveCard, renameCard, setDueDate } from "@/lib/board";
 import { useBoard } from "@/lib/useBoard";
 import { AddCardForm } from "./AddCardForm";
 import { CardItem } from "./CardItem";
@@ -48,6 +48,7 @@ export function Board() {
                       onMove={(to) => update((b) => moveCard(b, card.id, to))}
                       onDelete={() => update((b) => deleteCard(b, card.id))}
                       onRename={(title) => update((b) => renameCard(b, card.id, title))}
+                      onSetDueDate={(date) => update((b) => setDueDate(b, card.id, date))}
                     />
                   ))}
                 </ul>

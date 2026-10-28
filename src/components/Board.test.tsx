@@ -1,7 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { addCard, emptyBoard, moveCard } from "@/lib/board";
+import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, todayString } from "@/lib/board";
 import { saveBoard } from "@/lib/storage";
 import { resetBoardStore } from "@/lib/useBoard";
 import { Board } from "./Board";
@@ -162,6 +162,84 @@ describe("<Board />", () => {
       await user.click(screen.getByRole("button", { name: 'Edit "Buy milk"' }));
       await user.click(screen.getByRole("button", { name: "Save" }));
       expect(titles("To do")).toEqual(["Buy milk", "Walk dog", "Read"]);
+    });
+  });
+
+  describe("due dates", () => {
+    const seed = (dueDate?: string) => {
+      const board = addCard(emptyBoard(), "Pay rent", { id: "a" });
+      saveBoard(dueDate ? setDueDate(board, "a", dueDate) : board);
+    };
+    const dateInput = () => screen.getByLabelText('Due date for "Pay rent"');
+
+    it("sets, changes and clears a due date, moving focus to the input on clear", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+      expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
+
+      fireEvent.change(dateInput(), { target: { value: "2999-10-28" } });
+      expect(dateInput()).toHaveValue("2999-10-28");
+      expect(screen.getByText(formatDueDate("2999-10-28"))).toBeInTheDocument();
+      expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
+
+      fireEvent.change(dateInput(), { target: { value: "2999-11-02" } });
+      expect(screen.getByText(formatDueDate("2999-11-02"))).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: 'Clear due date for "Pay rent"' }));
+      expect(dateInput()).toHaveValue("");
+      expect(dateInput()).toHaveFocus();
+      expect(screen.queryByRole("button", { name: /Clear due date/ })).not.toBeInTheDocument();
+    });
+
+    it("clears when the native input is emptied", () => {
+      seed("2999-10-28");
+      render(<Board />);
+      fireEvent.change(dateInput(), { target: { value: "" } });
+      expect(screen.queryByRole("time")).not.toBeInTheDocument();
+    });
+
+    it("is reachable with the keyboard", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+      await user.tab();
+      await user.tab();
+      await user.tab();
+      expect(dateInput()).toHaveFocus();
+    });
+
+    it("persists across reloads", () => {
+      seed();
+      const { unmount } = render(<Board />);
+      fireEvent.change(dateInput(), { target: { value: "2999-10-28" } });
+      unmount();
+      resetBoardStore();
+      render(<Board />);
+      expect(dateInput()).toHaveValue("2999-10-28");
+    });
+
+    it("marks past dates overdue unless the card is in Done, and updates on move", async () => {
+      const user = userEvent.setup();
+      seed("2000-01-01");
+      render(<Board />);
+      expect(within(column("To do")).getByText(/Overdue/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Doing' }));
+      expect(within(column("Doing")).getByText(/Overdue/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Done' }));
+      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+      expect(dateInput()).toHaveValue("2000-01-01");
+
+      await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Doing' }));
+      expect(screen.getByText(/Overdue/)).toBeInTheDocument();
+    });
+
+    it("does not mark a card due today as overdue", () => {
+      seed(todayString());
+      render(<Board />);
+      expect(screen.getByRole("time")).toBeInTheDocument();
+      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
     });
   });
 

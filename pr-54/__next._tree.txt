@@ -1,0 +1,5 @@
+:HL["/agentic-dev-team/pr-54/_next/static/chunks/375_x1o_qlz_7.css","style"]
+:HL["/agentic-dev-team/pr-54/_next/static/media/07a39a8a4660cc7c-s.p.0r6juujl39pe6.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+:HL["/agentic-dev-team/pr-54/_next/static/media/605ce01b664af129-s.p.0wgildi0cnwt9.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
+1:[["children",{"s":"__PAGE__","h":160}]]
+0:{"b":"B3KLs-eSSbAo4WOaV0qR6","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

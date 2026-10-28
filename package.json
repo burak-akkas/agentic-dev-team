@@ -1,0 +1,16 @@
+{
+  "name": "tasks-cli",
+  "version": "0.1.0",
+  "description": "Tiny task list CLI used as a sandbox for the agent team",
+  "type": "module",
+  "bin": {
+    "tasks": "bin/tasks.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

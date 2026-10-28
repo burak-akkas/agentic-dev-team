@@ -99,3 +99,16 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 - A QA/Tester role that runs end-to-end tests against a preview deploy.
 - A scheduled "maintainer" agent that triages stale issues and CI failures.
 - Move the workflows into a reusable workflow in an org-level repo once the pilot works.
+
+## tasks-cli (sandbox project)
+
+> This section and `src/`, `bin/` and `test/` only exist on the `sandbox` branch. They give the agents a small project to work on.
+
+```
+node bin/tasks.js add Buy milk     # Added: [ ] 1. Buy milk
+node bin/tasks.js done 1           # Completed task 1
+node bin/tasks.js list [--all]     # list open (or all) tasks
+npm test                           # run tests
+```
+
+Tasks are stored in `$TASKS_FILE` (default `./tasks.json`).

@@ -1,25 +1,29 @@
 # Project guide for agents
 
 ## What this project is
-A template for a label-driven agent team (Analyst → Architect → Implementor ⇄ Reviewer) that runs on GitHub Actions with `anthropics/claude-code-action`. This repository is also the pilot that tests the template on itself.
+`tasks-cli` is a tiny Node.js command-line task list (add / done / list) that stores tasks in a JSON file. It's a sandbox project for piloting the agent team. Keep it simple and dependency-free.
 
 ## Layout
-- `.github/agents/`: role prompts and `transition.sh` (agents must not modify these)
-- `.github/workflows/`: one workflow per role (agents must not modify these)
-- `scripts/`: Bash helper scripts for setting up a repo
-- `templates/`: files other repos copy, e.g. `templates/CLAUDE.md`
-- `README.md`: setup guide and how the pipeline works
+- `src/tasks.js`: pure task functions (`addTask`, `completeTask`, `listTasks`, `formatTask`) plus JSON `load`/`save`
+- `bin/tasks.js`: CLI entry point; `run(argv, { file, out })` is exported for tests
+- `test/*.test.js`: tests using the built-in `node:test` runner
+- `.github/`, `scripts/`, `templates/`: the agent-team tooling. **Not part of the product; never modify.**
 
 ## Commands
-- Syntax-check a shell script: `bash -n <file>`
-- There is no build and no test suite. For script changes, include a "How to verify" section in the PR.
+- Test (all): `npm test`
+- Test (single file): `node --test test/tasks.test.js`
+- Run the CLI: `node bin/tasks.js <command>` (set `TASKS_FILE` to use a temporary file)
+- No install step: there are no dependencies.
 
 ## Conventions
-- Bash: start with `#!/usr/bin/env bash` and `set -euo pipefail`, put a usage comment at the top, quote all variables.
-- Keep scripts small and dependency-free (only `gh`, `jq`, `git`).
-- When behaviour or setup changes, update `README.md` in the same PR.
-- Commits: Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`).
+- ES modules, Node >= 20, **no npm dependencies**.
+- Business logic goes in `src/` as pure functions (return new arrays, never mutate the input). The CLI only parses args, does I/O and formats output.
+- Errors: throw `Error` with a user-facing message; the CLI prints `Error: <message>` and exits with code 1.
+- Every behaviour change needs a test in `test/`. Prefer testing pure functions; use `run()` with a temp file for CLI behaviour.
+- When CLI usage changes, update the `USAGE` text in `bin/tasks.js` and the README section "tasks-cli".
+- Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`).
 
 ## Never
-- Modify `.github/`, secrets or workflow files.
-- Commit credentials, tokens or `.pem` files.
+- Modify `.github/`, `scripts/`, `templates/`, secrets or workflow files.
+- Add npm dependencies.
+- Commit `tasks.json` or other local data files.

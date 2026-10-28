@@ -36,6 +36,7 @@ export function CardDialog({
   column,
   onSave,
   onDelete,
+  onDuplicate,
   onClose,
   onChecklist,
   onUpdateBoard,
@@ -45,6 +46,8 @@ export function CardDialog({
   onChecklist?: (change: (board: Board) => Board) => void;
   onSave: (edits: CardEdits) => void;
   onDelete: () => void;
+  // Duplicates the saved card (unsaved edits in this dialog are not copied).
+  onDuplicate?: () => void;
   onClose: () => void;
   onUpdateBoard: (fn: (board: Board) => Board) => void;
 }) {
@@ -319,6 +322,11 @@ export function CardDialog({
           <Button variant="ghost" size="sm" onClick={requestClose}>
             Cancel
           </Button>
+          {onDuplicate && (
+            <Button variant="ghost" size="sm" title="Duplicates the saved card (unsaved edits are not copied)" onClick={onDuplicate}>
+              Duplicate
+            </Button>
+          )}
           <Button variant="danger" size="sm" className="ml-auto" onClick={handleDelete}>
             Delete card
           </Button>

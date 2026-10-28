@@ -677,6 +677,23 @@ describe("<Board />", () => {
 
     afterEach(() => vi.restoreAllMocks());
 
+    it("duplicates the saved card, ignoring unsaved edits, and opens the copy", async () => {
+      const user = userEvent.setup();
+      seedOne();
+      render(<Board />);
+      await user.click(screen.getByRole("button", { name: "Alpha" }));
+      const dialog = screen.getByRole("dialog", { name: "Alpha" });
+      await user.type(within(dialog).getByLabelText("Title"), " unsaved");
+      await user.click(within(dialog).getByRole("button", { name: "Duplicate" }));
+
+      expect(screen.getByRole("dialog", { name: "Alpha (copy)" })).toBeInTheDocument();
+      expect(within(screen.getByRole("dialog")).getByLabelText("Title")).toHaveValue("Alpha (copy)");
+      expect(within(screen.getByRole("dialog")).getByText("created as a copy of Alpha")).toBeInTheDocument();
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+      const titles = within(column("To do")).getAllByRole("button", { name: /^Alpha/ });
+      expect(titles.map((t) => t.textContent)).toEqual(["Alpha", "Alpha (copy)"]);
+    });
+
     it("opens on click and on Enter, and saves all edits to the board and storage", async () => {
       const user = userEvent.setup();
       seedOne();

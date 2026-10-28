@@ -50,7 +50,8 @@ export type ActivityType =
   | "dueDate"
   | "archived"
   | "restored"
-  | "checklistDone";
+  | "checklistDone"
+  | "duplicated";
 
 export interface ActivityEntry {
   id: string;
@@ -58,7 +59,7 @@ export interface ActivityEntry {
   at: string;
   type: ActivityType;
   // Column ids for `moved`; old/new value for `title`, `priority` and `dueDate` (omitted when empty).
-  // `checklistDone` keeps the item text in `to`. `description` stores no text.
+  // `checklistDone` keeps the item text in `to`. `duplicated` keeps the source card's title in `from`. `description` stores no text.
   from?: string;
   to?: string;
 }
@@ -124,6 +125,7 @@ export const ACTIVITY_TYPES: readonly ActivityType[] = [
   "archived",
   "restored",
   "checklistDone",
+  "duplicated",
 ];
 
 export interface ActivityOptions {
@@ -269,6 +271,47 @@ export function moveCard(board: Board, cardId: string, to: ColumnId, opts: Activ
       [found.column]: board.columns[found.column].filter((c) => c.id !== cardId),
       [to]: [...board.columns[to], withActivity(found.card, { type: "moved", from: found.column, to }, opts)],
     },
+  };
+}
+
+const COPY_SUFFIX = " (copy)";
+
+// Inserts a copy right after the original, in the same column. The copy keeps notes, priority, due date,
+// labels and checklist text (items unticked, new ids); comments and activity are not copied.
+export function duplicateCard(
+  board: Board,
+  cardId: string,
+  { id = crypto.randomUUID(), now = new Date() }: { id?: string; now?: Date } = {},
+): Board {
+  const found = findCard(board, cardId);
+  if (!found) {
+    throw new Error(`Card ${cardId} not found`);
+  }
+  const { card: original, column } = found;
+  let copy: Card = {
+    id,
+    title: original.title.slice(0, MAX_TITLE_LENGTH - COPY_SUFFIX.length).trimEnd() + COPY_SUFFIX,
+    createdAt: now.toISOString(),
+    priority: original.priority,
+  };
+  if (original.dueDate !== undefined) {
+    copy.dueDate = original.dueDate;
+  }
+  if (original.notes !== undefined) {
+    copy.notes = original.notes;
+  }
+  if (original.labels && original.labels.length > 0) {
+    copy.labels = [...original.labels];
+  }
+  if (original.checklist && original.checklist.length > 0) {
+    copy.checklist = original.checklist.map((item) => ({ id: crypto.randomUUID(), text: item.text, done: false }));
+  }
+  copy = withActivity(copy, { type: "duplicated", from: original.title }, { now });
+  const cards = board.columns[column];
+  const index = cards.findIndex((c) => c.id === cardId);
+  return {
+    ...board,
+    columns: { ...board.columns, [column]: [...cards.slice(0, index + 1), copy, ...cards.slice(index + 1)] },
   };
 }
 

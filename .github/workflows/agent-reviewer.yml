@@ -4,8 +4,11 @@ name: "Agent · Reviewer"
 #   - agent PRs (branch `agent/*`) are opened, updated or marked ready
 #   - a human applies `agent:review` to any same-repo PR
 # Loop guard: after AGENT_MAX_REVIEW_ROUNDS reviewer summaries since the last Lead decision (default 3) the PR goes to the Lead (`agent:needs-decision`).
+# PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
+# conflicts (GitHub creates no merge commit for those), and it always runs this workflow
+# file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, ready_for_review, labeled]
 
 env:
@@ -41,6 +44,7 @@ jobs:
 
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
           token: ${{ steps.app.outputs.token }}
 

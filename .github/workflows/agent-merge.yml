@@ -6,8 +6,11 @@ name: "Agent · Merge"
 #   3. Up to date: if the default branch moved on, updates the PR branch (re-runs CI, review, QA)
 #   4. Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names, default "CI")
 #   5. Green: squash-merges exactly the approved commit. Red: sends the PR back to the Implementor.
+# PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
+# conflicts (GitHub creates no merge commit for those), and it always runs this workflow
+# file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 env:
@@ -110,6 +113,7 @@ jobs:
           echo "result=timeout" >> "$GITHUB_OUTPUT"
 
       - name: Merge or send back
+        id: final
         if: ${{ !cancelled() && steps.risk.outputs.stop != 'true' && steps.fresh.outputs.stop != 'true' }}
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
@@ -126,6 +130,7 @@ jobs:
                 prod="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
                 [ -n "$ISSUE" ] && "$TRUSTED/progress.sh" "$ISSUE" "✅ **Merged** #$PR, deploying to [production]($prod)"
                 echo "Merged PR #$PR" >> "$GITHUB_STEP_SUMMARY"
+                echo "merged=true" >> "$GITHUB_OUTPUT"
               else
                 "$TRUSTED/transition.sh" "$PR" agent:needs-decision
                 gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⚠️ Auto-merge failed (conflict or new commits). Lead, please decide."
@@ -139,3 +144,30 @@ jobs:
               "$TRUSTED/transition.sh" "$PR" agent:needs-decision
               gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⏱️ Required checks ($REQUIRED) did not finish in time. Lead, please decide." ;;
           esac
+
+      # A merge can make other open agent PRs conflict. GitHub runs no pull_request workflows
+      # for conflicting PRs, so flag them now: the Implementor merges the base and resolves.
+      - name: Send PRs that now conflict back to the Implementor
+        if: ${{ !cancelled() && steps.final.outputs.merged == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          sleep 20   # give GitHub time to recompute mergeability after the merge
+          for n in $(gh pr list -R "$GITHUB_REPOSITORY" --state open --base "$BASE" --json number,headRefName \
+                       --jq '.[] | select(.headRefName | startswith("agent/")) | .number'); do
+            state=UNKNOWN
+            for _ in 1 2 3 4 5; do
+              state=$(gh pr view "$n" -R "$GITHUB_REPOSITORY" --json mergeable --jq .mergeable)
+              [ "$state" != "UNKNOWN" ] && break
+              sleep 10
+            done
+            echo "PR #$n: $state" >> "$GITHUB_STEP_SUMMARY"
+            [ "$state" = "CONFLICTING" ] || continue
+            labels=$(gh pr view "$n" -R "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | join(",")')
+            case ",$labels," in *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*) continue ;; esac
+            "$TRUSTED/transition.sh" "$n" agent:changes-requested
+            gh pr comment "$n" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
+          ⚠️ #$PR was just merged into \`$BASE\`, and this PR now **conflicts** with it. Implementor: run \`git fetch origin $BASE\` and \`git merge origin/$BASE\`, resolve the conflicts keeping the intent of both changes, run all checks, and push."
+            "$TRUSTED/progress.sh" --pr "$n" "🚦 **Merge gate**: #$n conflicts with the just-merged #$PR, back to the Implementor"
+          done

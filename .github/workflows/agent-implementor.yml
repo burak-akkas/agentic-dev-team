@@ -17,7 +17,7 @@ on:
 
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
-  AGENT_BOT_LOGIN: ${{ vars.AGENT_BOT_LOGIN }}
+  AGENT_BOT_ID: ${{ vars.AGENT_BOT_ID }}   # the App's bot user id: unlike its login, it survives renames
 
 jobs:
   implement:
@@ -54,7 +54,7 @@ jobs:
       - name: Prepare
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          BOT: ${{ vars.AGENT_BOT_LOGIN }}
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
         run: |
           mkdir -p .agent-out && echo ".agent-out/" >> .git/info/exclude
           git config user.name "$BOT"
@@ -68,7 +68,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
-          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          allowed_bots: ${{ steps.app.outputs.app-slug }}[bot]
           branch_prefix: "agent/"
           prompt: |
             You are the IMPLEMENTOR agent. Read .github/agents/implementor.md and follow it exactly.
@@ -176,7 +176,7 @@ jobs:
       - name: Prepare
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          BOT: ${{ vars.AGENT_BOT_LOGIN }}
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
         run: |
           mkdir -p .agent-out
           printf '.agent-out/\n.agent-trusted/\n' >> .git/info/exclude
@@ -191,7 +191,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
-          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          allowed_bots: ${{ steps.app.outputs.app-slug }}[bot]
           prompt: |
             You are the IMPLEMENTOR agent. Read ${{ env.TRUSTED }}/implementor.md and follow it exactly.
 

@@ -21,10 +21,10 @@ line="$1"
 run="${GITHUB_SERVER_URL:-https://github.com}/$repo/actions/runs/${GITHUB_RUN_ID:-}"
 entry="- \`$(date -u +%H:%M)\` $line · [run]($run)"
 marker="<!-- agent:progress -->"
-bot="${AGENT_BOT_LOGIN:-}"
+bot="${AGENT_BOT_ID:-}"   # matched by user id, which survives App renames
 
 id=$(gh api --paginate "repos/$repo/issues/$issue/comments" \
-  --jq ".[] | select((\"$bot\" == \"\" or .user.login == \"$bot\") and (.body | startswith(\"$marker\"))) | .id" 2>/dev/null | head -1)
+  --jq ".[] | select((\"$bot\" == \"\" or .user.id == ${bot:-0}) and (.body | startswith(\"$marker\"))) | .id" 2>/dev/null | head -1)
 
 if [ -n "$id" ]; then
   body=$(gh api "repos/$repo/issues/comments/$id" --jq .body 2>/dev/null)

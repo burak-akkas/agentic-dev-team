@@ -10,10 +10,11 @@ import {
   undoArchive,
   wipStatus,
 } from "./board";
-import { loadBoard, parseBoard, saveBoard, serializeBoard, STORAGE_KEY } from "./storage";
+import { LEGACY_STORAGE_KEY, parseBoard, serializeBoard } from "./storage";
+import { loadBoard, saveBoard } from "./testStorage";
 
 function memoryStorage(initial?: string): Storage {
-  const data = new Map<string, string>(initial === undefined ? [] : [[STORAGE_KEY, initial]]);
+  const data = new Map<string, string>(initial === undefined ? [] : [[LEGACY_STORAGE_KEY, initial]]);
   return {
     getItem: (key: string) => data.get(key) ?? null,
     setItem: (key: string, value: string) => void data.set(key, value),

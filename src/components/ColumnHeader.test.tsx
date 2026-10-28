@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addCard, emptyBoard, moveCard, setWipLimit } from "@/lib/board";
-import { saveBoard } from "@/lib/storage";
+import { saveBoard } from "@/lib/testStorage";
 import { resetBoardStore } from "@/lib/useBoard";
 import { Board } from "./Board";
 

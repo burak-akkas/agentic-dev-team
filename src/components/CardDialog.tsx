@@ -10,12 +10,14 @@ import {
   MAX_TITLE_LENGTH,
   PRIORITIES,
   removeLabelFromList,
+  type Board,
   type Card,
   type CardEdits,
   type ColumnId,
   type Priority,
 } from "@/lib/board";
 
+import { ChecklistSection } from "./ChecklistSection";
 import { LabelChip } from "./LabelChip";
 import { Button, Dialog, Input, Select, Textarea } from "./ui";
 
@@ -27,9 +29,11 @@ export function CardDialog({
   onSave,
   onDelete,
   onClose,
+  onChecklist,
 }: {
   card: Card;
   column: ColumnId;
+  onChecklist?: (change: (board: Board) => Board) => void;
   onSave: (edits: CardEdits) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -240,6 +244,8 @@ export function CardDialog({
             </p>
           )}
         </div>
+
+        {onChecklist && <ChecklistSection card={card} onChange={onChecklist} />}
 
         <p className="text-xs text-muted">
           Created <time dateTime={card.createdAt}>{new Date(card.createdAt).toLocaleString()}</time>

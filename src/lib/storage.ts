@@ -1,5 +1,5 @@
 import { DEFAULT_BOARD_NAME, initialBoardList, type BoardEntry, type BoardList } from "./boards";
-import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, isValidDueDate, isValidWipLimit, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card, type ColumnId } from "./board";
+import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, isValidDueDate, isValidWipLimit, MAX_NOTES_LENGTH, normalizeChecklistText, PRIORITIES, todayString, type Board, type Card, type ChecklistItem, type ColumnId } from "./board";
 
 export const STORAGE_KEY = "kanban-boards-v2";
 // Only read, to migrate old data; never written or removed.
@@ -29,7 +29,7 @@ export function isBoard(value: unknown): value is Board {
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const { notes, labels, ...rest } = card as Card & { notes?: unknown; labels?: unknown };
+  const { notes, labels, checklist, ...rest } = card as Card & { notes?: unknown; labels?: unknown; checklist?: unknown };
   const priority = PRIORITIES.some((p) => p.id === card.priority) ? card.priority : DEFAULT_PRIORITY;
   const trimmed = typeof notes === "string" ? notes.trim() : "";
   const normalized: Card = { ...rest, priority };
@@ -40,7 +40,33 @@ function normalizeCard(card: Card): Card {
   if (cleanLabels.length > 0) {
     normalized.labels = cleanLabels;
   }
+  const cleanChecklist = normalizeChecklist(checklist);
+  if (cleanChecklist.length > 0) {
+    normalized.checklist = cleanChecklist;
+  }
   return normalized;
+}
+
+// Keeps valid items only: malformed, blank, over-long and duplicate-id entries are dropped; text is trimmed.
+function normalizeChecklist(value: unknown): ChecklistItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const ids = new Set<string>();
+  const result: ChecklistItem[] = [];
+  for (const entry of value) {
+    const item = entry as Partial<ChecklistItem> | null;
+    if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.text !== "string" || typeof item.done !== "boolean" || ids.has(item.id)) {
+      continue;
+    }
+    try {
+      result.push({ id: item.id, text: normalizeChecklistText(item.text), done: item.done });
+      ids.add(item.id);
+    } catch {
+      // blank or too long: skip it
+    }
+  }
+  return result;
 }
 
 // Keeps valid labels only: non-strings, blank, over-long and duplicate (case-insensitive) entries are dropped.

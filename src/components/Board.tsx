@@ -135,6 +135,7 @@ export function Board() {
           key={openCardId}
           card={open.card}
           column={open.column}
+          onChecklist={update}
           onSave={(edits) => {
             update((b) => updateCard(b, openCardId, edits));
             closeDialog(openCardId);

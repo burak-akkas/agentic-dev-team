@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   addCard,
   adjacentColumn,
+  boardStats,
   deleteCard,
   emptyBoard,
   filterCards,
+  filterOverdue,
   findCard,
   formatDueDate,
   isFiltering,
@@ -322,5 +324,44 @@ describe("notes", () => {
   it("keeps notes when moving or renaming", () => {
     expect(card(moveCard(withNotes, "a", "doing")).notes).toBe("line one\nline two");
     expect(card(renameCard(withNotes, "a", "New")).notes).toBe("line one\nline two");
+  });
+});
+
+describe("boardStats / filterOverdue", () => {
+  const TODAY = "2026-10-28";
+  let board = emptyBoard();
+  for (const id of ["a", "b", "c", "d"]) {
+    board = addCard(board, `Card ${id}`, { id });
+  }
+  board = setDueDate(board, "a", "2026-10-01"); // overdue
+  board = setDueDate(board, "b", "2026-10-28"); // due today: not overdue
+  board = setDueDate(board, "c", "2026-09-01");
+  board = setPriority(board, "a", "high");
+  board = setPriority(board, "c", "high");
+  board = moveCard(board, "c", "doing"); // overdue and high
+  board = moveCard(board, "d", "done");
+  board = setDueDate(board, "d", "2000-01-01"); // overdue but done
+  board = setPriority(board, "d", "high"); // high but done
+
+  it("counts totals, progress, overdue and open high priority cards", () => {
+    expect(boardStats(board, TODAY)).toEqual({ total: 4, done: 1, percentDone: 25, overdue: 2, highOpen: 2 });
+  });
+
+  it("handles an empty board", () => {
+    expect(boardStats(emptyBoard(), TODAY)).toEqual({ total: 0, done: 0, percentDone: 0, overdue: 0, highOpen: 0 });
+  });
+
+  it("rounds the percentage", () => {
+    let b = addCard(addCard(addCard(emptyBoard(), "x", { id: "x" }), "y", { id: "y" }), "z", { id: "z" });
+    b = moveCard(b, "x", "done");
+    expect(boardStats(b, TODAY).percentDone).toBe(33);
+  });
+
+  it("keeps only overdue, not-done cards and does not mutate", () => {
+    const filtered = filterOverdue(board, TODAY);
+    expect(ids(filtered.columns.todo)).toEqual(["a"]);
+    expect(ids(filtered.columns.doing)).toEqual(["c"]);
+    expect(filtered.columns.done).toEqual([]);
+    expect(ids(board.columns.done)).toEqual(["d"]);
   });
 });

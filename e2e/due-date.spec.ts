@@ -18,12 +18,12 @@ test("sets a due date, shows it overdue, persists it and clears it", async ({ pa
 
   await page.reload();
   await expect(input).toHaveValue("2000-01-01");
-  await expect(page.getByText("Overdue")).toBeVisible();
+  await expect(column(page, "To do").getByText("Overdue")).toBeVisible();
 
   await page.getByRole("button", { name: 'Move "Pay rent" to Doing' }).click();
   await page.getByRole("button", { name: 'Move "Pay rent" to Done' }).click();
   await expect(column(page, "Done").getByText("Pay rent")).toBeVisible();
-  await expect(page.getByText("Overdue")).toHaveCount(0);
+  await expect(column(page, "Done").getByText("Overdue")).toHaveCount(0);
   await expect(input).toHaveValue("2000-01-01");
 
   await page.getByRole("button", { name: 'Clear due date for "Pay rent"' }).click();

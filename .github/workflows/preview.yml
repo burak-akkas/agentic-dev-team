@@ -1,0 +1,80 @@
+name: Preview
+
+# Every same-repo PR gets a live preview at https://<owner>.github.io/<repo>/pr-<N>/
+# (published to the `gh-pages` branch). The preview serves version.txt with the PR's
+# head SHA, so the QA agent can wait until the preview matches the commit it tests.
+# The preview is removed when the PR closes.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/pr-${{ github.event.pull_request.number }}/
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}/pr-${{ github.event.pull_request.number }}
+      - run: echo "${{ github.event.pull_request.head.sha }}" > out/version.txt
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+          destination_dir: pr-${{ github.event.pull_request.number }}
+          keep_files: true
+          commit_message: "deploy: preview PR #${{ github.event.pull_request.number }} ${{ github.event.pull_request.head.sha }}"
+      - name: Post or update preview link
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          body="<!-- preview -->
+          🔎 **Preview:** $URL
+          Commit \`${SHA:0:7}\`. GitHub Pages can take about a minute to update after each push."
+          id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+                 --jq '.[] | select(.body | startswith("<!-- preview -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" >/dev/null
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" >/dev/null
+          fi
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+      - name: Remove preview and QA screenshots
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          git rm -rq --ignore-unmatch "pr-$PR" "qa/pr-$PR"
+          if git diff --cached --quiet; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git commit -qm "cleanup: preview PR #$PR"
+          git push

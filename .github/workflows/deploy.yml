@@ -1,23 +1,22 @@
 name: Deploy to GitHub Pages
 
-# Every merge to the default branch ships the static export to
-# https://<owner>.github.io/<repo>/
+# Every merge to the default branch ships the static export to the root of the
+# `gh-pages` branch: https://<owner>.github.io/<repo>/
+# PR previews live next to it in pr-<N>/ (see preview.yml) and are kept.
 on:
   push:
     branches: [sandbox]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-production
+  cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -30,16 +29,10 @@ jobs:
       - run: npm run build
         env:
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
-      - uses: actions/upload-pages-artifact@v3
+      - run: echo "${{ github.sha }}" > out/version.txt
+      - uses: peaceiris/actions-gh-pages@v4
         with:
-          path: out
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+          keep_files: true
+          commit_message: "deploy: production ${{ github.sha }}"

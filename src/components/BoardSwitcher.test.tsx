@@ -42,6 +42,16 @@ describe("<BoardSwitcher />", () => {
     expect(selectedName()).toBe("Work");
   });
 
+  it("styles the board select like the label filter select", () => {
+    setup();
+    const board = select();
+    const filter = screen.getByRole("combobox", { name: "Filter by label" });
+    expect(board).toHaveClass("px-3", "py-2");
+    expect(board).not.toHaveClass("text-xs");
+    expect(filter).toHaveClass("px-3", "py-2");
+    expect(filter).not.toHaveClass("text-xs");
+  });
+
   it("switches boards by keyboard and keeps cards per board", async () => {
     const { user } = setup();
     await user.type(screen.getByLabelText("New card title"), "Mine");

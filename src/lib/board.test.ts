@@ -43,6 +43,7 @@ describe("addCard", () => {
       title: "first",
       createdAt: "2026-01-01T00:00:00.000Z",
       priority: "medium",
+      activity: [{ id: expect.any(String), at: "2026-01-01T00:00:00.000Z", type: "created" }],
     });
   });
 
@@ -107,12 +108,14 @@ describe("renameCard", () => {
 
   it("trims the title and keeps column, index, id and createdAt", () => {
     const result = renameCard(base, "a", "  renamed  ");
-    expect(result.columns.todo[0]).toEqual({
+    const { activity, ...card } = result.columns.todo[0];
+    expect(card).toEqual({
       id: "a",
       title: "renamed",
       createdAt: "2026-01-01T00:00:00.000Z",
       priority: "medium",
     });
+    expect(activity?.map((e) => e.type)).toEqual(["title", "created"]);
     expect(ids(result.columns.todo)).toEqual(["a", "b"]);
     expect(ids(result.columns.doing)).toEqual(["c"]);
   });
@@ -349,15 +352,22 @@ describe("updateCard / hasChanges", () => {
       column: "doing",
     });
     expect(next.columns.todo).toEqual([]);
-    expect(next.columns.doing).toEqual([
-      { ...original, title: "Renamed", notes: "Some notes", priority: "high", dueDate: "2030-01-02" },
-    ]);
+    const { activity, ...card } = next.columns.doing[0];
+    const rest = { ...original };
+    delete rest.activity;
+    expect(next.columns.doing).toHaveLength(1);
+    expect(card).toEqual({ ...rest, title: "Renamed", notes: "Some notes", priority: "high", dueDate: "2030-01-02" });
+    expect(activity?.map((e) => e.type)).toEqual(["moved", "dueDate", "priority", "description", "title", "created"]);
   });
 
   it("clears notes and due date", () => {
     const full = updateCard(base, "a", { ...same, notes: "n", dueDate: "2030-01-02" });
     const cleared = updateCard(full, "a", same);
-    expect(findCard(cleared, "a")?.card).toEqual(original);
+    const { activity, ...card } = findCard(cleared, "a")?.card as Card;
+    const rest = { ...original };
+    delete rest.activity;
+    expect(card).toEqual(rest);
+    expect(activity).toHaveLength(5);
   });
 
   it("returns the same board when nothing changed", () => {
@@ -437,7 +447,10 @@ describe("archive", () => {
   it("undoArchive restores the original order and empties the archive", () => {
     const board = seed();
     const next = undoArchive(archiveDone(board), board.columns.done);
-    expect(next).toEqual(board);
+    expect(ids(next.columns.done)).toEqual(ids(board.columns.done));
+    expect(next.archive).toEqual([]);
+    expect(next.columns.todo).toEqual(board.columns.todo);
+    expect(next.columns.doing).toEqual(board.columns.doing);
   });
 
   it("undoArchive skips cards already restored or deleted", () => {

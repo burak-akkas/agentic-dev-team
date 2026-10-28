@@ -17,6 +17,7 @@ import {
   type Priority,
 } from "@/lib/board";
 
+import { ActivityLog } from "./ActivityLog";
 import { ChecklistSection } from "./ChecklistSection";
 import { LabelChip } from "./LabelChip";
 import { Button, Dialog, Input, Select, Textarea } from "./ui";
@@ -250,6 +251,11 @@ export function CardDialog({
         <p className="text-xs text-muted">
           Created <time dateTime={card.createdAt}>{new Date(card.createdAt).toLocaleString()}</time>
         </p>
+
+        <div className="flex flex-col gap-1">
+          <h3 className={labelStyles}>Activity</h3>
+          <ActivityLog activity={card.activity} />
+        </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <Button type="submit" variant="primary" size="sm" disabled={invalid}>

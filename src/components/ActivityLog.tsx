@@ -1,0 +1,52 @@
+import { COLUMNS, formatDueDate, PRIORITIES, type ActivityEntry } from "@/lib/board";
+import { formatRelativeTime } from "@/lib/time";
+
+const columnName = (id: string | undefined) => COLUMNS.find((c) => c.id === id)?.title ?? id ?? "";
+const priorityName = (id: string | undefined) => PRIORITIES.find((p) => p.id === id)?.label ?? id ?? "";
+
+export function describeActivity(entry: ActivityEntry): string {
+  switch (entry.type) {
+    case "created":
+      return "Created";
+    case "moved":
+      return `Moved from ${columnName(entry.from)} to ${columnName(entry.to)}`;
+    case "title":
+      return `Title changed from “${entry.from ?? ""}” to “${entry.to ?? ""}”`;
+    case "description":
+      return "Description changed";
+    case "priority":
+      return `Priority changed from ${priorityName(entry.from)} to ${priorityName(entry.to)}`;
+    case "dueDate":
+      return entry.to ? `Due date set to ${formatDueDate(entry.to)}` : "Due date cleared";
+    case "archived":
+      return "Archived";
+    case "restored":
+      return "Restored";
+    case "checklistDone":
+      return `Completed checklist item “${entry.to ?? ""}”`;
+  }
+}
+
+// Read-only, newest first (the order they are stored in).
+export function ActivityLog({ activity, now }: { activity: ActivityEntry[] | undefined; now?: Date }) {
+  if (!activity || activity.length === 0) {
+    return <p className="text-xs text-muted">No activity yet</p>;
+  }
+  return (
+    <ol aria-label="Activity" className="flex max-h-48 flex-col gap-1 overflow-y-auto text-xs">
+      {activity.map((entry) => (
+        <li key={entry.id} className="flex flex-wrap items-baseline justify-between gap-x-3">
+          <span className="break-words">{describeActivity(entry)}</span>
+          <time
+            dateTime={entry.at}
+            title={new Date(entry.at).toLocaleString()}
+            tabIndex={0}
+            className="text-muted"
+          >
+            {formatRelativeTime(entry.at, now)}
+          </time>
+        </li>
+      ))}
+    </ol>
+  );
+}

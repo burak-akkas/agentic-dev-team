@@ -4,11 +4,15 @@ export type ColumnId = "todo" | "doing" | "done";
 
 export type Priority = "low" | "medium" | "high";
 
+export type CoverColor = "red" | "orange" | "yellow" | "green" | "teal" | "blue" | "purple" | "pink";
+
 export interface Card {
   id: string;
   title: string;
   createdAt: string;
   priority: Priority;
+  // Optional cover color from COVER_COLORS. Absent means no cover.
+  cover?: CoverColor;
   // Optional date-only due date, `YYYY-MM-DD` (local calendar day).
   dueDate?: string;
   // Optional multi-line plain-text notes (trimmed, at most MAX_NOTES_LENGTH characters).
@@ -81,6 +85,21 @@ export const PRIORITIES: readonly { id: Priority; label: string }[] = [
 ];
 
 export const DEFAULT_PRIORITY: Priority = "medium";
+
+export const COVER_COLORS: readonly { id: CoverColor; label: string }[] = [
+  { id: "red", label: "Red" },
+  { id: "orange", label: "Orange" },
+  { id: "yellow", label: "Yellow" },
+  { id: "green", label: "Green" },
+  { id: "teal", label: "Teal" },
+  { id: "blue", label: "Blue" },
+  { id: "purple", label: "Purple" },
+  { id: "pink", label: "Pink" },
+];
+
+export function isCoverColor(value: unknown): value is CoverColor {
+  return COVER_COLORS.some((c) => c.id === value);
+}
 
 export const MAX_TITLE_LENGTH = 120;
 
@@ -174,6 +193,36 @@ export function setPriority(board: Board, cardId: string, priority: Priority, op
       ...board.columns,
       [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? withActivity({ ...c, priority }, { type: "priority", from: c.priority, to: priority }, opts) : c),
       ),
+    },
+  };
+}
+
+// Sets or clears (undefined) the cover color. Returns the same board when nothing changes.
+export function setCover(board: Board, cardId: string, cover: CoverColor | undefined): Board {
+  const found = findCard(board, cardId);
+  if (!found) {
+    throw new Error(`Card ${cardId} not found`);
+  }
+  if (cover !== undefined && !isCoverColor(cover)) {
+    throw new Error(`Unknown cover color ${String(cover)}`);
+  }
+  if (found.card.cover === cover) {
+    return board;
+  }
+  return {
+    ...board,
+    columns: {
+      ...board.columns,
+      [found.column]: board.columns[found.column].map((c) => {
+        if (c.id !== cardId) {
+          return c;
+        }
+        const updated = { ...c, cover };
+        if (cover === undefined) {
+          delete updated.cover;
+        }
+        return updated;
+      }),
     },
   };
 }
@@ -751,12 +800,17 @@ export interface CardEdits {
   dueDate: string | undefined;
   column: ColumnId;
   labels?: string[];
+  // Only applied when the key is present; `undefined` with the key present clears the cover.
+  cover?: CoverColor | undefined;
 }
 
 // Applies every edit at once. Validates first (the setters throw), so nothing is half-applied.
 export function updateCard(board: Board, cardId: string, edits: CardEdits, opts: { now?: Date } = {}): Board {
   let next = renameCard(board, cardId, edits.title, opts);
   next = setNotes(next, cardId, edits.notes, opts);
+  if ("cover" in edits) {
+    next = setCover(next, cardId, edits.cover);
+  }
   if (edits.labels !== undefined) {
     next = setLabels(next, cardId, edits.labels);
   }
@@ -773,6 +827,7 @@ export function hasChanges(card: Card, column: ColumnId, draft: CardEdits): bool
     draft.priority !== card.priority ||
     (draft.dueDate || undefined) !== card.dueDate ||
     draft.column !== column ||
+    ("cover" in draft && draft.cover !== card.cover) ||
     (draft.labels !== undefined &&
       (draft.labels.length !== (card.labels ?? []).length ||
         draft.labels.some((l, i) => l.trim() !== (card.labels ?? [])[i])))

@@ -5,6 +5,7 @@ import {
   addComment,
   addLabelToList,
   COLUMNS,
+  COVER_COLORS,
   deleteComment,
   editComment,
   hasChanges,
@@ -17,8 +18,10 @@ import {
   type Card,
   type CardEdits,
   type ColumnId,
+  type CoverColor,
   type Priority,
 } from "@/lib/board";
+import { coverStyles } from "./coverColors";
 
 import { ActivityLog } from "./ActivityLog";
 import { CardComments } from "./CardComments";
@@ -55,6 +58,7 @@ export function CardDialog({
   const [dueDate, setDueDate] = useState(card.dueDate ?? "");
   const [status, setStatus] = useState<ColumnId>(column);
   const [labels, setLabels] = useState<string[]>(card.labels ?? []);
+  const [cover, setCover] = useState<CoverColor | undefined>(card.cover);
   const [labelInput, setLabelInput] = useState("");
   const [labelError, setLabelError] = useState<string | null>(null);
 
@@ -79,6 +83,7 @@ export function CardDialog({
     dueDate: dueDate || undefined,
     column: status,
     labels,
+    cover,
   };
 
   // Closing with unsaved changes needs confirmation.
@@ -202,6 +207,42 @@ export function CardDialog({
                 Clear due date
               </Button>
             )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span id={`${headingId}-cover`} className={labelStyles}>
+            Cover color
+          </span>
+          {cover && (
+            <div
+              aria-hidden="true"
+              data-testid="cover-preview"
+              className={`h-1.5 w-full rounded-full ${coverStyles[cover]}`}
+            />
+          )}
+          <div role="radiogroup" aria-labelledby={`${headingId}-cover`} className="flex flex-wrap gap-2">
+            {[{ id: undefined, label: "None" }, ...COVER_COLORS].map(({ id, label }) => (
+              <label key={id ?? "none"} className="relative cursor-pointer">
+                <input
+                  type="radio"
+                  name={`${headingId}-cover`}
+                  aria-label={`Cover color: ${label}`}
+                  checked={cover === id}
+                  onChange={() => setCover(id)}
+                  className="peer sr-only"
+                />
+                <span
+                  aria-hidden="true"
+                  title={label}
+                  className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-line text-sm font-bold text-white peer-checked:ring-2 peer-checked:ring-offset-2 peer-checked:ring-zinc-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-blue-600 dark:peer-checked:ring-zinc-100 dark:ring-offset-zinc-900 ${
+                    id ? coverStyles[id] : "bg-surface text-muted"
+                  }`}
+                >
+                  {cover === id ? (id ? "✓" : "–") : ""}
+                </span>
+              </label>
+            ))}
           </div>
         </div>
 

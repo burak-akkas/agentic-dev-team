@@ -5,6 +5,7 @@ import {
   adjacentColumn,
   checklistProgress,
   COLUMNS,
+  COVER_COLORS,
   formatDueDate,
   isOverdue,
   isValidDueDate,
@@ -13,8 +14,10 @@ import {
   PRIORITIES,
   type Card,
   type ColumnId,
+  type CoverColor,
   type Priority,
 } from "@/lib/board";
+import { coverStyles } from "./coverColors";
 import { LabelChip } from "./LabelChip";
 import { Button, Input, Select, Textarea } from "./ui";
 
@@ -22,6 +25,8 @@ export const CARD_DRAG_TYPE = "application/x-kanban-card";
 
 const columnTitle =(id: ColumnId) => COLUMNS.find((c) => c.id === id)?.title ?? id;
 const priorityLabel = (id: Priority) => PRIORITIES.find((p) => p.id === id)?.label ?? id;
+
+const coverLabel = (id: CoverColor) => COVER_COLORS.find((c) => c.id === id)?.label ?? id;
 
 const badgeStyles: Record<Priority, string> = {
   low: "bg-zinc-200 font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
@@ -76,6 +81,7 @@ export function CardItem({
   const notesButtonRef = useRef<HTMLButtonElement>(null);
   const restoreNotesFocus = useRef(false);
   const notesId = useId();
+  const coverId = useId();
 
   useEffect(() => {
     if (editingNotes) {
@@ -201,8 +207,22 @@ export function CardItem({
       draggable
       onDragStart={handleDragStart}
       onDragEnd={onDragEnd}
-      className={`${cardSurface} cursor-grab active:cursor-grabbing`}
+      aria-describedby={card.cover ? coverId : undefined}
+      className={`${cardSurface} cursor-grab active:cursor-grabbing${card.cover ? " relative overflow-hidden" : ""}`}
     >
+      {card.cover && (
+        <>
+          <span
+            aria-hidden="true"
+            data-testid="cover-stripe"
+            data-cover={card.cover}
+            className={`absolute inset-x-0 top-0 h-1.5 ${coverStyles[card.cover]}`}
+          />
+          <span id={coverId} className="sr-only">
+            Cover color: {coverLabel(card.cover)}
+          </span>
+        </>
+      )}
       <div className="flex items-start justify-between gap-2">
         <button
           type="button"

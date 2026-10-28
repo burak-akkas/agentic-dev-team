@@ -6,7 +6,8 @@
 #
 # Usage: pr-still-current.sh <pr> <expected-head-sha> [required-label]
 # Prints "skip=<reason>" (for $GITHUB_OUTPUT) when the run should stop, nothing otherwise.
-# A conflicting PR that nobody flagged yet is sent to the Implementor here.
+# A conflicting PR that nobody flagged yet is sent to the Implementor here, and a PR waiting in
+# another agent's state gets that state re-applied, in case its pending run was dropped.
 set -euo pipefail
 
 pr="$1"
@@ -31,8 +32,16 @@ if [ "$head" != "$sha" ]; then
   echo "skip=newer commit ${head:0:7} was pushed, its own run handles it"; exit 0
 fi
 case ",$labels," in
-  *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*)
-    echo "skip=PR is already labeled $labels"; exit 0 ;;
+  *",agent:changes-requested,"*|*",agent:needs-decision,"*)
+    # The PR waits for another agent. GitHub keeps only one pending run per concurrency group, so
+    # a push event (like the one that queued this run) can silently replace the pending run for that
+    # state. Re-apply the state label: its handler queues behind this run, at worst replacing an
+    # identical pending run.
+    current=$(echo ",$labels," | grep -oE 'agent:(changes-requested|needs-decision)' | head -1)
+    "$here/transition.sh" "$pr" "$current" >/dev/null
+    echo "skip=PR is waiting in $current, re-queued its handler"; exit 0 ;;
+  *",agent:needs-human,"*)
+    echo "skip=PR is waiting for a human"; exit 0 ;;
 esac
 if [ -n "$required" ] && [[ ",$labels," != *",$required,"* ]]; then
   echo "skip=PR no longer has $required (labels: ${labels:-none})"; exit 0

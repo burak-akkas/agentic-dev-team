@@ -107,6 +107,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 ```
 node bin/tasks.js add Buy milk     # Added: [ ] 1. Buy milk
 node bin/tasks.js done 1           # Completed task 1
+node bin/tasks.js remove 1         # Removed task 1
 node bin/tasks.js list [--all]     # list open (or all) tasks
 npm test                           # run tests
 ```

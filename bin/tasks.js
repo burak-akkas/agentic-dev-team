@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { addTask, completeTask, listTasks, formatTask, load, save } from "../src/tasks.js";
+import { addTask, completeTask, removeTask, listTasks, formatTask, load, save } from "../src/tasks.js";
 
 const USAGE = `Usage:
   tasks add <title>     Add a task
   tasks done <id>       Mark a task as done
+  tasks remove <id>     Remove a task
   tasks list [--all]    List open tasks (or all tasks)
 
 Tasks are stored in $TASKS_FILE (default: ./tasks.json).`;
@@ -26,6 +27,15 @@ export function run(argv, { file = process.env.TASKS_FILE || "tasks.json", out =
       }
       save(file, completeTask(tasks, id));
       out(`Completed task ${id}`);
+      return 0;
+    }
+    case "remove": {
+      const id = Number(args[0]);
+      if (!Number.isInteger(id)) {
+        throw new Error("Usage: tasks remove <id>");
+      }
+      save(file, removeTask(tasks, id));
+      out(`Removed task ${id}`);
       return 0;
     }
     case "list": {

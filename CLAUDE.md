@@ -1,33 +1,25 @@
 # Project guide for agents
 
-> Template: replace every `<...>`. Every agent reads this file on every run, so keep it short and specific.
-
 ## What this project is
-<one paragraph: purpose, main users, tech stack>
+A template for a label-driven agent team (Analyst → Architect → Implementor ⇄ Reviewer) that runs on GitHub Actions with `anthropics/claude-code-action`. This repository is also the pilot that tests the template on itself.
 
 ## Layout
-- `<src/...>`: <what lives here>
-- `<tests/...>`: <test layout>
+- `.github/agents/`: role prompts and `transition.sh` (agents must not modify these)
+- `.github/workflows/`: one workflow per role (agents must not modify these)
+- `scripts/`: Bash helper scripts for setting up a repo
+- `templates/`: files other repos copy, e.g. `templates/CLAUDE.md`
+- `README.md`: setup guide and how the pipeline works
 
 ## Commands
-- Install: `<npm ci | pip install -e .[dev] | ...>`
-- Build: `<...>`
-- Lint/format: `<...>`
-- Test (all): `<...>`
-- Test (single): `<...>`
-
-> Each command above must also be allowed in the repo variable `AGENT_BUILD_TOOLS`,
-> e.g. `Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)`.
+- Syntax-check a shell script: `bash -n <file>`
+- There is no build and no test suite. For script changes, include a "How to verify" section in the PR.
 
 ## Conventions
-- <language/style rules a linter does not enforce>
-- <error handling, logging, naming patterns>
-- Commits: Conventional Commits (`feat:`, `fix:`, `chore:` ...)
-- Every behaviour change ships with a test.
-
-## Architecture rules
-- <boundaries, e.g. "UI never calls the DB directly", "no new dependencies without an ADR">
+- Bash: start with `#!/usr/bin/env bash` and `set -euo pipefail`, put a usage comment at the top, quote all variables.
+- Keep scripts small and dependency-free (only `gh`, `jq`, `git`).
+- When behaviour or setup changes, update `README.md` in the same PR.
+- Commits: Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`).
 
 ## Never
-- Modify `.github/`, secrets, CI config or deployment files.
-- Change public APIs or DB schemas unless the Architect's design says so explicitly.
+- Modify `.github/`, secrets or workflow files.
+- Commit credentials, tokens or `.pem` files.

@@ -38,11 +38,11 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | [.github/agents/transition.sh](.github/agents/transition.sh) | Swaps `agent:*` state labels |
 | [scripts/setup-labels.sh](scripts/setup-labels.sh) | Creates the labels |
 | [.github/ISSUE_TEMPLATE/agent-task.yml](.github/ISSUE_TEMPLATE/agent-task.yml) | Issue form that starts the pipeline |
-| [CLAUDE.md](CLAUDE.md) | Project guide every agent reads. **Fill this in** |
+| [templates/CLAUDE.md](templates/CLAUDE.md) | Project guide every agent reads. Copy it to the target repo root as `CLAUDE.md` and fill it in |
 
 ## Setup (about 15 minutes)
 
-1. **Copy these files** into the target repo: `.github/`, `scripts/`, and `CLAUDE.md` (fill it in).
+1. **Copy these files** into the target repo: `.github/` and `scripts/`, plus `templates/CLAUDE.md` copied to the repo root as `CLAUDE.md` (fill it in). The root `CLAUDE.md` in this repo describes the pilot itself.
 2. **Create a GitHub App** (Settings → Developer settings → GitHub Apps → New). It's free on any plan.
    - Name, e.g. `acme-agents`. Disable the webhook.
    - Repository permissions: **Contents: R/W, Issues: R/W, Pull requests: R/W, Checks: Read, Commit statuses: Read, Actions: Read**, Metadata: Read.

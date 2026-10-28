@@ -4,6 +4,7 @@ import {
   addLabelToList,
   COLUMNS,
   DEFAULT_PRIORITY,
+  isCoverColor,
   isValidDueDate,
   isValidWipLimit,
   MAX_ACTIVITY_ENTRIES,
@@ -49,8 +50,9 @@ export function isBoard(value: unknown): value is Board {
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const { notes, labels, checklist, comments, activity, ...rest } = card as Card & {
+  const { notes, cover, labels, checklist, comments, activity, ...rest } = card as Card & {
     notes?: unknown;
+    cover?: unknown;
     labels?: unknown;
     checklist?: unknown;
     comments?: unknown;
@@ -61,6 +63,9 @@ function normalizeCard(card: Card): Card {
   const normalized: Card = { ...rest, priority };
   if (trimmed && trimmed.length <= MAX_NOTES_LENGTH) {
     normalized.notes = trimmed;
+  }
+  if (isCoverColor(cover)) {
+    normalized.cover = cover;
   }
   const cleanLabels = normalizeLabels(labels);
   if (cleanLabels.length > 0) {

@@ -1,4 +1,4 @@
-import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, PRIORITIES, type Board, type Card } from "./board";
+import { COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, PRIORITIES, todayString, type Board, type Card } from "./board";
 
 export const STORAGE_KEY = "kanban-board-v1";
 
@@ -37,6 +37,30 @@ function normalizeBoard(board: Board): Board {
       done: board.columns.done.map(normalizeCard),
     },
   };
+}
+
+export function serializeBoard(board: Board): string {
+  return JSON.stringify(board, null, 2);
+}
+
+export type ParseResult = { ok: true; board: Board } | { ok: false; error: string };
+
+// Validates exported/imported text with the same rules as localStorage data.
+export function parseBoard(text: string): ParseResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "This file is not valid JSON." };
+  }
+  if (!isBoard(parsed)) {
+    return { ok: false, error: "This file is not a Kanban board export." };
+  }
+  return { ok: true, board: normalizeBoard(parsed) };
+}
+
+export function exportFilename(now: Date = new Date()): string {
+  return `kanban-board-${todayString(now)}.json`;
 }
 
 // Returns an empty board when storage is unavailable, empty or corrupt.

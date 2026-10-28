@@ -2,6 +2,8 @@ name: "Agent · Analyst"
 
 # Triggers:
 #   - a new issue (only when the repo variable AGENT_AUTO_START == 'true')
+# Only the owner, org members and collaborators can trigger agents. Outsiders' issues
+# and comments are ignored before any job starts (labels already require write access).
 #   - a human applies the `agent:start` label
 #   - a human replies on an issue that is in `agent:needs-info`
 on:
@@ -12,17 +14,20 @@ on:
 
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
+  AGENT_BOT_LOGIN: ${{ vars.AGENT_BOT_LOGIN }}
 
 jobs:
   analyst:
     if: >-
       ${{ !github.event.issue.pull_request && (
         (github.event.action == 'opened' && vars.AGENT_AUTO_START == 'true' &&
+         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) &&
          !contains(github.event.issue.labels.*.name, 'agent:start')) ||
         (github.event.action == 'labeled' && github.event.label.name == 'agent:start') ||
         (github.event_name == 'issue_comment' &&
          contains(github.event.issue.labels.*.name, 'agent:needs-info') &&
-         github.event.comment.user.type != 'Bot')
+         github.event.comment.user.type != 'Bot' &&
+         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
       ) }}
     concurrency:
       group: agent-${{ github.event.issue.number }}

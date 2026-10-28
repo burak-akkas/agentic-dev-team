@@ -11,6 +11,7 @@ on:
 
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
+  AGENT_BOT_LOGIN: ${{ vars.AGENT_BOT_LOGIN }}
 
 jobs:
   merge:

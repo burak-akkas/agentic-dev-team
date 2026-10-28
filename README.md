@@ -56,8 +56,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
    | Secret | `CLAUDE_CODE_OAUTH_TOKEN` | output of `claude setup-token` |
    | Secret | `AGENT_APP_PRIVATE_KEY` | contents of the `.pem` file |
    | Variable | `AGENT_APP_ID` | App ID |
-   | Variable | `AGENT_BOT_LOGIN` | `<app-slug>[bot]`, e.g. `acme-agents[bot]` |
-   | Variable | `AGENT_BOT_ID` | `gh api '/users/acme-agents%5Bbot%5D' --jq .id` (used for the commit email) |
+   | Variable | `AGENT_BOT_ID` | The bot's user id: `gh api '/users/<app-slug>%5Bbot%5D' --jq .id`. Workflows recognise the agents' comments by this id, which (unlike the login) survives renaming the App. The login itself is read from the App token at run time |
    | Variable | `AGENT_BUILD_TOOLS` | commands the Implementor may run, e.g. `Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)` |
    | Variable | `AGENT_ESCALATION_ASSIGNEE` | GitHub username assigned when the Lead escalates |
 
@@ -103,7 +102,7 @@ You don't need to do anything in autonomous mode. These are overrides:
 
 ## Safety rails built in
 
-- Only the **owner, org members and collaborators** can trigger agents. Outsiders' issues and comments are filtered out before any job starts, agents ignore their comments, and handoff markers only count when the agents' bot posted them. Bots other than `AGENT_BOT_LOGIN` are rejected.
+- Only the **owner, org members and collaborators** can trigger agents. Outsiders' issues and comments are filtered out before any job starts, agents ignore their comments, and handoff markers only count when the agents' bot posted them. Bots other than the team's App are rejected. The App is identified by its user id (`AGENT_BOT_ID`), so renaming it breaks nothing.
 - On a public repo, consider limiting interactions to collaborators (up to 6 months, renewable): `gh api -X PUT repos/<owner>/<repo>/interaction-limits -f limit=collaborators_only -f expiry=six_months`.
 - Each role gets a **least-privilege tool allowlist**. Analyst, Architect, Reviewer and Lead can't edit code or run git. The Implementor can't force-push or push to the default branch. Denied tool calls are listed in the job summary.
 - The App has no *Workflows* permission, so agents can't push changes to `.github/workflows/`. That permission doesn't cover the role prompts (`.github/agents/`) or the scripts (`scripts/`), so the merge gate never auto-merges a PR that touches `AGENT_PROTECTED_PATHS` (default `.github/,scripts/,templates/`): a human merges it.

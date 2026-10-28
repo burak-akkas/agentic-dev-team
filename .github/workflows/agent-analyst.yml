@@ -14,7 +14,7 @@ on:
 
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
-  AGENT_BOT_LOGIN: ${{ vars.AGENT_BOT_LOGIN }}
+  AGENT_BOT_ID: ${{ vars.AGENT_BOT_ID }}   # the App's bot user id: unlike its login, it survives renames
 
 jobs:
   analyst:
@@ -65,7 +65,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
-          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          allowed_bots: ${{ steps.app.outputs.app-slug }}[bot]
           prompt: |
             You are the ANALYST agent. Read .github/agents/analyst.md and follow it exactly.
 

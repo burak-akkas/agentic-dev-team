@@ -199,6 +199,7 @@ jobs:
             Repository: ${{ github.repository }}
             Pull request: #${{ github.event.pull_request.number }}
             Branch (already checked out): ${{ github.event.pull_request.head.ref }}
+            Default branch (the PR's base; merge only this one, never any other branch): ${{ github.event.pull_request.base.ref }}
 
             Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).
             Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.

@@ -28,6 +28,12 @@
 ## Architecture rules
 - <boundaries, e.g. "UI never calls the DB directly", "no new dependencies without an ADR">
 
+## Testing notes for agents (optional)
+<!-- Helps the Reviewer and QA find side effects. Keep it short. -->
+- Where data lives: <e.g. database tables, local storage keys, files, external services>
+- What counts as "other" data that an action must never touch: <e.g. other users, other tenants, other projects>
+- Risky areas: <e.g. migrations, billing, anything that deletes>
+
 ## Never
 - Modify `.github/`, secrets, CI config or deployment files.
 - Change public APIs or DB schemas unless the Architect's design says so explicitly.

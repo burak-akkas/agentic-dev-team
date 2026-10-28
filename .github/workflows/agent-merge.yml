@@ -3,8 +3,9 @@ name: "Agent · Merge"
 # Merge gate. When a PR gets `agent:approved` (from the Reviewer or the Lead):
 #   1. Kill switch: does nothing unless AGENT_AUTO_MERGE == 'true'
 #   2. Risk: if the linked issue is `risk:high`, a human merges (unless AGENT_AUTO_MERGE_HIGH_RISK == 'true')
-#   3. Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names, default "CI")
-#   4. Green: squash-merges exactly the approved commit. Red: sends the PR back to the Implementor.
+#   3. Up to date: if the default branch moved on, updates the PR branch (re-runs CI, review, QA)
+#   4. Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names, default "CI")
+#   5. Green: squash-merges exactly the approved commit. Red: sends the PR back to the Implementor.
 on:
   pull_request:
     types: [labeled]
@@ -63,9 +64,32 @@ jobs:
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Without branch protection nothing forces a PR to include the latest default branch.
+      # If the base moved on, update the branch: the push re-runs CI, review and QA on the
+      # combined code, and a later approval brings the PR back here.
+      - name: Up-to-date gate
+        id: fresh
+        if: steps.risk.outputs.stop != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          behind=$(gh api "repos/$GITHUB_REPOSITORY/compare/$HEAD_SHA...$BASE" --jq .ahead_by)
+          echo "Behind $BASE by $behind commit(s)" >> "$GITHUB_STEP_SUMMARY"
+          [ "$behind" -eq 0 ] && exit 0
+          echo "stop=true" >> "$GITHUB_OUTPUT"
+          if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR/update-branch" -f expected_head_sha="$HEAD_SHA" >/dev/null 2>&1; then
+            "$TRUSTED/transition.sh" "$PR"
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "🔄 \`$BASE\` moved on by $behind commit(s) since this was approved. I merged it into this branch; CI, review and QA now run again on the combined code."
+          else
+            "$TRUSTED/transition.sh" "$PR" agent:changes-requested
+            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
+          ⚠️ This PR is behind \`$BASE\` and can't be updated automatically (merge conflicts, or the base changed workflow files). Implementor: run \`git fetch origin $BASE\` and \`git merge origin/$BASE\`, resolve the conflicts keeping the intent of both sides, run all checks, and push."
+          fi
+
       - name: Wait for required checks
         id: checks
-        if: steps.risk.outputs.stop != 'true'
+        if: steps.risk.outputs.stop != 'true' && steps.fresh.outputs.stop != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
@@ -85,7 +109,7 @@ jobs:
           echo "result=timeout" >> "$GITHUB_OUTPUT"
 
       - name: Merge or send back
-        if: ${{ !cancelled() && steps.risk.outputs.stop != 'true' }}
+        if: ${{ !cancelled() && steps.risk.outputs.stop != 'true' && steps.fresh.outputs.stop != 'true' }}
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           RESULT: ${{ steps.checks.outputs.result }}

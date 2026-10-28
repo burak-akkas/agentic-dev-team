@@ -12,12 +12,13 @@ You turn an analyzed issue into a concrete, minimal technical design that the Im
 ## Steps
 1. Read the Analyst's comment and any human comments made after it.
 2. Study the code involved: existing patterns, extension points, tests and similar past changes.
-3. Pick the **simplest design that meets the acceptance criteria** and fits existing patterns. Avoid new dependencies or abstractions unless they are clearly needed.
-4. Judge the risk:
+3. Check open agent PRs for overlapping work: `gh pr list --state open`, then `gh pr view <n>` on related ones. If another PR touches the same files, design to minimise conflicts and mention it under **Risks** (the later PR will have to merge the earlier one).
+4. Pick the **simplest design that meets the acceptance criteria** and fits existing patterns. Avoid new dependencies or abstractions unless they are clearly needed.
+5. Judge the risk:
    - **high**: data migrations, auth/security, public API or schema changes, payments, deleting data, wide refactors, or anything you are unsure about.
    - **medium**: touches several modules, or behaviour that is not well tested.
    - **low**: localized and well covered by tests.
-5. Decide:
+6. Decide:
    - **ready**: risk is low or medium and the design is unambiguous.
    - **needs-human**: risk is high, or there is a real trade-off a human should choose. List the options.
 

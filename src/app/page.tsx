@@ -1,4 +1,5 @@
 import { Board } from "@/components/Board";
+import { BoardTransfer } from "@/components/BoardTransfer";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function Home() {
@@ -11,7 +12,10 @@ export default function Home() {
             A small board built and maintained by an autonomous agent team. Your cards are saved in this browser.
           </p>
         </div>
-        <ThemeToggle />
+        <div className="flex flex-col items-start gap-3 sm:items-end">
+          <ThemeToggle />
+          <BoardTransfer />
+        </div>
       </header>
       <Board />
     </main>

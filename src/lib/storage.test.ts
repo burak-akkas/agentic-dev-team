@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addCard, emptyBoard, setDueDate, setNotes, setPriority } from "./board";
-import { loadBoard, saveBoard, STORAGE_KEY } from "./storage";
+import { exportFilename, loadBoard, parseBoard, saveBoard, serializeBoard, STORAGE_KEY } from "./storage";
 
 describe("storage", () => {
   it("round-trips a board through localStorage", () => {
@@ -109,5 +109,48 @@ describe("storage", () => {
   it("works without storage", () => {
     expect(loadBoard(undefined)).toEqual(emptyBoard());
     expect(() => saveBoard(emptyBoard(), undefined)).not.toThrow();
+  });
+});
+
+describe("export and import", () => {
+  it("round-trips a board through serializeBoard and parseBoard", () => {
+    const added = addCard(emptyBoard(), "Task", { id: "c1" });
+    const board = setDueDate(setPriority(added, "c1", "low"), "c1", "2026-01-02");
+    const result = parseBoard(serializeBoard(board));
+    expect(result).toEqual({ ok: true, board });
+  });
+
+  it("defaults missing priority and leaves a missing dueDate unset", () => {
+    const old = JSON.stringify({
+      columns: { todo: [{ id: "a", title: "Old", createdAt: "2024-01-01T00:00:00.000Z" }], doing: [], done: [] },
+    });
+    const result = parseBoard(old);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.board.columns.todo[0].priority).toBe("medium");
+      expect(result.board.columns.todo[0].dueDate).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ["not json", "nope"],
+    ["empty object", "{}"],
+    ["array", "[]"],
+    ["null", "null"],
+    ["missing columns", '{"columns":{"todo":[]}}'],
+    [
+      "bad due date",
+      '{"columns":{"todo":[{"id":"a","title":"t","createdAt":"x","dueDate":"31-12-2026"}],"doing":[],"done":[]}}',
+    ],
+  ])("rejects %s", (_name, text) => {
+    const result = parseBoard(text);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).not.toBe("");
+    }
+  });
+
+  it("names the export file after the local date", () => {
+    expect(exportFilename(new Date(2026, 9, 28))).toBe("kanban-board-2026-10-28.json");
   });
 });

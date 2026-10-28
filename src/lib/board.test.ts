@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCard, adjacentColumn, deleteCard, emptyBoard, findCard, MAX_TITLE_LENGTH, moveCard, renameCard } from "./board";
+import { addCard, adjacentColumn, deleteCard, emptyBoard, filterCards, findCard, isFiltering, MAX_TITLE_LENGTH, moveCard, renameCard } from "./board";
 
 const ids = (cards: { id: string }[]) => cards.map((c) => c.id);
 
@@ -118,5 +118,42 @@ describe("helpers", () => {
     expect(adjacentColumn("todo", -1)).toBeUndefined();
     expect(adjacentColumn("todo", 1)).toBe("doing");
     expect(adjacentColumn("done", 1)).toBeUndefined();
+  });
+});
+
+describe("filterCards / isFiltering", () => {
+  let board = addCard(emptyBoard(), "Write Docs", { id: "a" });
+  board = addCard(board, "Fix bug", { id: "b" });
+  board = addCard(board, "Docs review", { id: "c" });
+  board = moveCard(board, "c", "doing");
+  board = moveCard(board, "b", "done");
+
+  it("matches case-insensitively across all columns, preserving order", () => {
+    const result = filterCards(board, "DOCS");
+    expect(ids(result.columns.todo)).toEqual(["a"]);
+    expect(ids(result.columns.doing)).toEqual(["c"]);
+    expect(ids(result.columns.done)).toEqual([]);
+  });
+
+  it("ignores leading and trailing spaces in the query", () => {
+    expect(filterCards(board, "  fix bug ").columns.done).toEqual(board.columns.done);
+  });
+
+  it("returns all cards for an empty or whitespace query", () => {
+    expect(filterCards(board, "")).toBe(board);
+    expect(filterCards(board, "   ")).toBe(board);
+    expect(isFiltering("")).toBe(false);
+    expect(isFiltering("  ")).toBe(false);
+    expect(isFiltering(" a ")).toBe(true);
+  });
+
+  it("returns empty columns when nothing matches", () => {
+    expect(filterCards(board, "zzz").columns).toEqual({ todo: [], doing: [], done: [] });
+  });
+
+  it("does not mutate the input board", () => {
+    const snapshot = structuredClone(board);
+    filterCards(board, "docs");
+    expect(board).toEqual(snapshot);
   });
 });

@@ -15,7 +15,7 @@ required="${3:-}"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 here="$(dirname "$0")"
 
-view=$(gh pr view "$pr" -R "$repo" --json state,headRefOid,baseRefName,labels)
+view=$(gh pr view "$pr" -R "$repo" --json state,isDraft,headRefOid,baseRefName,labels)
 state=$(echo "$view" | jq -r .state)
 head=$(echo "$view" | jq -r .headRefOid)
 base=$(echo "$view" | jq -r .baseRefName)
@@ -23,6 +23,9 @@ labels=$(echo "$view" | jq -r '[.labels[].name] | join(",")')
 
 if [ "$state" != "OPEN" ]; then
   echo "skip=PR is $state"; exit 0
+fi
+if [ "$(echo "$view" | jq -r .isDraft)" = "true" ]; then
+  echo "skip=PR is a draft"; exit 0
 fi
 if [ "$head" != "$sha" ]; then
   echo "skip=newer commit ${head:0:7} was pushed, its own run handles it"; exit 0

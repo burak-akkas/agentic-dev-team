@@ -21,7 +21,7 @@ env:
 jobs:
   merge:
     if: >-
-      ${{ github.event.label.name == 'agent:approved' && vars.AGENT_AUTO_MERGE == 'true' &&
+      ${{ github.event.label.name == 'agent:approved' && vars.AGENT_AUTO_MERGE == 'true' && !github.event.pull_request.draft &&
         github.event.pull_request.head.repo.full_name == github.repository }}
     concurrency:
       group: agent-${{ github.event.pull_request.number }}-merge

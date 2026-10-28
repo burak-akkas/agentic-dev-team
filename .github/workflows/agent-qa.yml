@@ -19,7 +19,9 @@ env:
 
 jobs:
   qa:
-    if: github.event.label.name == 'agent:qa' && github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event.label.name == 'agent:qa' && !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
     concurrency:
       group: agent-${{ github.event.pull_request.number }}
       cancel-in-progress: false

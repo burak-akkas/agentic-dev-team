@@ -1,7 +1,7 @@
 import { createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, todayString } from "@/lib/board";
+import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, setPriority, todayString } from "@/lib/board";
 import { saveBoard } from "@/lib/storage";
 import { resetBoardStore } from "@/lib/useBoard";
 import { Board } from "./Board";
@@ -235,18 +235,18 @@ describe("<Board />", () => {
       await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Doing' }));
       expect(within(column("Doing")).getByText(/Overdue/)).toBeInTheDocument();
       await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Done' }));
-      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+      expect(within(column("Done")).queryByText(/Overdue/)).not.toBeInTheDocument();
       expect(dateInput()).toHaveValue("2000-01-01");
 
       await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Doing' }));
-      expect(screen.getByText(/Overdue/)).toBeInTheDocument();
+      expect(within(column("Doing")).getByText(/Overdue/)).toBeInTheDocument();
     });
 
     it("does not mark a card due today as overdue", () => {
       seed(todayString());
       render(<Board />);
       expect(screen.getByRole("time")).toBeInTheDocument();
-      expect(screen.queryByText(/Overdue/)).not.toBeInTheDocument();
+      expect(within(column("To do")).queryByText(/Overdue/)).not.toBeInTheDocument();
     });
   });
 
@@ -663,6 +663,64 @@ describe("<Board />", () => {
 
       await user.click(screen.getByRole("button", { name: 'Edit "Beta"' }));
       expect(screen.getByLabelText("Card title").closest("li")).not.toHaveAttribute("draggable");
+    });
+  });
+
+  describe("summary bar", () => {
+    const summary = () => screen.getByRole("region", { name: "Board summary" });
+
+    it("shows a friendly empty state", () => {
+      render(<Board />);
+      expect(within(summary()).getByText(/No cards yet/)).toBeInTheDocument();
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    });
+
+    it("shows live totals, progress and high priority count", async () => {
+      const user = userEvent.setup();
+      let board = addCard(addCard(emptyBoard(), "One", { id: "a" }), "Two", { id: "b" });
+      board = setPriority(board, "a", "high");
+      saveBoard(board);
+      render(<Board />);
+
+      expect(within(summary()).getByText("2")).toBeInTheDocument();
+      expect(within(summary()).getByText("High priority open: 1")).toBeInTheDocument();
+      expect(screen.getByRole("progressbar", { name: "Cards done" })).toHaveAttribute("aria-valuenow", "0");
+
+      await user.click(screen.getByRole("button", { name: 'Move "One" to Doing' }));
+      await user.click(screen.getByRole("button", { name: 'Move "One" to Done' }));
+      expect(screen.getByRole("progressbar", { name: "Cards done" })).toHaveAttribute("aria-valuenow", "50");
+      expect(within(summary()).getByText("50% done")).toBeInTheDocument();
+      expect(within(summary()).getByText("High priority open: 0")).toBeInTheDocument();
+    });
+
+    it("filters to overdue cards when the overdue count is clicked and toggles back", async () => {
+      const user = userEvent.setup();
+      let board = addCard(addCard(emptyBoard(), "Late", { id: "a" }), "Fine", { id: "b" });
+      board = setDueDate(board, "a", "2000-01-01");
+      saveBoard(board);
+      render(<Board />);
+
+      const button = within(summary()).getByRole("button", { name: /Overdue: 1/ });
+      expect(button).toHaveAttribute("aria-pressed", "false");
+      await user.click(button);
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(within(column("To do")).getByText("Late")).toBeInTheDocument();
+      expect(within(column("To do")).queryByText("Fine")).not.toBeInTheDocument();
+
+      await user.click(button);
+      expect(within(column("To do")).getByText("Fine")).toBeInTheDocument();
+    });
+
+    it("drops the overdue filter once nothing is overdue", async () => {
+      const user = userEvent.setup();
+      saveBoard(setDueDate(addCard(emptyBoard(), "Late", { id: "a" }), "a", "2000-01-01"));
+      render(<Board />);
+
+      await user.click(within(summary()).getByRole("button", { name: /Overdue: 1/ }));
+      await user.click(screen.getByRole("button", { name: 'Move "Late" to Doing' }));
+      await user.click(screen.getByRole("button", { name: 'Move "Late" to Done' }));
+      expect(within(summary()).getByText("Overdue: 0")).toBeInTheDocument();
+      expect(within(column("Done")).getByText("Late")).toBeInTheDocument();
     });
   });
 });

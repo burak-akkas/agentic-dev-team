@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   adjacentColumn,
+  checklistProgress,
   COLUMNS,
   formatDueDate,
   isOverdue,
@@ -66,6 +67,7 @@ export function CardItem({
   const dateRef = useRef<HTMLInputElement>(null);
   const restoreFocus = useRef(false);
   const overdue = isOverdue(card, column);
+  const progress = checklistProgress(card);
   const commentCount = card.comments?.length ?? 0;
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState(card.notes ?? "");
@@ -225,6 +227,23 @@ export function CardItem({
             </li>
           ))}
         </ul>
+      )}
+      {progress && (
+        <p className="mt-2">
+          <span
+            role="img"
+            aria-label={`${progress.done} of ${progress.total} checklist items done`}
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+              progress.done === progress.total
+                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                : "bg-zinc-100 text-muted dark:bg-zinc-800"
+            }`}
+          >
+            <span aria-hidden="true">
+              ☑ {progress.done}/{progress.total}
+            </span>
+          </span>
+        </p>
       )}
       {commentCount > 0 && (
         <div className="mt-2 flex items-center gap-1 text-xs">

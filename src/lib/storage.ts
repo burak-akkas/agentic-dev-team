@@ -9,6 +9,7 @@ import {
   MAX_ACTIVITY_ENTRIES,
   MAX_COMMENT_LENGTH,
   MAX_NOTES_LENGTH,
+  normalizeChecklistText,
   PRIORITIES,
   todayString,
   type ActivityEntry,
@@ -16,6 +17,7 @@ import {
   type Board,
   type Card,
   type CardComment,
+  type ChecklistItem,
   type ColumnId,
 } from "./board";
 
@@ -47,9 +49,10 @@ export function isBoard(value: unknown): value is Board {
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
 function normalizeCard(card: Card): Card {
-  const { notes, labels, comments, activity, ...rest } = card as Card & {
+  const { notes, labels, checklist, comments, activity, ...rest } = card as Card & {
     notes?: unknown;
     labels?: unknown;
+    checklist?: unknown;
     comments?: unknown;
     activity?: unknown;
   };
@@ -63,6 +66,10 @@ function normalizeCard(card: Card): Card {
   if (cleanLabels.length > 0) {
     normalized.labels = cleanLabels;
   }
+  const cleanChecklist = normalizeChecklist(checklist);
+  if (cleanChecklist.length > 0) {
+    normalized.checklist = cleanChecklist;
+  }
   const cleanComments = normalizeComments(comments);
   if (cleanComments.length > 0) {
     normalized.comments = cleanComments;
@@ -72,6 +79,28 @@ function normalizeCard(card: Card): Card {
     normalized.activity = cleanActivity;
   }
   return normalized;
+}
+
+// Keeps valid items only: malformed, blank, over-long and duplicate-id entries are dropped; text is trimmed.
+function normalizeChecklist(value: unknown): ChecklistItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const ids = new Set<string>();
+  const result: ChecklistItem[] = [];
+  for (const entry of value) {
+    const item = entry as Partial<ChecklistItem> | null;
+    if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.text !== "string" || typeof item.done !== "boolean" || ids.has(item.id)) {
+      continue;
+    }
+    try {
+      result.push({ id: item.id, text: normalizeChecklistText(item.text), done: item.done });
+      ids.add(item.id);
+    } catch {
+      // blank or too long: skip it
+    }
+  }
+  return result;
 }
 
 const isValidDate = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(new Date(value).getTime());

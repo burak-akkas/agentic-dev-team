@@ -22,6 +22,7 @@ import {
 
 import { ActivityLog } from "./ActivityLog";
 import { CardComments } from "./CardComments";
+import { ChecklistSection } from "./ChecklistSection";
 import { LabelChip } from "./LabelChip";
 import { Button, Dialog, Input, Select, Textarea } from "./ui";
 
@@ -33,10 +34,12 @@ export function CardDialog({
   onSave,
   onDelete,
   onClose,
+  onChecklist,
   onUpdateBoard,
 }: {
   card: Card;
   column: ColumnId;
+  onChecklist?: (change: (board: Board) => Board) => void;
   onSave: (edits: CardEdits) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -248,6 +251,8 @@ export function CardDialog({
             </p>
           )}
         </div>
+
+        {onChecklist && <ChecklistSection card={card} onChange={onChecklist} />}
 
         {/* Comment actions apply immediately; they are not part of the draft or the discard prompt. */}
         <CardComments

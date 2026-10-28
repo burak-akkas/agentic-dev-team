@@ -2,7 +2,7 @@ import { act, createEvent, fireEvent, render, screen, within } from "@testing-li
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, setPriority, todayString } from "@/lib/board";
-import { saveBoard } from "@/lib/storage";
+import { saveBoard } from "@/lib/testStorage";
 import { resetBoardStore } from "@/lib/useBoard";
 import { Board } from "./Board";
 import { UNDO_TOAST_MS } from "./UndoToast";
@@ -558,8 +558,8 @@ describe("<Board />", () => {
     };
     const storedColumn = (id: string) =>
       (JSON.parse(localStorage.getItem(localStorage.key(0) as string) as string) as {
-        columns: Record<string, { id: string }[]>;
-      }).columns[id].map((c) => c.id);
+        boards: { board: { columns: Record<string, { id: string }[]> } }[];
+      }).boards[0].board.columns[id].map((c) => c.id);
 
     it("moves a card to the end of another column and persists it", () => {
       seed();

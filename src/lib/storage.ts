@@ -1,6 +1,9 @@
-import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, emptyBoard, isValidDueDate, isValidWipLimit, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card, type ColumnId } from "./board";
+import { DEFAULT_BOARD_NAME, initialBoardList, type BoardEntry, type BoardList } from "./boards";
+import { addLabelToList, COLUMNS, DEFAULT_PRIORITY, isValidDueDate, isValidWipLimit, MAX_NOTES_LENGTH, PRIORITIES, todayString, type Board, type Card, type ColumnId } from "./board";
 
-export const STORAGE_KEY = "kanban-board-v1";
+export const STORAGE_KEY = "kanban-boards-v2";
+// Only read, to migrate old data; never written or removed.
+export const LEGACY_STORAGE_KEY = "kanban-board-v1";
 
 // Cards saved before priorities existed (or with an invalid value) are treated as the default priority.
 function isCard(value: unknown): value is Omit<Card, "priority"> & { priority?: unknown } {
@@ -108,23 +111,58 @@ export function exportFilename(now: Date = new Date()): string {
   return `kanban-board-${todayString(now)}.json`;
 }
 
-// Returns an empty board when storage is unavailable, empty or corrupt.
-export function loadBoard(storage: Storage | undefined = globalThis.localStorage): Board {
-  try {
-    const raw = storage?.getItem(STORAGE_KEY);
-    if (!raw) {
-      return emptyBoard();
-    }
-    const parsed: unknown = JSON.parse(raw);
-    return isBoard(parsed) ? normalizeBoard(parsed) : emptyBoard();
-  } catch {
-    return emptyBoard();
-  }
+function isBoardEntry(value: unknown): value is BoardEntry {
+  const e = value as BoardEntry | null;
+  return typeof e === "object" && e !== null && typeof e.id === "string" && typeof e.name === "string" && isBoard(e.board);
 }
 
-export function saveBoard(board: Board, storage: Storage | undefined = globalThis.localStorage): void {
+export function isBoardList(value: unknown): value is BoardList {
+  const list = value as BoardList | null;
+  return typeof list === "object" && list !== null && typeof list.currentId === "string" && Array.isArray(list.boards);
+}
+
+// Invalid and duplicate-id entries are dropped; an unknown currentId falls back to the first board.
+function normalizeBoardList(list: BoardList): BoardList | null {
+  const seen = new Set<string>();
+  const boards: BoardEntry[] = [];
+  for (const entry of list.boards) {
+    if (isBoardEntry(entry) && !seen.has(entry.id)) {
+      seen.add(entry.id);
+      boards.push({ id: entry.id, name: entry.name, board: normalizeBoard(entry.board) });
+    }
+  }
+  if (boards.length === 0) {
+    return null;
+  }
+  return { boards, currentId: seen.has(list.currentId) ? list.currentId : boards[0].id };
+}
+
+// A valid v2 value wins; otherwise the legacy single board becomes "My board"; otherwise one empty board.
+// Corrupt v2 data does not consult the legacy key.
+export function loadBoards(storage: Storage | undefined = globalThis.localStorage): BoardList {
   try {
-    storage?.setItem(STORAGE_KEY, JSON.stringify(board));
+    const raw = storage?.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      return (isBoardList(parsed) && normalizeBoardList(parsed)) || initialBoardList();
+    }
+    const legacy = storage?.getItem(LEGACY_STORAGE_KEY);
+    if (legacy) {
+      const parsed: unknown = JSON.parse(legacy);
+      if (isBoard(parsed)) {
+        const list = initialBoardList();
+        return { ...list, boards: [{ id: list.currentId, name: DEFAULT_BOARD_NAME, board: normalizeBoard(parsed) }] };
+      }
+    }
+  } catch {
+    // fall through to an empty list
+  }
+  return initialBoardList();
+}
+
+export function saveBoards(list: BoardList, storage: Storage | undefined = globalThis.localStorage): void {
+  try {
+    storage?.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
     // Storage full or blocked (e.g. private mode): keep working in memory.
   }

@@ -17,8 +17,18 @@ function setup(overrides: Partial<Card> = {}) {
   const onSave = vi.fn();
   const onDelete = vi.fn();
   const onClose = vi.fn();
-  render(<CardDialog card={{ ...card, ...overrides }} column="todo" onSave={onSave} onDelete={onDelete} onClose={onClose} />);
-  return { onSave, onDelete, onClose, user: userEvent.setup() };
+  const onUpdateBoard = vi.fn();
+  render(
+    <CardDialog
+      card={{ ...card, ...overrides }}
+      column="todo"
+      onSave={onSave}
+      onDelete={onDelete}
+      onClose={onClose}
+      onUpdateBoard={onUpdateBoard}
+    />,
+  );
+  return { onSave, onDelete, onClose, onUpdateBoard, user: userEvent.setup() };
 }
 
 afterEach(() => vi.restoreAllMocks());

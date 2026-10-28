@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCard, archiveDone, emptyBoard, moveCard, setDueDate, setNotes, setPriority } from "./board";
+import { addCard, addComment, archiveDone, emptyBoard, MAX_COMMENT_LENGTH, moveCard, setDueDate, setNotes, setPriority } from "./board";
 import { initialBoardList } from "./boards";
 import {
   exportFilename,
@@ -235,6 +235,74 @@ describe("export and import", () => {
     const board = setDueDate(setPriority(added, "c1", "low"), "c1", "2026-01-02");
     const result = parseBoard(serializeBoard(board));
     expect(result).toEqual({ ok: true, board });
+  });
+
+  describe("comments", () => {
+    const at = "2026-10-28T10:00:00.000Z";
+    const parseComments = (comments: unknown) => {
+      const card = { id: "a", title: "t", createdAt: at, comments };
+      const result = parseBoard(JSON.stringify({ columns: { todo: [card], doing: [], done: [] } }));
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+      return result.board.columns.todo[0];
+    };
+
+    it("round-trips comments through serializeBoard and parseBoard", () => {
+      const board = addComment(addCard(emptyBoard(), "Task", { id: "c1" }), "c1", "hello", { id: "m1" });
+      expect(parseBoard(serializeBoard(board))).toEqual({ ok: true, board });
+    });
+
+    it("keeps valid comments trimmed and in order, with a valid editedAt", () => {
+      const card = parseComments([
+        { id: "1", text: " one ", createdAt: at, editedAt: at },
+        { id: "2", text: "two", createdAt: at },
+      ]);
+      expect(card.comments).toEqual([
+        { id: "1", text: "one", createdAt: at, editedAt: at },
+        { id: "2", text: "two", createdAt: at },
+      ]);
+    });
+
+    it("drops invalid, blank, over-long and duplicate-id comments, and a bad editedAt alone", () => {
+      const card = parseComments([
+        null,
+        "text",
+        { id: 1, text: "x", createdAt: at },
+        { id: "blank", text: "  ", createdAt: at },
+        { id: "long", text: "x".repeat(MAX_COMMENT_LENGTH + 1), createdAt: at },
+        { id: "baddate", text: "x", createdAt: "nope" },
+        { id: "dup", text: "first", createdAt: at },
+        { id: "dup", text: "second", createdAt: at },
+        { id: "badedit", text: "kept", createdAt: at, editedAt: "nope" },
+      ]);
+      expect(card.comments).toEqual([
+        { id: "dup", text: "first", createdAt: at },
+        { id: "badedit", text: "kept", createdAt: at },
+      ]);
+    });
+
+    it("omits the key when nothing valid is left or the value is not a list", () => {
+      expect("comments" in parseComments([{ id: "x", text: "", createdAt: at }])).toBe(false);
+      expect("comments" in parseComments("nope")).toBe(false);
+      expect("comments" in parseComments(undefined)).toBe(false);
+    });
+
+    it("loads cards without comments unchanged and normalizes archived cards and saved boards", () => {
+      const list = initialBoardList();
+      const card = { id: "a", title: "t", createdAt: at, priority: "low" as const };
+      const archived = { ...card, id: "z", comments: [{ id: "m", text: " hi ", createdAt: at }] };
+      const board = { columns: { todo: [card], doing: [], done: [] }, archive: [archived] };
+      const storage = new Map<string, string>();
+      const fake = {
+        getItem: (k: string) => storage.get(k) ?? null,
+        setItem: (k: string, v: string) => void storage.set(k, v),
+      } as unknown as Storage;
+      saveBoards({ ...list, boards: [{ ...list.boards[0], board }] }, fake);
+      const loaded = loadBoards(fake).boards[0].board;
+      expect(loaded.columns.todo[0]).toEqual(card);
+      expect(loaded.archive[0].comments).toEqual([{ id: "m", text: "hi", createdAt: at }]);
+    });
   });
 
   it("defaults missing priority and leaves a missing dueDate unset", () => {

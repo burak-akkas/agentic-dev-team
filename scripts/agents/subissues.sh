@@ -6,23 +6,23 @@
 # Only markers written by the agents' bot count, like everywhere else.
 #
 # Usage: subissues.sh <closed-sub-issue>
-# Needs GH_TOKEN, GITHUB_REPOSITORY and AGENT_BOT_LOGIN.
+# Needs GH_TOKEN, GITHUB_REPOSITORY and AGENT_BOT_ID (the bot's user id; it survives App renames).
 set -euo pipefail
 
 closed="$1"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
-bot="${AGENT_BOT_LOGIN:?AGENT_BOT_LOGIN must be set}"
+bot="${AGENT_BOT_ID:?AGENT_BOT_ID must be set}"
 here="$(dirname "$0")"
 
 issue=$(gh api "repos/$repo/issues/$closed")
-if [ "$(echo "$issue" | jq -r .user.login)" != "$bot" ]; then
-  echo "#$closed was not created by $bot, nothing to do"; exit 0
+if [ "$(echo "$issue" | jq -r .user.id)" != "$bot" ]; then
+  echo "#$closed was not created by the agents' bot, nothing to do"; exit 0
 fi
 parent=$(echo "$issue" | jq -r '(.body // "") | capture("<!-- agent:sub-issue parent=(?<p>[0-9]+)").p // empty')
 [ -z "$parent" ] && { echo "#$closed is not a sub-issue"; exit 0; }
 
 children=$(gh api --paginate "repos/$repo/issues/$parent/comments" \
-  --jq ".[] | select(.user.login == \"$bot\") | (.body // \"\") | capture(\"<!-- agent:split (?<n>[0-9,]+) -->\").n" | tail -1 | tr ',' ' ')
+  --jq ".[] | select(.user.id == $bot) | (.body // \"\") | capture(\"<!-- agent:split (?<n>[0-9,]+) -->\").n" | tail -1 | tr ',' ' ')
 [ -z "$children" ] && { echo "::warning::#$parent has no split marker"; exit 0; }
 
 if [ "$(echo "$issue" | jq -r .state_reason)" = "not_planned" ]; then

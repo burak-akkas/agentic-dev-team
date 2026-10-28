@@ -56,8 +56,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
    | Secret | `CLAUDE_CODE_OAUTH_TOKEN` | output of `claude setup-token` |
    | Secret | `AGENT_APP_PRIVATE_KEY` | contents of the `.pem` file |
    | Variable | `AGENT_APP_ID` | App ID |
-   | Variable | `AGENT_BOT_LOGIN` | `<app-slug>[bot]`, e.g. `acme-agents[bot]` |
-   | Variable | `AGENT_BOT_ID` | `gh api '/users/acme-agents%5Bbot%5D' --jq .id` (used for the commit email) |
+   | Variable | `AGENT_BOT_ID` | The bot's user id: `gh api '/users/<app-slug>%5Bbot%5D' --jq .id`. Workflows recognise the agents' comments by this id, which (unlike the login) survives renaming the App. The login itself is read from the App token at run time |
    | Variable | `AGENT_BUILD_TOOLS` | commands the Implementor may run, e.g. `Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)` |
    | Variable | `AGENT_ESCALATION_ASSIGNEE` | GitHub username assigned when the Lead escalates |
 
@@ -81,6 +80,9 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_MAX_REVIEW_ROUNDS` | `3` | `3` | Review rounds before the Lead steps in |
 | `AGENT_QA_SCREENSHOT_DAYS` | `7` | `7` | Days QA screenshots stay after a PR closes ([pages-janitor.yml](.github/workflows/pages-janitor.yml) also squashes `gh-pages` weekly) |
 | `AGENT_MAX_QA_ROUNDS` | `3` | `3` | Failed QA rounds before the Lead steps in |
+| `AGENT_WATCHDOG_MINUTES` | `90` | `90` | The [watchdog](.github/workflows/agent-watchdog.yml) re-triggers items whose state hasn't moved this long with no agent run active (keep it above the longest job timeout, 60) |
+| `AGENT_WATCHDOG_RETRIES` | `2` | `2` | Watchdog retries per item (since the last Lead decision) before it goes to the Lead |
+| `AGENT_IMPLEMENTOR_MAX_TURNS` | `150` | `150` | Turn budget of an Implementor run |
 | `AGENT_MAX_LEAD_DECISIONS` | `3` | `3` | Lead decisions per item before a human is assigned |
 | `AGENT_PREVIEW_URL` | | | Preview URL template for QA, default `https://{owner}.github.io/{repo}/pr-{pr}/`. The preview must serve `version.txt` containing the PR head SHA |
 | `AGENT_MODEL` / `AGENT_REVIEWER_MODEL` / `AGENT_QA_MODEL` / `AGENT_LEAD_MODEL` | | | e.g. a cheaper model for the workers and a stronger one for Reviewer and Lead |
@@ -103,7 +105,7 @@ You don't need to do anything in autonomous mode. These are overrides:
 
 ## Safety rails built in
 
-- Only the **owner, org members and collaborators** can trigger agents. Outsiders' issues and comments are filtered out before any job starts, agents ignore their comments, and handoff markers only count when the agents' bot posted them. Bots other than `AGENT_BOT_LOGIN` are rejected (test: conflict skip).
+- Only the **owner, org members and collaborators** can trigger agents. Outsiders' issues and comments are filtered out before any job starts, agents ignore their comments, and handoff markers only count when the agents' bot posted them. Bots other than the team's App are rejected. The App is identified by its user id (`AGENT_BOT_ID`), so renaming it breaks nothing (test: conflict skip).
 - On a public repo, consider limiting interactions to collaborators (up to 6 months, renewable): `gh api -X PUT repos/<owner>/<repo>/interaction-limits -f limit=collaborators_only -f expiry=six_months`.
 - Each role gets a **least-privilege tool allowlist**. Analyst, Architect, Reviewer and Lead can't edit code or run git. The Implementor can't force-push or push to the default branch. Denied tool calls are listed in the job summary.
 - The App has no *Workflows* permission, so agents can't push changes to `.github/workflows/`. That permission doesn't cover the role prompts (`.github/agents/`) or the scripts (`scripts/`), so the merge gate never auto-merges a PR that touches `AGENT_PROTECTED_PATHS` (default `.github/,scripts/,templates/`): a human merges it.
@@ -111,6 +113,7 @@ You don't need to do anything in autonomous mode. These are overrides:
 - Issue and PR text is treated as data, never as instructions (stated in every role prompt).
 - The merge gate only merges the **exact commit that was approved** (`--match-head-commit`), only after the required checks pass, and never `risk:high` by default.
 - **Parallel PRs stay correct:** the merge gate only merges PRs that include the latest default branch (otherwise it updates them, which re-runs CI, review and QA). After every merge it flags other agent PRs that now conflict, and the Implementor merges the base and resolves them. PR-driven agent workflows use `pull_request_target`, because GitHub runs no `pull_request` workflows for conflicting PRs. They only act on same-repo PRs. Queued Reviewer and QA runs first re-check the live PR (`pr-still-current.sh`) and skip when it has newer commits, a pending verdict or a conflict, so no round is spent on stale code.
+- **Nothing stalls silently:** a cancelled or crashed run leaves its state label behind with nothing working on it. Every 30 minutes the watchdog finds such items, re-triggers them (twice by default), then hands them to the Lead, or to a human if the Lead is what stalls.
 - **Budgets everywhere:** review rounds, Lead decisions, `--max-turns` per role, `timeout-minutes` per job, one run at a time per issue or PR (`concurrency`).
 - Every decision is a comment, so the issue and PR history is a complete audit trail.
 

@@ -9,7 +9,8 @@ n="$1"
 role="$2"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 
-bot="${AGENT_BOT_LOGIN:-}"   # only the agents' own comments count; outsiders can't forge markers
+# Only the agents' own comments count, so outsiders can't forge markers. Matched by user id, which survives App renames.
+bot="${AGENT_BOT_ID:?AGENT_BOT_ID must be set}"
 
 gh api --paginate "repos/$repo/issues/$n/comments" \
-  --jq ".[] | select((\"$bot\" == \"\" or .user.login == \"$bot\") and (.body | contains(\"<!-- agent:$role -->\"))) | .id" | wc -l | tr -d ' '
+  --jq ".[] | select(.user.id == $bot and (.body | contains(\"<!-- agent:$role -->\"))) | .id" | wc -l | tr -d ' '

@@ -15,7 +15,7 @@ on:
 
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
-  AGENT_BOT_LOGIN: ${{ vars.AGENT_BOT_LOGIN }}
+  AGENT_BOT_ID: ${{ vars.AGENT_BOT_ID }}   # the App's bot user id: unlike its login, it survives renames
 
 jobs:
   qa:
@@ -77,7 +77,7 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           # QA rounds are counted since the latest Lead decision.
           comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
-                       | jq --arg bot "$AGENT_BOT_LOGIN" '[[.[][] | select($bot == "" or .user.login == $bot)]]')
+                       | jq --argjson bot "${AGENT_BOT_ID:?AGENT_BOT_ID must be set}" '[[.[][] | select(.user.id == $bot)]]')
           total=$(echo "$comments" | jq '[.[][] | select(.body | contains("<!-- agent:qa -->"))] | length')
           rounds=$(echo "$comments" | jq '[.[][]] as $c
             | ([$c | to_entries[] | select(.value.body | contains("<!-- agent:lead -->")) | .key] | max // -1) as $last
@@ -133,7 +133,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ steps.app.outputs.token }}
-          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          allowed_bots: ${{ steps.app.outputs.app-slug }}[bot]
           prompt: |
             You are the QA agent. Read ${{ env.TRUSTED }}/qa.md and follow it exactly.
 
@@ -170,7 +170,6 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           OUT: ${{ steps.agent.outputs.structured_output }}
-          BOT: ${{ vars.AGENT_BOT_LOGIN }}
           KEEP_DAYS: ${{ vars.AGENT_QA_SCREENSHOT_DAYS || '7' }}
         run: |
           shopt -s nullglob

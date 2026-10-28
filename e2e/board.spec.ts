@@ -49,3 +49,30 @@ test("keeps cards after a reload", async ({ page }) => {
   await page.reload();
   await expect(column(page, "To do").getByText("Remember me")).toBeVisible();
 });
+
+test("filters cards with the search box", async ({ page }) => {
+  await addCard(page, "Write docs");
+  await addCard(page, "Fix bug");
+  await page.getByRole("button", { name: 'Move "Fix bug" to Doing' }).click();
+
+  const search = page.getByLabel("Search cards");
+  await search.fill("DOCS");
+  await expect(column(page, "To do").getByText("Write docs")).toBeVisible();
+  await expect(page.getByText("Fix bug")).toHaveCount(0);
+  await expect(column(page, "Doing").getByText("No matching cards")).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(search).toHaveValue("");
+  await expect(column(page, "Doing").getByText("Fix bug")).toBeVisible();
+
+  await search.fill("zzz");
+  await expect(column(page, "To do").getByText("No matching cards")).toBeVisible();
+  await search.press("Escape");
+  await expect(search).toHaveValue("");
+  await expect(column(page, "To do").getByText("Write docs")).toBeVisible();
+
+  await search.fill("docs");
+  await page.reload();
+  await expect(page.getByLabel("Search cards")).toHaveValue("");
+  await expect(column(page, "Doing").getByText("Fix bug")).toBeVisible();
+});

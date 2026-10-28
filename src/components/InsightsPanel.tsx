@@ -1,9 +1,19 @@
 "use client";
 
 import { useId } from "react";
+import type { ReactNode } from "react";
 import { formatDueDate } from "@/lib/board";
 import type { Board } from "@/lib/board";
-import { cycleTimes, formatDuration, overdueCards, summarizeCycleTimes } from "@/lib/insights";
+import { barRects, chartBounds, chartMax, linePoints } from "@/lib/chart";
+import type { ChartSize } from "@/lib/chart";
+import {
+  cycleTimes,
+  dailyWip,
+  formatDuration,
+  overdueCards,
+  summarizeCycleTimes,
+  weeklyThroughput,
+} from "@/lib/insights";
 import { Button, Dialog } from "./ui";
 
 function CycleTimeSection({ board, now }: { board: Board; now?: Date }) {
@@ -34,6 +44,152 @@ function CycleTimeSection({ board, now }: { board: Board; now?: Date }) {
           {excluded} {excluded === 1 ? "card" : "cards"} left out (no recorded Doing → Done history)
         </p>
       )}
+    </section>
+  );
+}
+
+const CHART_SIZE: ChartSize = { width: 320, height: 140, padding: { top: 18, right: 12, bottom: 24, left: 28 } };
+
+function ChartFrame({ max, children }: { max: number; children: ReactNode }) {
+  const { top, bottom } = chartBounds(CHART_SIZE);
+  const { left, right } = CHART_SIZE.padding;
+  return (
+    <svg
+      aria-hidden="true"
+      focusable="false"
+      viewBox={`0 0 ${CHART_SIZE.width} ${CHART_SIZE.height}`}
+      className="h-auto w-full max-w-full"
+    >
+      <line x1={left} x2={CHART_SIZE.width - right} y1={top} y2={top} className="stroke-line" strokeDasharray="3 3" />
+      <line x1={left} x2={CHART_SIZE.width - right} y1={bottom} y2={bottom} className="stroke-line" />
+      <text x={left - 4} y={top + 3} textAnchor="end" fontSize="9" className="fill-muted">
+        {max}
+      </text>
+      <text x={left - 4} y={bottom + 3} textAnchor="end" fontSize="9" className="fill-muted">
+        0
+      </text>
+      {children}
+    </svg>
+  );
+}
+
+function DataTable({
+  caption,
+  rowHeader,
+  valueHeader,
+  rows,
+}: {
+  caption: string;
+  rowHeader: string;
+  valueHeader: string;
+  rows: { label: string; count: number }[];
+}) {
+  return (
+    <table className="w-full text-xs tabular-nums">
+      <caption className="sr-only">{caption}</caption>
+      <thead>
+        <tr className="text-left text-muted">
+          <th scope="col" className="py-0.5 pr-2 font-medium">
+            {rowHeader}
+          </th>
+          <th scope="col" className="py-0.5 text-right font-medium">
+            {valueHeader}
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.label} className="border-t border-line dark:border-field">
+            <th scope="row" className="py-0.5 pr-2 text-left font-normal">
+              {row.label}
+            </th>
+            <td className="py-0.5 text-right">{row.count}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function ThroughputSection({ board, now }: { board: Board; now?: Date }) {
+  const headingId = useId();
+  const weeks = weeklyThroughput(board, { now });
+  const counts = weeks.map((w) => w.count);
+  const bars = barRects(counts, CHART_SIZE);
+  const baseline = chartBounds(CHART_SIZE).bottom;
+  const empty = counts.every((c) => c === 0);
+  return (
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
+      <h3 id={headingId} className="text-sm font-semibold">
+        Throughput
+      </h3>
+      <ChartFrame max={chartMax(counts)}>
+        {bars.map((bar, i) => (
+          <g key={weeks[i].weekStart}>
+            {counts[i] > 0 && (
+              <>
+                <rect x={bar.x} y={bar.y} width={bar.width} height={bar.height} rx={2} className="fill-accent" />
+                <text x={bar.x + bar.width / 2} y={bar.y - 3} textAnchor="middle" fontSize="9" className="fill-foreground">
+                  {counts[i]}
+                </text>
+              </>
+            )}
+            <text x={bar.x + bar.width / 2} y={baseline + 14} textAnchor="middle" fontSize="8" className="fill-muted">
+              {weeks[i].label}
+            </text>
+          </g>
+        ))}
+      </ChartFrame>
+      {empty && <p className="text-sm text-muted">No cards moved to Done in the last {weeks.length} weeks</p>}
+      <DataTable
+        caption="Cards moved to Done per week"
+        rowHeader="Week of"
+        valueHeader="Cards moved to Done"
+        rows={weeks.map((w) => ({ label: w.label, count: w.count }))}
+      />
+    </section>
+  );
+}
+
+function WipSection({ board, now }: { board: Board; now?: Date }) {
+  const headingId = useId();
+  const days = dailyWip(board, { now });
+  const counts = days.map((d) => d.count);
+  const points = linePoints(counts, CHART_SIZE);
+  const baseline = chartBounds(CHART_SIZE).bottom;
+  const empty = counts.every((c) => c === 0);
+  const labelled = new Set([0, Math.floor((days.length - 1) / 2), days.length - 1]);
+  return (
+    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
+      <h3 id={headingId} className="text-sm font-semibold">
+        WIP over time
+      </h3>
+      <ChartFrame max={chartMax(counts)}>
+        <polyline
+          points={points.map((p) => `${p.x},${p.y}`).join(" ")}
+          fill="none"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          className="stroke-accent"
+        />
+        {points.map((p, i) => (
+          <g key={days[i].day}>
+            <circle cx={p.x} cy={p.y} r={2.5} className="fill-accent" />
+            {labelled.has(i) && (
+              <text x={p.x} y={baseline + 14} textAnchor={i === 0 ? "start" : i === days.length - 1 ? "end" : "middle"} fontSize="8" className="fill-muted">
+                {formatDueDate(days[i].day)}
+              </text>
+            )}
+          </g>
+        ))}
+      </ChartFrame>
+      {empty && <p className="text-sm text-muted">No cards in Doing in the last {days.length} days</p>}
+      <DataTable
+        caption="Cards in Doing per day"
+        rowHeader="Day"
+        valueHeader="Cards in Doing"
+        rows={days.map((d) => ({ label: formatDueDate(d.day), count: d.count }))}
+      />
     </section>
   );
 }
@@ -91,6 +247,8 @@ export function InsightsPanel({
           Board insights
         </h2>
         <CycleTimeSection board={board} now={now} />
+        <ThroughputSection board={board} now={now} />
+        <WipSection board={board} now={now} />
         <OverdueSection board={board} now={now} onOpenCard={onOpenCard} />
         <div className="flex">
           <Button variant="primary" size="sm" onClick={onClose}>

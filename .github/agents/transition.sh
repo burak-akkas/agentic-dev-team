@@ -11,8 +11,9 @@ n="$1"
 new="${2:-}"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 
+# The new label is removed too if already present: re-adding it fires a fresh `labeled`
+# event, so repeating a state (e.g. a second approval) still triggers the next workflow.
 for label in $(gh api "repos/$repo/issues/$n/labels" --jq '.[].name | select(startswith("agent:"))'); do
-  [ "$label" = "$new" ] && continue
   encoded=$(jq -rn --arg l "$label" '$l | @uri')
   gh api -X DELETE "repos/$repo/issues/$n/labels/$encoded" >/dev/null
 done

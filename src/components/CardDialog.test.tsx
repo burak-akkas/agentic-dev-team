@@ -13,7 +13,7 @@ const card: Card = {
   dueDate: "2030-02-03",
 };
 
-function setup(overrides: Partial<Card> = {}) {
+function setup(overrides: Partial<Card> = {}, onDuplicate?: () => void) {
   const onSave = vi.fn();
   const onDelete = vi.fn();
   const onClose = vi.fn();
@@ -24,6 +24,7 @@ function setup(overrides: Partial<Card> = {}) {
       column="todo"
       onSave={onSave}
       onDelete={onDelete}
+      onDuplicate={onDuplicate}
       onClose={onClose}
       onUpdateBoard={onUpdateBoard}
     />,
@@ -205,5 +206,16 @@ describe("<CardDialog />", () => {
     await user.click(screen.getByRole("button", { name: "Delete card" }));
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it("duplicates with the mouse and with the keyboard", async () => {
+    const onDuplicate = vi.fn();
+    const { user } = setup({}, onDuplicate);
+    await user.click(screen.getByRole("button", { name: "Duplicate" }));
+    expect(onDuplicate).toHaveBeenCalledTimes(1);
+    screen.getByRole("button", { name: "Duplicate" }).focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+    expect(onDuplicate).toHaveBeenCalledTimes(3);
   });
 });

@@ -1,19 +1,19 @@
 # Agentic dev team on GitHub
 
-An autonomous team of Claude agents (**Analyst → Architect → Implementor ⇄ Reviewer**, plus a **Lead** that makes the calls) that takes a GitHub issue all the way to a merged PR. Nobody has to prompt them: they talk to each other through issues, PRs, comments and labels. A human is only pulled in when the Lead escalates.
+An autonomous team of Claude agents (**Analyst → Architect → Implementor ⇄ Reviewer → QA**, plus a **Lead** that makes the calls) that takes a GitHub issue all the way to a merged PR. Nobody has to prompt them: they talk to each other through issues, PRs, comments and labels. A human is only pulled in when the Lead escalates.
 
 It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action), authenticated with your **Claude subscription** (`claude setup-token`).
 
 ## How it works
 
 ```
- new issue ──► 🔍 Analyst ──► 🏛 Architect ──► 🛠 Implementor ──► 🧐 Reviewer ──► 🚦 Merge gate ──► ✅ merged
-                  │               │  risk:low/med       opens PR      ▲     │  approve     CI green +
-                  │               │                                   │     │              risk not high
-                  │               │                           fix ────┘     │ changes          │ CI red
-                  │               │                        (Implementor) ◄──┘ requested        └──► fix
-                  ▼               ▼                                         │
-         open questions    high risk / unsure      stuck · failed · review deadlock · merge conflict
+ new issue ──► 🔍 Analyst ──► 🏛 Architect ──► 🛠 Implementor ──► 🧐 Reviewer ──► 🧪 QA ──► 🚦 Merge gate ──► ✅ merged
+                  │               │  risk:low/med       opens PR      ▲     │ approve   │ pass     CI green +    │
+                  │               │                   + 🔎 preview    │     │           │          risk not high │
+                  │               │                           fix ────┘◄────┴───────────┘ changes/defects      ▼
+                  │               │                       (Implementor)                              🌐 production
+                  ▼               ▼
+         open questions    high risk / unsure      stuck · failed · review/QA deadlock · merge conflict
                   └───────────────┴──────────────────────┬───────────────────┘
                                                          ▼
                                            🧭 Lead (agent:needs-decision)
@@ -26,12 +26,13 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 - **Labels are the state machine.** Each workflow fires on a specific label (or PR event). The agent decides the outcome and returns it as structured JSON. A plain shell step then applies the next label using [`transition.sh`](.github/agents/transition.sh). Agents never change labels themselves.
 - **Handoffs are structured comments** with a hidden marker (`<!-- agent:analyst -->` and so on). Workflows check that the comment was actually posted; if it wasn't, the item goes to the Lead.
 - **The Lead is the decision maker.** Every "stuck" state goes to `agent:needs-decision` instead of a human. The Lead answers the Analyst's questions, rules on high-risk designs and review deadlocks, retries failed stages, or closes the item. Its decision overrides earlier comments. It only escalates for irreversible or high-impact choices, or after `AGENT_MAX_LEAD_DECISIONS` (default 3) on the same item.
+- **Every PR gets a live preview** at `…/pr-<N>/` (link posted on the PR). After the Reviewer approves, **the QA agent** waits until the preview serves the PR's exact commit, runs the project's Playwright e2e suite against it, then tests the acceptance criteria in a real headless Chrome (Playwright MCP). It posts a report with **screenshots in the PR**. Defects go back to the Implementor, with steps to reproduce.
 - **The merge gate replaces the human merge.** It squash-merges *exactly the approved commit* once the required checks pass. High-risk changes (`risk:high`, set by the Architect) still go to a human unless you allow them explicitly.
 - **One custom GitHub App** is the agents' identity. Events created by an App token *do* trigger other workflows. Events created by the default `GITHUB_TOKEN` don't, and that would break the chain.
 
 | File | Purpose |
 |---|---|
-| [.github/agents/*.md](.github/agents/) | Role prompts (analyst, architect, implementor, reviewer, lead). Review and version them like code |
+| [.github/agents/*.md](.github/agents/) | Role prompts (analyst, architect, implementor, reviewer, qa, lead). Review and version them like code |
 | [.github/workflows/agent-*.yml](.github/workflows/) | One workflow per role, plus `agent-merge.yml` (merge gate) and `agent-chat.yml` (human `@claude`) |
 | [.github/agents/transition.sh](.github/agents/transition.sh) | Swaps `agent:*` state labels; assigns a human on escalation |
 | [.github/agents/count-comments.sh](.github/agents/count-comments.sh) | Counts handoff comments (verification and loop budgets) |
@@ -71,12 +72,15 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_AUTO_START` | – | `true` | New issues from collaborators enter the pipeline without a label |
 | `AGENT_AUTONOMY` | – | `full` | The Lead answers the Analyst's questions instead of a human |
 | `AGENT_REQUIRE_DESIGN_APPROVAL` | `true` | – | When `true`, every design waits for a human `agent:ready` |
+| `AGENT_QA` | – | `true` | Reviewer approval goes to the QA agent before merge (needs a preview deploy) |
 | `AGENT_AUTO_MERGE` | – | `true` | **Kill switch** for the merge gate |
 | `AGENT_AUTO_MERGE_HIGH_RISK` | – | – | `true` lets the agents merge `risk:high` changes too (not recommended) |
 | `AGENT_REQUIRED_CHECKS` | | `CI` | Comma-separated workflow names that must pass before merge |
 | `AGENT_MAX_REVIEW_ROUNDS` | `3` | `3` | Review rounds before the Lead steps in |
+| `AGENT_MAX_QA_ROUNDS` | `3` | `3` | Failed QA rounds before the Lead steps in |
 | `AGENT_MAX_LEAD_DECISIONS` | `3` | `3` | Lead decisions per item before a human is assigned |
-| `AGENT_MODEL` / `AGENT_REVIEWER_MODEL` / `AGENT_LEAD_MODEL` | | | e.g. a cheaper model for the workers and a stronger one for Reviewer and Lead |
+| `AGENT_PREVIEW_URL` | | | Preview URL template for QA, default `https://{owner}.github.io/{repo}/pr-{pr}/`. The preview must serve `version.txt` containing the PR head SHA |
+| `AGENT_MODEL` / `AGENT_REVIEWER_MODEL` / `AGENT_QA_MODEL` / `AGENT_LEAD_MODEL` | | | e.g. a cheaper model for the workers and a stronger one for Reviewer and Lead |
 
 "–" means unset. Unset variables mean the more conservative behaviour.
 
@@ -113,7 +117,6 @@ You don't need to do anything in autonomous mode. These are overrides:
 ## Ideas for later
 
 - The Architect splits large issues into sub-issues, each going through the pipeline.
-- A QA/Tester role that runs end-to-end tests against a preview deploy.
 - A scheduled "maintainer" agent that triages stale issues and CI failures.
 - Move the workflows into a reusable workflow in an org-level repo once the pilot works.
 
@@ -121,11 +124,11 @@ You don't need to do anything in autonomous mode. These are overrides:
 
 > The app and its CI/deploy workflows only exist on the `sandbox` branch, which is the default branch while piloting. They give the agents a real project to work on. `main` holds just the toolkit.
 
-A Next.js 16 static app, live at **https://burak-akkas.github.io/agentic-dev-team/** and redeployed on every merge.
+A Next.js 16 static app, live at **https://burak-akkas.github.io/agentic-dev-team/** and redeployed on every merge ([deploy.yml](.github/workflows/deploy.yml)). Every PR gets a preview at `…/agentic-dev-team/pr-<N>/` ([preview.yml](.github/workflows/preview.yml)). Both are published to the `gh-pages` branch.
 
 ```
 npm ci
 npm run dev     # http://localhost:3000
-npm run check   # lint + typecheck + tests + build (what CI runs)
+npm run check   # lint + typecheck + unit tests + build + e2e (what CI runs)
 ```
 

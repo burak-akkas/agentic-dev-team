@@ -31,12 +31,11 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
       - run: echo "${{ github.sha }}" > out/version.txt
-      - uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./out
-          keep_files: true
-          commit_message: "deploy: production ${{ github.sha }}"
+      - name: Publish to gh-pages (root, keeping previews and QA screenshots)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .github/agents/publish-pages.sh out . "deploy: production ${{ github.sha }}"
       - name: Request a Pages build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

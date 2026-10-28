@@ -100,7 +100,8 @@ You don't need to do anything in autonomous mode. These are overrides:
 
 ## Safety rails built in
 
-- Only users with **write access** can trigger agents (the action checks this). Bots other than `AGENT_BOT_LOGIN` are rejected.
+- Only the **owner, org members and collaborators** can trigger agents. Outsiders' issues and comments are filtered out before any job starts, agents ignore their comments, and handoff markers only count when the agents' bot posted them. Bots other than `AGENT_BOT_LOGIN` are rejected.
+- On a public repo, consider limiting interactions to collaborators (up to 6 months, renewable): `gh api -X PUT repos/<owner>/<repo>/interaction-limits -f limit=collaborators_only -f expiry=six_months`.
 - Each role gets a **least-privilege tool allowlist**. Analyst, Architect, Reviewer and Lead can't edit code or run git. The Implementor can't force-push or push to the default branch. Denied tool calls are listed in the job summary.
 - The App has no *Workflows* permission, so agents can't change CI, the role prompts or the merge gate.
 - For PR-triggered runs, role prompts are loaded from the **default branch** (`.agent-trusted/`), so a PR can't rewrite its own reviewer instructions.

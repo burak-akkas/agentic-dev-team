@@ -1,11 +1,16 @@
 name: "Agent · Architect"
 
 # Trigger: the issue gets `agent:analyzed` (set by the Analyst, or by a human).
-# Human gate: when AGENT_REQUIRE_DESIGN_APPROVAL == 'true', or when the Architect flags
-# high risk, the issue goes to `agent:design-review`. A human approves by applying `agent:ready`.
+# Records the design risk as a `risk:low|medium|high` label (the Merge gate reads it).
+# Next state: low/medium risk -> `agent:ready`. High risk or unsure -> the Lead (`agent:needs-decision`).
+# Optional human gate: with AGENT_REQUIRE_DESIGN_APPROVAL == 'true', every design waits in
+# `agent:design-review` until a human applies `agent:ready`.
 on:
   issues:
     types: [labeled]
+
+env:
+  AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
 
 jobs:
   architect:
@@ -33,6 +38,12 @@ jobs:
       - name: Prepare scratch dir
         run: mkdir -p .agent-out && echo ".agent-out/" >> .git/info/exclude
 
+      - name: Count handoff comments
+        id: before
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: echo "count=$(.github/agents/count-comments.sh ${{ github.event.issue.number }} architect)" >> "$GITHUB_OUTPUT"
+
       - uses: anthropics/claude-code-action@v1
         id: agent
         env:
@@ -47,12 +58,24 @@ jobs:
             Repository: ${{ github.repository }}
             Issue: #${{ github.event.issue.number }}
 
-            Write comment bodies to .agent-out/ and post them with --body-file.
+            Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).
+            Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.
+            Compound commands are blocked by the permission system.
           claude_args: |
             --max-turns 40
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*),Bash(gh pr list:*),Bash(git log:*)"
             --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["ready","needs-human"]},"risk":{"type":"string","enum":["low","medium","high"]}},"required":["decision","risk"]}'
+
+      - name: Report denied tools
+        if: ${{ !cancelled() && steps.agent.outputs.execution_file != '' }}
+        run: |
+          denied=$(jq -r '.[] | select(.type == "result") | .permission_denials[]? | "- `\(.tool_name)`: `\(.tool_input | tostring | .[0:300])`"' \
+                   "${{ steps.agent.outputs.execution_file }}" 2>/dev/null || true)
+          if [ -n "$denied" ]; then
+            printf '### Denied tool calls\n%s\n' "$denied" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Agent had denied tool calls, see the job summary"
+          fi
 
       - name: Apply state transition
         if: ${{ !cancelled() }}
@@ -60,16 +83,30 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           OUT: ${{ steps.agent.outputs.structured_output }}
           N: ${{ github.event.issue.number }}
+          BEFORE: ${{ steps.before.outputs.count }}
           REQUIRE_APPROVAL: ${{ vars.AGENT_REQUIRE_DESIGN_APPROVAL }}
         run: |
           decision=$(echo "${OUT:-null}" | jq -r '.decision // "error"')
+          after=$(.github/agents/count-comments.sh "$N" architect)
+          if [ "$after" -le "${BEFORE:-0}" ]; then
+            echo "::warning::architect returned '$decision' but posted no handoff comment"
+            decision=missing-comment
+          fi
           risk=$(echo "${OUT:-null}" | jq -r '.risk // "unknown"')
-          if [ "$decision" = "ready" ] && [ "$risk" != "high" ] && [ "$REQUIRE_APPROVAL" != "true" ]; then
-            .github/agents/transition.sh "$N" agent:ready
-          elif [ "$decision" = "ready" ] || [ "$decision" = "needs-human" ]; then
-            .github/agents/transition.sh "$N" agent:design-review
-            gh issue comment "$N" --body "👀 Design is waiting for human approval (risk: **$risk**). Apply \`agent:ready\` to start implementation, or comment and re-apply \`agent:analyzed\` to redesign."
+          case "$risk" in low|medium|high)
+            for old in low medium high; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$N/labels/risk:$old" >/dev/null 2>&1 || true; done
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$N/labels" -f "labels[]=risk:$risk" >/dev/null ;;
+          esac
+          if [ "$decision" = "ready" ] || [ "$decision" = "needs-human" ]; then
+            if [ "$REQUIRE_APPROVAL" = "true" ]; then
+              .github/agents/transition.sh "$N" agent:design-review
+              gh issue comment "$N" --body "👀 Design is waiting for human approval (risk: **$risk**). Apply \`agent:ready\` to start implementation, or comment and re-apply \`agent:analyzed\` to redesign."
+            elif [ "$decision" = "ready" ] && [ "$risk" != "high" ]; then
+              .github/agents/transition.sh "$N" agent:ready
+            else
+              .github/agents/transition.sh "$N" agent:needs-decision
+            fi
           else
-            .github/agents/transition.sh "$N" agent:needs-human
-            gh issue comment "$N" --body "⚠️ Architect agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Needs a human."
+            .github/agents/transition.sh "$N" agent:needs-decision
+            gh issue comment "$N" --body "⚠️ Architect agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead."
           fi

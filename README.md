@@ -80,7 +80,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_MAX_REVIEW_ROUNDS` | `3` | `3` | Review rounds before the Lead steps in |
 | `AGENT_QA_SCREENSHOT_DAYS` | `7` | `7` | Days QA screenshots stay after a PR closes ([pages-janitor.yml](.github/workflows/pages-janitor.yml) also squashes `gh-pages` weekly) |
 | `AGENT_MAX_QA_ROUNDS` | `3` | `3` | Failed QA rounds before the Lead steps in |
-| `AGENT_WATCHDOG_MINUTES` | `10` | `10` | The [watchdog](.github/workflows/agent-watchdog.yml) (every 10 minutes) re-triggers items whose state hasn't moved this long while no agent run is queued or running for them |
+| `AGENT_WATCHDOG_MINUTES` | `10` | `10` | The [watchdog](.github/workflows/agent-watchdog.yml) re-triggers items whose state hasn't moved this long while no agent run is queued or running for them. It runs this long after the last agent run finishes, plus every 10 minutes as a backup |
 | `AGENT_WATCHDOG_RETRIES` | `2` | `2` | Watchdog retries per item (since the last Lead decision) before it goes to the Lead |
 | `AGENT_IMPLEMENTOR_MAX_TURNS` | `150` | `150` | Turn budget of an Implementor run |
 | `AGENT_MAX_LEAD_DECISIONS` | `3` | `3` | Lead decisions per item before a human is assigned |
@@ -116,14 +116,14 @@ You don't need to do anything in autonomous mode. These are overrides:
 - **Parallel PRs stay correct:** the merge gate only merges PRs that include the latest default branch (otherwise it updates them, which re-runs CI, review and QA). After every merge it flags other agent PRs that now conflict, and the Implementor merges the base and resolves them. PR-driven agent workflows use `pull_request_target`, because GitHub runs no `pull_request` workflows for conflicting PRs. They only act on same-repo PRs. Queued Reviewer and QA runs first re-check the live PR (`pr-still-current.sh`) and skip when it has newer commits, a pending verdict or a conflict, so no round is spent on stale code.
 - **Dropped runs are re-queued.** Sub-issue runs (and the watchdog) sweep every open split issue, so a dropped sub-issue event is caught up by the next run.
 - **Dropped review/QA handoffs are re-queued.** GitHub keeps only one pending run per concurrency group and silently cancels the older one. When a Reviewer or QA run skips because the PR waits in another agent's state, it re-applies that state, so a dropped handler gets queued again.
-- **Nothing stalls silently:** a cancelled or crashed run leaves its state label behind with nothing working on it. Every 10 minutes the watchdog finds such items, re-triggers them (twice by default), then hands them to the Lead, or to a human if the Lead is what stalls.
+- **Nothing stalls silently:** a cancelled or crashed run leaves its state label behind with nothing working on it. The watchdog runs 10 minutes after agent activity stops (and every 10 minutes as a backup, since GitHub's scheduler can skip runs), finds such items, re-triggers them (twice by default), then hands them to the Lead, or to a human if the Lead is what stalls.
 - **Budgets everywhere:** review rounds, Lead decisions, `--max-turns` per role, `timeout-minutes` per job, one run at a time per issue or PR (`concurrency`).
 - Every decision is a comment, so the issue and PR history is a complete audit trail.
 
 ## Costs and limits
 
 - **Claude:** runs use your subscription. Headless and Agent SDK usage may draw from a separate monthly credit on Pro and Max plans, so check Anthropic's current Help Center article. One issue typically costs 4–8 agent runs (roughly $0.05–0.50 of usage each with Sonnet on a small repo; see `total_cost_usd` in the run logs). If you hit limits, lower `--max-turns` or set a cheaper `AGENT_MODEL`. For team-wide rollout, use a Team/Enterprise plan or a Console API key (`anthropic_api_key`), because an OAuth token is tied to one person's subscription.
-- **GitHub Free:** Actions are free on public repos. Private repos get 2,000 minutes a month; the merge gate polls CI for up to 30 minutes per PR. Branch protection on private repos needs a paid plan; the merge gate enforces checks itself.
+- **GitHub Free:** Actions are free on public repos. Private repos get 2,000 minutes a month, and two things here add up: the watchdog's wait after each burst of agent activity occupies a runner (the length of the burst plus 10 minutes), and its 10-minute backup schedule bills about 144 minutes a day, because every job is rounded up to a full minute. On a private repo, make the backup hourly (`cron: "7 * * * *"`) or remove it. Also, the merge gate polls CI for up to 30 minutes per PR. Branch protection on private repos needs a paid plan; the merge gate enforces checks itself.
 
 ## Ideas for later
 

@@ -20,6 +20,7 @@ import {
   setDueDate,
   setNotes,
   setPriority,
+  setWipLimit,
   undoArchive,
   updateCard,
 } from "@/lib/board";
@@ -28,6 +29,7 @@ import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "./ArchivePanel";
 import { CardDialog } from "./CardDialog";
 import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
+import { ColumnHeader } from "./ColumnHeader";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
 import { UndoToast } from "./UndoToast";
@@ -182,17 +184,19 @@ export function Board() {
                   : "bg-surface-muted dark:bg-surface/50"
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <h2 id={`column-${id}`} className="flex items-center gap-2 px-1 text-sm font-semibold">
-                  {title}
-                  <span className="rounded-full bg-line px-2 text-xs font-medium text-subtle">{cards.length}</span>
-                </h2>
+              <ColumnHeader
+                id={id}
+                title={title}
+                total={board.columns[id].length}
+                limit={board.wipLimits?.[id]}
+                onSetLimit={(limit) => update((b) => setWipLimit(b, id, limit))}
+              >
                 {id === "done" && (
                   <Button size="xs" disabled={board.columns.done.length === 0} onClick={archiveDoneCards}>
                     Archive done
                   </Button>
                 )}
-              </div>
+              </ColumnHeader>
               {cards.length === 0 ? (
                 <p className="px-1 py-4 text-center text-xs text-muted">
                   {filtering ? "No matching cards" : "No cards"}

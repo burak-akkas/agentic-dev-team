@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addCard, adjacentColumn, deleteCard, emptyBoard, findCard, MAX_TITLE_LENGTH, moveCard } from "./board";
+import { addCard, adjacentColumn, deleteCard, emptyBoard, findCard, MAX_TITLE_LENGTH, moveCard, renameCard } from "./board";
 
 const ids = (cards: { id: string }[]) => cards.map((c) => c.id);
 
@@ -57,6 +57,53 @@ describe("deleteCard", () => {
 
   it("throws for unknown cards", () => {
     expect(() => deleteCard(emptyBoard(), "nope")).toThrow(/not found/);
+  });
+});
+
+describe("renameCard", () => {
+  const base = moveCard(
+    addCard(
+      addCard(addCard(emptyBoard(), "a", { id: "a", now: new Date("2026-01-01T00:00:00Z") }), "b", { id: "b" }),
+      "c",
+      { id: "c" },
+    ),
+    "c",
+    "doing",
+  );
+
+  it("trims the title and keeps column, index, id and createdAt", () => {
+    const result = renameCard(base, "a", "  renamed  ");
+    expect(result.columns.todo[0]).toEqual({ id: "a", title: "renamed", createdAt: "2026-01-01T00:00:00.000Z" });
+    expect(ids(result.columns.todo)).toEqual(["a", "b"]);
+    expect(ids(result.columns.doing)).toEqual(["c"]);
+  });
+
+  it("renames a card in a later column", () => {
+    expect(renameCard(base, "c", "z").columns.doing[0].title).toBe("z");
+  });
+
+  it("rejects empty, whitespace-only and too long titles", () => {
+    expect(() => renameCard(base, "a", "")).toThrow(/must not be empty/);
+    expect(() => renameCard(base, "a", "   ")).toThrow(/must not be empty/);
+    expect(() => renameCard(base, "a", "x".repeat(MAX_TITLE_LENGTH + 1))).toThrow(/at most/);
+  });
+
+  it("allows a title of exactly the maximum length", () => {
+    const title = "x".repeat(MAX_TITLE_LENGTH);
+    expect(renameCard(base, "a", title).columns.todo[0].title).toBe(title);
+  });
+
+  it("throws for unknown cards", () => {
+    expect(() => renameCard(base, "nope", "x")).toThrow(/not found/);
+  });
+
+  it("returns the same board when the title is unchanged", () => {
+    expect(renameCard(base, "a", " a ")).toBe(base);
+  });
+
+  it("does not mutate the input board", () => {
+    renameCard(base, "a", "changed");
+    expect(base.columns.todo[0].title).toBe("a");
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { addCard, COLUMNS, deleteCard, moveCard } from "@/lib/board";
+import { addCard, COLUMNS, deleteCard, moveCard, renameCard } from "@/lib/board";
 import { useBoard } from "@/lib/useBoard";
 import { AddCardForm } from "./AddCardForm";
 import { CardItem } from "./CardItem";
@@ -38,6 +38,7 @@ export function Board() {
                       column={id}
                       onMove={(to) => update((b) => moveCard(b, card.id, to))}
                       onDelete={() => update((b) => deleteCard(b, card.id))}
+                      onRename={(title) => update((b) => renameCard(b, card.id, title))}
                     />
                   ))}
                 </ul>

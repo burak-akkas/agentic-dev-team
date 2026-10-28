@@ -24,11 +24,7 @@ export function emptyBoard(): Board {
   return { columns: { todo: [], doing: [], done: [] } };
 }
 
-export function addCard(
-  board: Board,
-  title: string,
-  { id = crypto.randomUUID(), now = new Date() }: { id?: string; now?: Date } = {},
-): Board {
+function normalizeTitle(title: string): string {
   const trimmed = title.trim();
   if (!trimmed) {
     throw new Error("Card title must not be empty");
@@ -36,8 +32,33 @@ export function addCard(
   if (trimmed.length > MAX_TITLE_LENGTH) {
     throw new Error(`Card title must be at most ${MAX_TITLE_LENGTH} characters`);
   }
-  const card: Card = { id, title: trimmed, createdAt: now.toISOString() };
+  return trimmed;
+}
+
+export function addCard(
+  board: Board,
+  title: string,
+  { id = crypto.randomUUID(), now = new Date() }: { id?: string; now?: Date } = {},
+): Board {
+  const card: Card = { id, title: normalizeTitle(title), createdAt: now.toISOString() };
   return { columns: { ...board.columns, todo: [...board.columns.todo, card] } };
+}
+
+export function renameCard(board: Board, cardId: string, title: string): Board {
+  const found = findCard(board, cardId);
+  if (!found) {
+    throw new Error(`Card ${cardId} not found`);
+  }
+  const trimmed = normalizeTitle(title);
+  if (trimmed === found.card.title) {
+    return board;
+  }
+  return {
+    columns: {
+      ...board.columns,
+      [found.column]: board.columns[found.column].map((c) => (c.id === cardId ? { ...c, title: trimmed } : c)),
+    },
+  };
 }
 
 export function findCard(board: Board, cardId: string): { card: Card; column: ColumnId } | undefined {

@@ -44,6 +44,38 @@ test("deletes a card", async ({ page }) => {
   await expect(page.getByText("Oops")).toHaveCount(0);
 });
 
+test("edits a card title with the keyboard and keeps it after a reload", async ({ page }) => {
+  await addCard(page, "First");
+  await addCard(page, "Second");
+  await addCard(page, "Third");
+
+  await page.getByRole("button", { name: 'Edit "Second"' }).focus();
+  await page.keyboard.press("Enter");
+  const input = page.getByLabel("Card title", { exact: true });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("Second");
+  await input.fill("  Second, edited ");
+  await page.keyboard.press("Enter");
+
+  const items = column(page, "To do").getByRole("listitem");
+  await expect(items.nth(1)).toContainText("Second, edited");
+  await expect(page.getByRole("button", { name: 'Edit "Second, edited"' })).toBeFocused();
+
+  await page.reload();
+  await expect(items.nth(0)).toContainText("First");
+  await expect(items.nth(1)).toContainText("Second, edited");
+  await expect(items.nth(2)).toContainText("Third");
+});
+
+test("Escape cancels editing a card title", async ({ page }) => {
+  await addCard(page, "Keep me");
+  await page.getByRole("button", { name: 'Edit "Keep me"' }).click();
+  await page.getByLabel("Card title", { exact: true }).fill("Nope");
+  await page.keyboard.press("Escape");
+  await expect(column(page, "To do").getByText("Keep me")).toBeVisible();
+  await expect(page.getByText("Nope")).toHaveCount(0);
+});
+
 test("keeps cards after a reload", async ({ page }) => {
   await addCard(page, "Remember me");
   await page.reload();

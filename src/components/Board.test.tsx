@@ -839,6 +839,36 @@ describe("<Board />", () => {
       expect(within(panel).getByText("No archived cards")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Archived (0)" })).toBeInTheDocument();
     });
+
+    it("empties the archive after confirmation, keeps Done cards and can undo", async () => {
+      const user = userEvent.setup();
+      seed();
+      render(<Board />);
+      await user.click(screen.getByRole("button", { name: "Archive done" }));
+      await user.click(screen.getByRole("button", { name: "Archived (2)" }));
+      await user.click(screen.getByRole("button", { name: "Undo" }));
+      await user.click(screen.getByRole("button", { name: "Archive done" }));
+      await user.click(screen.getByRole("button", { name: "Move \"Third\" to Doing" }));
+      await user.click(screen.getByRole("button", { name: "Move \"Third\" to Done" }));
+
+      const panel = screen.getByRole("region", { name: "Archived cards" });
+      await user.click(within(panel).getByRole("button", { name: "Empty archive" }));
+      expect(within(panel).getByText("Permanently delete 2 archived cards?")).toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: "Cancel" }));
+      expect(screen.getByRole("button", { name: "Archived (2)" })).toBeInTheDocument();
+
+      await user.click(within(panel).getByRole("button", { name: "Empty archive" }));
+      await user.click(within(panel).getByRole("button", { name: "Delete 2 cards" }));
+      expect(within(panel).getByText("No archived cards")).toBeInTheDocument();
+      expect(within(column("Done")).getByText("Third")).toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent("Deleted 2 archived cards");
+
+      await user.click(screen.getByRole("button", { name: "Undo" }));
+      expect(screen.getByRole("button", { name: "Archived (2)" })).toBeInTheDocument();
+      expect(within(panel).getByText("First")).toBeInTheDocument();
+      expect(within(column("Done")).getByText("Third")).toBeInTheDocument();
+    });
   });
 
   describe("summary bar", () => {

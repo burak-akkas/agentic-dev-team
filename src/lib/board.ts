@@ -359,7 +359,17 @@ export function emptyArchive(board: Board): Board {
   if (board.archive.length === 0) {
     return board;
   }
-  return { ...board, columns: { ...board.columns, done: [] }, archive: [] };
+  return { ...board, archive: [] };
+}
+
+// Puts cards removed by emptyArchive back into the archive, in front of anything archived since.
+export function restoreArchive(board: Board, cards: Card[]): Board {
+  const present = new Set([...board.archive, ...Object.values(board.columns).flat()].map((c) => c.id));
+  const back = cards.filter((c) => !present.has(c.id));
+  if (back.length === 0) {
+    return board;
+  }
+  return { ...board, archive: [...back, ...board.archive] };
 }
 
 export function deleteArchived(board: Board, cardId: string): Board {

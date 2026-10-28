@@ -4,12 +4,12 @@ import {
   addComment,
   adjacentColumn,
   archiveDone,
-  emptyArchive,
   boardStats,
   deleteArchived,
   deleteCard,
   deleteComment,
   editComment,
+  emptyArchive,
   emptyBoard,
   filterCards,
   filterOverdue,
@@ -23,6 +23,7 @@ import {
   MAX_TITLE_LENGTH,
   moveCard,
   renameCard,
+  restoreArchive,
   restoreCard,
   setDueDate,
   setNotes,
@@ -488,6 +489,23 @@ describe("archive", () => {
     const next = emptyArchive(archiveDone(seed()));
     expect(next.archive).toEqual([]);
     expect(next.columns.doing.map((c) => c.id)).toEqual(["c"]);
+  });
+
+  it("emptyArchive leaves Done cards on the board", () => {
+    const board = archiveDone(seed());
+    const withDone = moveCard(moveCard(board, "c", "doing"), "c", "done");
+    const next = emptyArchive(withDone);
+    expect(next.archive).toEqual([]);
+    expect(next.columns.done.map((c) => c.id)).toEqual(["c"]);
+  });
+
+  it("restoreArchive puts emptied cards back and skips ones already present", () => {
+    const archived = archiveDone(seed());
+    const cards = archived.archive;
+    const emptied = emptyArchive(archived);
+    const restored = restoreArchive(emptied, cards);
+    expect(restored.archive.map((c) => c.id)).toEqual(cards.map((c) => c.id));
+    expect(restoreArchive(restored, cards)).toBe(restored);
   });
 
   it("emptyArchive returns the same board when the archive is empty", () => {

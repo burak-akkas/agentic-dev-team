@@ -8,9 +8,9 @@ import {
   boardStats,
   COLUMNS,
   deleteArchived,
-  emptyArchive,
   deleteCard,
   duplicateCard,
+  emptyArchive,
   filterByLabel,
   filterCards,
   filterOverdue,
@@ -20,6 +20,7 @@ import {
   isFiltering,
   moveCard,
   renameCard,
+  restoreArchive,
   restoreCard,
   setDueDate,
   setNotes,
@@ -67,7 +68,7 @@ export function Board() {
     setShowInsights(false);
     requestAnimationFrame(() => insightsButtonRef.current?.focus());
   }
-  const [undo, setUndo] = useState<{ cards: Card[]; message: string } | null>(null);
+  const [undo, setUndo] = useState<{ cards: Card[]; message: string; kind: "archive" | "empty" } | null>(null);
   const dismissUndo = useCallback(() => setUndo(null), []);
 
   function archiveDoneCards() {
@@ -76,13 +77,30 @@ export function Board() {
       return;
     }
     update(archiveDone);
-    setUndo({ cards, message: `Archived ${cards.length} done ${cards.length === 1 ? "card" : "cards"}` });
+    setUndo({
+      cards,
+      kind: "archive",
+      message: `Archived ${cards.length} done ${cards.length === 1 ? "card" : "cards"}`,
+    });
+  }
+
+  function emptyArchivedCards() {
+    const cards = board.archive;
+    if (cards.length === 0) {
+      return;
+    }
+    update(emptyArchive);
+    setUndo({
+      cards,
+      kind: "empty",
+      message: `Deleted ${cards.length} archived ${cards.length === 1 ? "card" : "cards"}`,
+    });
   }
 
   function undoLastArchive() {
     if (undo) {
-      const { cards } = undo;
-      update((b) => undoArchive(b, cards));
+      const { cards, kind } = undo;
+      update((b) => (kind === "empty" ? restoreArchive(b, cards) : undoArchive(b, cards)));
     }
     setUndo(null);
   }
@@ -201,7 +219,7 @@ export function Board() {
           cards={board.archive}
           onRestore={(cardId) => update((b) => (b.archive.some((c) => c.id === cardId) ? restoreCard(b, cardId) : b))}
           onDelete={(cardId) => update((b) => (b.archive.some((c) => c.id === cardId) ? deleteArchived(b, cardId) : b))}
-          onEmpty={() => update(emptyArchive)}
+          onEmpty={emptyArchivedCards}
         />
       )}
 

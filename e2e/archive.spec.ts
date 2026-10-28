@@ -47,3 +47,27 @@ test("archives Done cards, undoes, restores, deletes and persists", async ({ pag
   await expect(panel.getByText("No archived cards")).toBeVisible();
   await expect(page.getByRole("button", { name: "Archived (0)" })).toBeVisible();
 });
+
+test("empties the archive after confirming, with undo, without touching Done", async ({ page }) => {
+  await addDoneCard(page, "Alpha");
+  await addDoneCard(page, "Beta");
+  await page.getByRole("button", { name: "Archive done" }).click();
+  await addDoneCard(page, "Gamma");
+  await page.getByRole("button", { name: "Archived (2)" }).click();
+
+  const panel = page.getByRole("region", { name: "Archived cards" });
+  await panel.getByRole("button", { name: "Empty archive" }).click();
+  await expect(panel.getByText("Permanently delete 2 archived cards?")).toBeVisible();
+  await panel.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("button", { name: "Archived (2)" })).toBeVisible();
+
+  await panel.getByRole("button", { name: "Empty archive" }).click();
+  await panel.getByRole("button", { name: "Delete 2 cards" }).click();
+  await expect(panel.getByText("No archived cards")).toBeVisible();
+  await expect(page.getByRole("region", { name: /^Done/ }).getByText("Gamma")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Deleted 2 archived cards");
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("button", { name: "Archived (2)" })).toBeVisible();
+  await expect(panel.getByText("Alpha")).toBeVisible();
+});

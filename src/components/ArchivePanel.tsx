@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Card } from "@/lib/board";
 import { Button, Surface } from "./ui";
 
@@ -16,12 +17,36 @@ export function ArchivePanel({
   onDelete: (cardId: string) => void;
   onEmpty: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
+  const count = cards.length;
+  const noun = count === 1 ? "card" : "cards";
+
   return (
     <Surface id={id} aria-label="Archived cards">
-      {cards.length > 0 && (
+      {count > 0 && !confirming && (
         <div className="mb-2 flex justify-end">
-          <Button size="xs" onClick={onEmpty} className="text-danger">
-            <span aria-hidden="true">🗑</span>
+          <Button size="xs" onClick={() => setConfirming(true)} className="text-danger">
+            Empty archive
+          </Button>
+        </div>
+      )}
+      {count > 0 && confirming && (
+        <div role="alertdialog" aria-label="Confirm empty archive" className="mb-2 flex flex-wrap items-center justify-end gap-2 text-sm">
+          <span>
+            Permanently delete {count} archived {noun}?
+          </span>
+          <Button
+            size="xs"
+            className="text-danger"
+            onClick={() => {
+              setConfirming(false);
+              onEmpty();
+            }}
+          >
+            Delete {count} {noun}
+          </Button>
+          <Button size="xs" autoFocus onClick={() => setConfirming(false)}>
+            Cancel
           </Button>
         </div>
       )}

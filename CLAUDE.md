@@ -1,29 +1,40 @@
 # Project guide for agents
 
 ## What this project is
-`tasks-cli` is a tiny Node.js command-line task list (add / done / list) that stores tasks in a JSON file. It's a sandbox project for piloting the agent team. Keep it simple and dependency-free.
+**Kanban**: a small Kanban board web app (To do / Doing / Done) built with **Next.js 16 (App Router), React 19, TypeScript and Tailwind CSS 4**. It's a static export (`output: "export"`) deployed to GitHub Pages on every merge, with cards saved in the browser's `localStorage`. There is no backend.
+
+> **Read [AGENTS.md](AGENTS.md) first.** This Next.js version is newer than your training data. Check `node_modules/next/dist/docs/` (after `npm ci`) before using any Next.js API you're not sure about.
 
 ## Layout
-- `src/tasks.js`: pure task functions (`addTask`, `completeTask`, `listTasks`, `formatTask`) plus JSON `load`/`save`
-- `bin/tasks.js`: CLI entry point; `run(argv, { file, out })` is exported for tests
-- `test/*.test.js`: tests using the built-in `node:test` runner
+- `src/app/`: App Router entry (`layout.tsx`, `page.tsx`, `globals.css`). Server Components by default.
+- `src/components/`: UI components. Interactive ones start with `"use client"`.
+- `src/lib/board.ts`: **pure board logic** (types, `addCard`, `moveCard`, `deleteCard` …). Every function returns a new board and never mutates its input.
+- `src/lib/storage.ts`: `localStorage` load/save with validation (corrupt data gives an empty board).
+- `src/lib/useBoard.ts`: React hook (`useSyncExternalStore`) connecting components to storage.
+- `src/**/*.test.ts(x)`: Vitest + Testing Library tests next to the code they test.
 - `.github/`, `scripts/`, `templates/`: the agent-team tooling. **Not part of the product; never modify.**
 
 ## Commands
-- Test (all): `npm test`
-- Test (single file): `node --test test/tasks.test.js`
-- Run the CLI: `node bin/tasks.js <command>` (set `TASKS_FILE` to use a temporary file)
-- No install step: there are no dependencies.
+- Install: `npm ci` (run this first in a fresh checkout)
+- Lint: `npm run lint`
+- Typecheck: `npm run typecheck`
+- Test: `npm test` (single file: `npx vitest run src/lib/board.test.ts`)
+- Build (static export to `out/`): `npm run build`
+- Everything CI runs: `npm run check`
+
+Before pushing, `npm run check` must pass. CI runs the same steps, and the merge gate only merges when CI is green.
 
 ## Conventions
-- ES modules, Node >= 20, **no npm dependencies**.
-- Business logic goes in `src/` as pure functions (return new arrays, never mutate the input). The CLI only parses args, does I/O and formats output.
-- Errors: throw `Error` with a user-facing message; the CLI prints `Error: <message>` and exits with code 1.
-- Every behaviour change needs a test in `test/`. Prefer testing pure functions; use `run()` with a temp file for CLI behaviour.
-- When CLI usage changes, update the `USAGE` text in `bin/tasks.js` and the README section "tasks-cli".
-- Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`).
+- TypeScript strict; no `any`. Use the `@/` import alias for `src/`.
+- Business logic goes in `src/lib/` as pure, tested functions. Components stay thin: they call lib functions through `useBoard()`'s `update`.
+- No server-only features: no API routes, Server Actions, `cookies()`/`headers()`, dynamic rendering, `cacheComponents` or PPR. They break the static export.
+- Persisted data shape changes must stay backward compatible with what `storage.ts` validates, or bump `STORAGE_KEY` and migrate.
+- Styling: Tailwind utility classes, and support dark mode (`dark:` variants) for every new UI.
+- Accessibility: every interactive element is reachable by keyboard and has an accessible name (tests query by role or label).
+- Tests: every behaviour change needs tests: lib tests for logic, component tests (Testing Library, `userEvent`) for UI behaviour.
+- New dependencies only when clearly justified in the PR description. Prefer zero.
+- Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`).
 
 ## Never
 - Modify `.github/`, `scripts/`, `templates/`, secrets or workflow files.
-- Add npm dependencies.
-- Commit `tasks.json` or other local data files.
+- Commit `node_modules/`, `.next/`, `out/` or `.env*`.

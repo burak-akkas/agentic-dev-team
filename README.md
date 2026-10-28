@@ -117,16 +117,15 @@ You don't need to do anything in autonomous mode. These are overrides:
 - A scheduled "maintainer" agent that triages stale issues and CI failures.
 - Move the workflows into a reusable workflow in an org-level repo once the pilot works.
 
-## tasks-cli (sandbox project)
+## Kanban (sandbox project)
 
-> This section and `src/`, `bin/` and `test/` only exist on the `sandbox` branch. They give the agents a small project to work on.
+> The app and its CI/deploy workflows only exist on the `sandbox` branch, which is the default branch while piloting. They give the agents a real project to work on. `main` holds just the toolkit.
+
+A Next.js 16 static app, live at **https://burak-akkas.github.io/agentic-dev-team/** and redeployed on every merge.
 
 ```
-node bin/tasks.js add Buy milk     # Added: [ ] 1. Buy milk
-node bin/tasks.js done 1           # Completed task 1
-node bin/tasks.js remove 1         # Removed task 1
-node bin/tasks.js list [--all]     # list open (or all) tasks
-npm test                           # run tests
+npm ci
+npm run dev     # http://localhost:3000
+npm run check   # lint + typecheck + tests + build (what CI runs)
 ```
 
-Tasks are stored in `$TASKS_FILE` (default `./tasks.json`).

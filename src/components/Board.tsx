@@ -1,0 +1,51 @@
+"use client";
+
+import { addCard, COLUMNS, deleteCard, moveCard } from "@/lib/board";
+import { useBoard } from "@/lib/useBoard";
+import { AddCardForm } from "./AddCardForm";
+import { CardItem } from "./CardItem";
+
+export function Board() {
+  const [board, update] = useBoard();
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AddCardForm onAdd={(title) => update((b) => addCard(b, title))} />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {COLUMNS.map(({ id, title }) => {
+          const cards = board.columns[id];
+          return (
+            <section
+              key={id}
+              aria-labelledby={`column-${id}`}
+              className="flex flex-col gap-3 rounded-xl bg-zinc-100 p-3 dark:bg-zinc-900/50"
+            >
+              <h2 id={`column-${id}`} className="flex items-center justify-between px-1 text-sm font-semibold">
+                {title}
+                <span className="rounded-full bg-zinc-200 px-2 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                  {cards.length}
+                </span>
+              </h2>
+              {cards.length === 0 ? (
+                <p className="px-1 py-4 text-center text-xs text-zinc-500">No cards</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {cards.map((card) => (
+                    <CardItem
+                      key={card.id}
+                      card={card}
+                      column={id}
+                      onMove={(to) => update((b) => moveCard(b, card.id, to))}
+                      onDelete={() => update((b) => deleteCard(b, card.id))}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

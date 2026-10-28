@@ -83,6 +83,7 @@ jobs:
 
             Repository: ${{ github.repository }}
             Item: ${{ env.KIND }} #${{ env.N }}
+            Default branch: ${{ github.event.repository.default_branch }} (all agent branches start from it and PRs target it)
             Decisions already made on this item: ${{ steps.guard.outputs.used }} of ${{ env.MAX_DECISIONS }}
 
             Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).

@@ -39,7 +39,7 @@ Post exactly one comment with `gh issue comment <n> --body-file <file>`:
 1. <ordered, small steps; each one leaves the code working>
 
 **Test plan**
-- <tests to add or update, mapped to the acceptance criteria>
+- <unit/component tests and, for user-visible behaviour, e2e tests, mapped to the acceptance criteria>
 
 **Risks & mitigations**
 - <risk>: <mitigation>

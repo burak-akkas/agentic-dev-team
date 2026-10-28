@@ -1,0 +1,218 @@
+name: "Agent · QA"
+
+# Runs when a PR gets `agent:qa` (the Reviewer approved and AGENT_QA == 'true').
+#   1. Waits until the PR preview serves this exact commit (<preview>/version.txt == head SHA)
+#   2. Runs the project's Playwright e2e suite against the preview
+#   3. The QA agent tests the acceptance criteria in a real browser (Playwright MCP) and takes screenshots
+#   4. Screenshots go to the PR as a gallery. pass -> merge gate, fail -> Implementor fixes, unsure -> Lead
+# Preview URL template: AGENT_PREVIEW_URL (default https://{owner}.github.io/{repo}/pr-{pr}/).
+on:
+  pull_request:
+    types: [labeled]
+
+env:
+  AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
+
+jobs:
+  qa:
+    if: github.event.label.name == 'agent:qa' && github.event.pull_request.head.repo.full_name == github.repository
+    concurrency:
+      group: agent-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      TRUSTED: .agent-trusted/.github/agents
+      MAX_ROUNDS: ${{ vars.AGENT_MAX_QA_ROUNDS || '3' }}
+      URL_TEMPLATE: ${{ vars.AGENT_PREVIEW_URL || 'https://{owner}.github.io/{repo}/pr-{pr}/' }}
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app
+        with:
+          app-id: ${{ vars.AGENT_APP_ID }}
+          private-key: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          token: ${{ steps.app.outputs.token }}
+
+      # Role prompts and scripts always come from the default branch.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .agent-trusted
+          sparse-checkout: .github/agents
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Round guard
+        id: guard
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          mkdir -p .agent-out/screenshots
+          printf '.agent-out/\n.agent-trusted/\n.gh-pages/\n' >> .git/info/exclude
+          url=$(echo "$URL_TEMPLATE" | sed -e "s|{owner}|${GITHUB_REPOSITORY_OWNER}|g" \
+                -e "s|{repo}|${GITHUB_REPOSITORY#*/}|g" -e "s|{pr}|$PR|g")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          # QA rounds are counted since the latest Lead decision.
+          comments=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments")
+          total=$(echo "$comments" | jq '[.[][] | select(.body | contains("<!-- agent:qa -->"))] | length')
+          rounds=$(echo "$comments" | jq '[.[][]] as $c
+            | ([$c | to_entries[] | select(.value.body | contains("<!-- agent:lead -->")) | .key] | max // -1) as $last
+            | [$c | to_entries[] | select(.key > $last and (.value.body | contains("<!-- agent:qa -->")))] | length')
+          echo "total=$total" >> "$GITHUB_OUTPUT"
+          echo "round=$((rounds + 1))" >> "$GITHUB_OUTPUT"
+          if [ "$rounds" -ge "$MAX_ROUNDS" ]; then
+            "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+            gh pr comment "$PR" --body "🛑 Reached $MAX_ROUNDS QA rounds without a pass. Handing to the Lead."
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for the preview of this commit
+        id: preview
+        if: steps.guard.outputs.stop != 'true'
+        env:
+          URL: ${{ steps.guard.outputs.url }}
+        run: |
+          for _ in $(seq 1 60); do
+            live=$(curl -fsSL "${URL}version.txt?t=$(date +%s)" 2>/dev/null | tr -d '[:space:]' || true)
+            if [ "$live" = "$HEAD_SHA" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+            sleep 15
+          done
+          echo "::warning::Preview at $URL never served $HEAD_SHA (last seen: ${live:-nothing})"
+
+      - uses: actions/setup-node@v4
+        if: steps.preview.outputs.ready == 'true'
+        with:
+          node-version: ${{ vars.AGENT_NODE_VERSION || '22' }}
+          cache: npm
+
+      - name: Run e2e suite against the preview
+        id: e2e
+        if: steps.preview.outputs.ready == 'true'
+        env:
+          E2E_BASE_URL: ${{ steps.guard.outputs.url }}
+          CI: "true"
+        run: |
+          npm ci
+          set +e
+          npx playwright test > .agent-out/e2e-results.txt 2>&1
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          tail -20 .agent-out/e2e-results.txt
+          cat > .agent-out/mcp.json <<'EOF'
+          {"mcpServers":{"playwright":{"command":"npx","args":["-y","@playwright/mcp@0.0.83","--headless","--isolated","--viewport-size","1280x800","--output-dir",".agent-out/screenshots"]}}}
+          EOF
+
+      - uses: anthropics/claude-code-action@v1
+        id: agent
+        if: steps.preview.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ steps.app.outputs.token }}
+          allowed_bots: ${{ vars.AGENT_BOT_LOGIN }}
+          prompt: |
+            You are the QA agent. Read ${{ env.TRUSTED }}/qa.md and follow it exactly.
+
+            Repository: ${{ github.repository }}
+            Pull request: #${{ github.event.pull_request.number }}
+            QA round: ${{ steps.guard.outputs.round }} of ${{ env.MAX_ROUNDS }}
+            Preview URL (serving commit ${{ github.event.pull_request.head.sha }}): ${{ steps.guard.outputs.url }}
+            Automated e2e results: .agent-out/e2e-results.txt (exit code ${{ steps.e2e.outputs.exit }}; 0 = all passed)
+
+            Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).
+            Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.
+            Compound commands are blocked by the permission system.
+          claude_args: |
+            --max-turns 80
+            ${{ (vars.AGENT_QA_MODEL || vars.AGENT_MODEL) && format('--model {0}', vars.AGENT_QA_MODEL || vars.AGENT_MODEL) || '' }}
+            --mcp-config ${{ github.workspace }}/.agent-out/mcp.json
+            --allowedTools "Read,Grep,Glob,Write,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr checks:*),Bash(gh pr comment:*),Bash(gh issue view:*),mcp__playwright"
+            --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["pass","fail","needs-human"]},"screenshots":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"caption":{"type":"string"}},"required":["file"]}}},"required":["verdict"]}'
+
+      - name: Report denied tools
+        if: ${{ !cancelled() && steps.agent.outputs.execution_file != '' }}
+        run: |
+          denied=$(jq -r '.[] | select(.type == "result") | .permission_denials[]? | "- `\(.tool_name)`: `\(.tool_input | tostring | .[0:300])`"' \
+                   "${{ steps.agent.outputs.execution_file }}" 2>/dev/null || true)
+          if [ -n "$denied" ]; then
+            printf '### Denied tool calls\n%s\n' "$denied" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Agent had denied tool calls, see the job summary"
+          fi
+
+      # Screenshots are committed to gh-pages (qa/pr-N/<run>/) and embedded via raw URLs,
+      # so they show up in the PR right away. The Preview workflow deletes them when the PR closes.
+      - name: Publish screenshots
+        if: ${{ !cancelled() && steps.agent.outcome != 'skipped' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OUT: ${{ steps.agent.outputs.structured_output }}
+          BOT: ${{ vars.AGENT_BOT_LOGIN }}
+        run: |
+          shopt -s nullglob
+          files=(.agent-out/screenshots/*.png .agent-out/screenshots/*.jpeg .agent-out/screenshots/*.jpg)
+          [ ${#files[@]} -eq 0 ] && { echo "No screenshots"; exit 0; }
+          dir="qa/pr-$PR/$GITHUB_RUN_ID"
+          git clone -q --depth 1 --branch gh-pages \
+            "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" .gh-pages
+          mkdir -p ".gh-pages/$dir" && cp "${files[@]}" ".gh-pages/$dir/"
+          git -C .gh-pages add "$dir"
+          git -C .gh-pages -c user.name="$BOT" -c user.email="${{ vars.AGENT_BOT_ID }}+$BOT@users.noreply.github.com" \
+            commit -qm "qa: screenshots for PR #$PR"
+          git -C .gh-pages push -q
+          base="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/gh-pages/$dir"
+          {
+            echo "<!-- agent:qa-screenshots -->"
+            echo "### 📸 QA screenshots (round ${{ steps.guard.outputs.round }})"
+            for f in "${files[@]}"; do
+              name=$(basename "$f")
+              caption=$(echo "${OUT:-null}" | jq -r --arg n "$name" '[.screenshots[]? | select(.file | endswith($n)) | .caption][0] // $n')
+              printf '\n**%s**\n\n![%s](%s/%s)\n' "$caption" "$name" "$base" "$name"
+            done
+          } > .agent-out/gallery.md
+          gh pr comment "$PR" --body-file .agent-out/gallery.md
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.agent.outcome != 'skipped' }}
+        with:
+          name: qa-pr-${{ github.event.pull_request.number }}-round-${{ steps.guard.outputs.round }}
+          path: |
+            .agent-out/screenshots/
+            .agent-out/e2e-results.txt
+            playwright-report/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Apply state transition
+        if: ${{ !cancelled() && steps.guard.outputs.stop != 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          OUT: ${{ steps.agent.outputs.structured_output }}
+          READY: ${{ steps.preview.outputs.ready }}
+          URL: ${{ steps.guard.outputs.url }}
+        run: |
+          if [ "$READY" != "true" ]; then
+            "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+            gh pr comment "$PR" --body "⚠️ QA could not start: the preview at $URL never served commit \`${HEAD_SHA:0:7}\`. Check the Preview workflow. Handing to the Lead."
+            exit 0
+          fi
+          verdict=$(echo "${OUT:-null}" | jq -r '.verdict // "error"')
+          if [ "$("$TRUSTED/count-comments.sh" "$PR" qa)" -le "${{ steps.guard.outputs.total }}" ]; then
+            echo "::warning::QA returned '$verdict' but posted no report"
+            verdict=missing-comment
+          fi
+          case "$verdict" in
+            pass)        "$TRUSTED/transition.sh" "$PR" agent:approved ;;
+            fail)        "$TRUSTED/transition.sh" "$PR" agent:changes-requested ;;
+            needs-human) "$TRUSTED/transition.sh" "$PR" agent:needs-decision ;;
+            *)           "$TRUSTED/transition.sh" "$PR" agent:needs-decision
+                         gh pr comment "$PR" --body "⚠️ QA agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
+          esac

@@ -113,6 +113,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           OUT: ${{ steps.agent.outputs.structured_output }}
+          QA: ${{ vars.AGENT_QA }}
         run: |
           verdict=$(echo "${OUT:-null}" | jq -r '.verdict // "error"')
           after=$("$TRUSTED/count-comments.sh" "$PR" reviewer)
@@ -121,7 +122,11 @@ jobs:
             verdict=missing-comment
           fi
           case "$verdict" in
-            approve)         "$TRUSTED/transition.sh" "$PR" agent:approved ;;
+            approve)         if [ "$QA" = "true" ]; then
+                               "$TRUSTED/transition.sh" "$PR" agent:qa
+                             else
+                               "$TRUSTED/transition.sh" "$PR" agent:approved
+                             fi ;;
             request-changes) "$TRUSTED/transition.sh" "$PR" agent:changes-requested ;;
             needs-human)     "$TRUSTED/transition.sh" "$PR" agent:needs-decision ;;
             *)               "$TRUSTED/transition.sh" "$PR" agent:needs-decision

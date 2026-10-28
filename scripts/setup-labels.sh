@@ -20,6 +20,7 @@ label "agent:out-of-scope"    "cccccc" "Analyst judged this not actionable"
 # PR states
 label "agent:review"            "c2e0c6" "Ask the Reviewer agent to review this PR"
 label "agent:changes-requested" "e99695" "Reviewer requested changes, Implementor agent fixes them"
+label "agent:qa"                "bfd4f2" "QA agent tests the PR preview in a browser"
 label "agent:approved"          "0e8a16" "Approved; the merge gate merges once CI is green"
 
 # Both

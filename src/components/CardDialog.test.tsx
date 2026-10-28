@@ -1,7 +1,7 @@
 import { createEvent, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MAX_NOTES_LENGTH, type Card } from "@/lib/board";
+import { MAX_LABEL_LENGTH, MAX_NOTES_LENGTH, type Card } from "@/lib/board";
 import { CardDialog } from "./CardDialog";
 
 const card: Card = {
@@ -78,7 +78,43 @@ describe("<CardDialog />", () => {
       priority: "high",
       dueDate: "2030-02-03",
       column: "doing",
+      labels: [],
     });
+  });
+
+  it("adds labels with the keyboard, rejects bad input with a visible message and removes labels", async () => {
+    const { user, onSave } = setup({ labels: ["Bug"] });
+    expect(screen.getByRole("button", { name: "Remove label Bug" })).toBeInTheDocument();
+
+    const input = screen.getByLabelText("Labels");
+    await user.type(input, "  design {Enter}");
+    expect(onSave).not.toHaveBeenCalled();
+    expect(input).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Remove label design" })).toBeInTheDocument();
+
+    await user.type(input, "BUG{Enter}");
+    expect(screen.getByRole("alert")).toHaveTextContent("already exists");
+
+    await user.clear(input);
+    await user.type(input, "   {Enter}");
+    expect(screen.getByRole("alert")).toHaveTextContent("must not be empty");
+
+    await user.type(input, "x".repeat(MAX_LABEL_LENGTH + 1));
+    await user.click(screen.getByRole("button", { name: "Add label" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(`at most ${MAX_LABEL_LENGTH} characters`);
+
+    await user.click(screen.getByRole("button", { name: "Remove label Bug" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ labels: ["design"] }));
+  });
+
+  it("asks before discarding when only labels changed", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { user, onClose } = setup();
+    await user.type(screen.getByLabelText("Labels"), "bug{Enter}");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("closes without asking when Cancel is used with no changes", async () => {

@@ -5,6 +5,7 @@ import { emptyBoard, renameList, setInsightsList } from "@/lib/board";
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/board/Board";
+import { TopBar } from "@/components/app/TopBar";
 
 const region = (name: RegExp) => screen.getByRole("region", { name });
 
@@ -34,7 +35,12 @@ describe("<Board /> done and in-progress markers", () => {
 
   it("moves the marker when the Settings selection changes", async () => {
     saveBoard(emptyBoard());
-    render(<Board />);
+    render(
+      <>
+        <TopBar />
+        <Board />
+      </>,
+    );
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const panel = screen.getByRole("dialog", { name: "Settings" });

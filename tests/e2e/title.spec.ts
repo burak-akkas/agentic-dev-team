@@ -24,7 +24,8 @@ test("the tab title shows the board name and the open card count", async ({ page
   await page.reload();
   await expect(page).toHaveTitle("My board (1) · Kanban");
 
-  await page.getByRole("button", { name: "New board" }).click();
+  await page.getByRole("button", { name: "Board actions" }).click();
+  await page.getByRole("menuitem", { name: "New board" }).click();
   await page.getByLabel("Board name").fill("Work");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page).toHaveTitle("Work · Kanban");

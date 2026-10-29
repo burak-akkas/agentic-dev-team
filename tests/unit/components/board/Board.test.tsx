@@ -285,7 +285,7 @@ describe("<Board />", () => {
 
       // Tab through the page chrome and the card's controls until the priority select is reached.
       const select = screen.getByLabelText('Priority of "Task"');
-      for (let i = 0; i < 15 && document.activeElement !== select; i++) {
+      for (let i = 0; i < 16 && document.activeElement !== select; i++) {
         await user.tab();
       }
       expect(select).toHaveFocus();

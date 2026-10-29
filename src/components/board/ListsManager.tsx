@@ -13,7 +13,7 @@ import {
   type Board,
   type List,
 } from "@/lib/board";
-import { Button, Dialog, Input, Select } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, Input, Select } from "@/components/ui";
 
 function ListRow({
   board,
@@ -32,6 +32,7 @@ function ListRow({
   const [name, setName] = useState(list.name);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const cards = listCards(board, list.id).length;
   const others = boardLists(board).filter((l) => l.id !== list.id);
   const [target, setTarget] = useState(others[0]?.id ?? "");
@@ -57,9 +58,7 @@ function ListRow({
       setDeleting(true);
       return;
     }
-    if (window.confirm(`Delete the empty list "${list.name}"?`)) {
-      onUpdateBoard((b) => deleteList(b, list.id));
-    }
+    setConfirming(true);
   }
 
   return (
@@ -142,6 +141,15 @@ function ListRow({
             </Button>
           </div>
         </div>
+      )}
+      {confirming && (
+        <ConfirmDialog
+          title="Delete list"
+          message={`Delete the empty list "${list.name}"?`}
+          confirmLabel="Delete"
+          onConfirm={() => onUpdateBoard((b) => deleteList(b, list.id))}
+          onCancel={() => setConfirming(false)}
+        />
       )}
     </li>
   );

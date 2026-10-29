@@ -244,7 +244,6 @@ describe("<Board />", () => {
     it("keeps the filter and acts on the right card when moving or deleting", async () => {
       const user = userEvent.setup();
       seed();
-      vi.spyOn(window, "confirm").mockReturnValue(true);
       render(<Board />);
       await user.type(screen.getByLabelText("Search cards"), "docs");
 
@@ -254,11 +253,11 @@ describe("<Board />", () => {
 
       await user.click(screen.getByRole("button", { name: "Docs review" }));
       await user.click(screen.getByRole("button", { name: "Delete card" }));
+      await user.click(within(screen.getByRole("dialog", { name: "Delete card" })).getByRole("button", { name: "Delete" }));
       expect(screen.queryByText("Docs review")).not.toBeInTheDocument();
 
       await user.clear(screen.getByLabelText("Search cards"));
       expect(screen.getByText("Fix bug")).toBeInTheDocument();
-      vi.restoreAllMocks();
     });
 
     it("does not modify stored data", async () => {
@@ -462,12 +461,12 @@ describe("<Board />", () => {
     it("discards changes on Cancel", async () => {
       const user = userEvent.setup();
       seedOne();
-      vi.spyOn(window, "confirm").mockReturnValue(true);
       render(<Board />);
 
       await user.click(screen.getByRole("button", { name: "Alpha" }));
       await user.type(screen.getByLabelText("Title"), "zzz");
       await user.click(screen.getByRole("button", { name: "Cancel" }));
+      await user.click(within(screen.getByRole("dialog", { name: "Discard changes" })).getByRole("button", { name: "Discard" }));
 
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(within(column("To do")).getByText("Alpha")).toBeInTheDocument();
@@ -476,15 +475,15 @@ describe("<Board />", () => {
     it("deletes the card after confirmation and keeps it when declined", async () => {
       const user = userEvent.setup();
       seedOne();
-      const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
       render(<Board />);
 
       await user.click(screen.getByRole("button", { name: "Alpha" }));
       await user.click(screen.getByRole("button", { name: "Delete card" }));
-      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      await user.click(within(screen.getByRole("dialog", { name: "Delete card" })).getByRole("button", { name: "Cancel" }));
+      expect(screen.getByRole("dialog", { name: "Alpha" })).toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "Delete card" }));
-      expect(confirm).toHaveBeenCalledTimes(2);
+      await user.click(within(screen.getByRole("dialog", { name: "Delete card" })).getByRole("button", { name: "Delete" }));
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(within(column("To do")).getByText("No cards")).toBeInTheDocument();
     });

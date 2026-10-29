@@ -22,8 +22,8 @@ export async function moveCardTo(page: Page, title: string, list: string) {
 
 export async function deleteCardViaDialog(page: Page, title: string) {
   await page.getByRole("button", { name: title, exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  page.once("dialog", (d) => void d.accept());
+  const dialog = page.getByRole("dialog", { name: title, exact: true });
   await dialog.getByRole("button", { name: "Delete card" }).click();
+  await page.getByRole("dialog", { name: "Delete card" }).getByRole("button", { name: "Delete", exact: true }).click();
   await expect(dialog).toBeHidden();
 }

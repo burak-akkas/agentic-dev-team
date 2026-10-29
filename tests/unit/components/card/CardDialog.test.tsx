@@ -141,52 +141,55 @@ describe("<CardDialog />", () => {
   });
 
   it("asks before discarding when only labels changed", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const { user, onClose } = setup();
     await user.type(screen.getByLabelText("Labels"), "bug{Enter}");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("dialog", { name: "Discard changes" })).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it("closes without asking when Cancel is used with no changes", async () => {
-    const confirm = vi.spyOn(window, "confirm");
     const { user, onClose } = setup();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Discard changes" })).not.toBeInTheDocument();
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("asks before discarding changes and honours the answer", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  it("asks before discarding, keeps the edits on Cancel and closes on Discard", async () => {
     const { user, onClose } = setup();
     await user.type(screen.getByLabelText("Title"), "!");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(confirm).toHaveBeenCalledTimes(1);
+    const confirm = screen.getByRole("dialog", { name: "Discard changes" });
+    expect(within(confirm).getByText("Discard your unsaved changes?")).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Discard changes" })).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Title")).toHaveValue("Write docs!");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Discard changes" })).getByRole("button", { name: "Discard" }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it("routes Escape (cancel event) through the same close logic", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const { onClose } = setup();
     const dialog = screen.getByRole("dialog");
     const event = createEvent("cancel", dialog, { cancelable: true });
     fireEvent(dialog, event);
     expect(event.defaultPrevented).toBe(true);
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Discard changes" })).not.toBeInTheDocument();
   });
 
-  it("confirms Escape and backdrop closes when dirty", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("confirms Escape and backdrop closes when dirty, and Escape in the confirm only cancels it", async () => {
     const { user, onClose } = setup();
     await user.type(screen.getByLabelText("Title"), "!");
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("dialog", { name: "Write docs" });
     fireEvent(dialog, createEvent("cancel", dialog, { cancelable: true }));
+    const confirm = screen.getByRole("dialog", { name: "Discard changes" });
+    fireEvent(confirm, createEvent("cancel", confirm, { cancelable: true }));
+    expect(screen.queryByRole("dialog", { name: "Discard changes" })).not.toBeInTheDocument();
     await user.click(dialog);
-    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("dialog", { name: "Discard changes" })).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -199,15 +202,15 @@ describe("<CardDialog />", () => {
   });
 
   it("deletes only after confirmation", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { user, onDelete, onClose } = setup();
     await user.click(screen.getByRole("button", { name: "Delete card" }));
-    expect(confirm).toHaveBeenCalledWith('Delete "Write docs"?');
+    const confirm = screen.getByRole("dialog", { name: "Delete card" });
+    expect(within(confirm).getByText('Delete "Write docs"?')).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(onDelete).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete card" }));
-    expect(confirm).toHaveBeenCalledTimes(2);
+    await user.click(within(screen.getByRole("dialog", { name: "Delete card" })).getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 

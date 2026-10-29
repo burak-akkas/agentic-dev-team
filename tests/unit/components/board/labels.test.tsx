@@ -59,9 +59,9 @@ describe("<Board /> labels", () => {
     const user = userEvent.setup();
     render(<Board />);
     await user.click(screen.getByRole("button", { name: 'Filter by label "bug"' }));
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: "Fix crash" }));
     await user.click(screen.getByRole("button", { name: "Delete card" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Delete card" })).getByRole("button", { name: "Delete" }));
     expect(within(column("To do")).getByText("Style page")).toBeInTheDocument();
     expect(within(column("To do")).getByText("Plain")).toBeInTheDocument();
   });

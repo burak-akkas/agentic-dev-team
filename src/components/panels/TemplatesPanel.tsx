@@ -9,7 +9,7 @@ import {
   renameTemplate,
   validateTemplateName,
 } from "@/lib/templates";
-import { Button, Dialog, Input } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, Input } from "@/components/ui";
 
 function TemplateRow({
   template,
@@ -23,6 +23,7 @@ function TemplateRow({
   const id = useId();
   const [name, setName] = useState(template.name);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
 
   function rename(event: FormEvent) {
     event.preventDefault();
@@ -46,9 +47,7 @@ function TemplateRow({
   }
 
   function remove() {
-    if (window.confirm(`Delete the template "${template.name}"?`)) {
-      onUpdateBoard((b) => (boardTemplates(b).some((t) => t.id === template.id) ? deleteTemplate(b, template.id) : b));
-    }
+    onUpdateBoard((b) => (boardTemplates(b).some((t) => t.id === template.id) ? deleteTemplate(b, template.id) : b));
   }
 
   return (
@@ -67,10 +66,19 @@ function TemplateRow({
         <Button type="submit" size="sm" aria-label={`Rename template "${template.name}"`}>
           Rename
         </Button>
-        <Button type="button" size="sm" variant="danger" aria-label={`Delete template "${template.name}"`} onClick={remove}>
+        <Button type="button" size="sm" variant="danger" aria-label={`Delete template "${template.name}"`} onClick={() => setConfirming(true)}>
           Delete
         </Button>
       </form>
+      {confirming && (
+        <ConfirmDialog
+          title="Delete template"
+          message={`Delete the template "${template.name}"?`}
+          confirmLabel="Delete"
+          onConfirm={remove}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
       {error && (
         <p id={`${id}-error`} role="alert" className="text-xs text-danger">
           {error}

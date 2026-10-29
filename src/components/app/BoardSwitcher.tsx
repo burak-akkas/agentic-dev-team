@@ -79,7 +79,7 @@ export function BoardSwitcher() {
   const close = () => setDialog(null);
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Select
         aria-label="Board"
         value={currentId}

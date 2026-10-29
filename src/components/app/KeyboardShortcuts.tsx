@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 
-import { Button, Dialog } from "@/components/ui";
+import { Button, Dialog, KeyboardIcon } from "@/components/ui";
 
 type ShortcutAction = "add-card" | "search" | "help";
 
@@ -70,8 +70,16 @@ export function KeyboardShortcuts() {
 
   return (
     <>
-      <Button ref={buttonRef} size="sm" onClick={openHelp}>
-        Keyboard shortcuts
+      <Button
+        ref={buttonRef}
+        variant="ghost"
+        aria-label="Keyboard shortcuts"
+        title="Keyboard shortcuts"
+        aria-haspopup="dialog"
+        className="p-2"
+        onClick={openHelp}
+      >
+        <KeyboardIcon />
       </Button>
       {open && (
         <Dialog labelledBy={headingId} onRequestClose={closeHelp}>

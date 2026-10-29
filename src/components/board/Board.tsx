@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useRef, useState, type DragEvent } from "react";
+import { useCallback, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
   addCard,
   archiveList,
+  backgroundImageCss,
   boardLabels,
   boardLists,
   boardStats,
@@ -31,6 +32,7 @@ import {
   updateCard,
 } from "@/lib/board";
 import { addCardFromTemplate, boardTemplates, saveAsTemplate } from "@/lib/templates";
+import { useBackgroundImageOk } from "@/hooks/useBackgroundImageOk";
 import { useBoard } from "@/hooks/useBoard";
 import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "@/components/panels/ArchivePanel";
@@ -173,8 +175,23 @@ export function Board() {
     });
   }
 
+  const background = board.background;
+  const imageOk = useBackgroundImageOk(background?.type === "image" ? background.url : undefined);
+  const backgroundStyle: CSSProperties | undefined =
+    background?.type === "color"
+      ? { backgroundColor: background.value }
+      : background?.type === "image" && imageOk
+        ? { backgroundImage: backgroundImageCss(background.url), backgroundSize: "cover", backgroundPosition: "center" }
+        : undefined;
+  // Lists and the toolbar get a semi-opaque surface so text stays readable over any background.
+  const surface = backgroundStyle ? "bg-white/85 dark:bg-zinc-900/85" : "";
+
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className={`flex flex-col gap-6 ${backgroundStyle ? "rounded-xl p-3" : ""}`}
+      style={backgroundStyle}
+      data-board-background={backgroundStyle ? background?.type : undefined}
+    >
       {openCardId && open && (
         <CardDialog
           key={openCardId}
@@ -210,6 +227,7 @@ export function Board() {
           onUpdateBoard={update}
         />
       )}
+      <div className={`flex flex-col gap-6 ${backgroundStyle ? `rounded-xl p-3 ${surface}` : ""}`}>
       <SummaryBar stats={stats} overdueOnly={showOverdueOnly} onToggleOverdue={() => setOverdueOnly(!showOverdueOnly)} />
 
       <AddCardForm
@@ -255,6 +273,7 @@ export function Board() {
         <Button ref={settingsButtonRef} aria-haspopup="dialog" onClick={() => setShowSettings(true)} className="bg-surface">
           Settings
         </Button>
+      </div>
       </div>
       {showLists && <ListsManager board={board} onUpdateBoard={update} onClose={closeLists} />}
       {showSettings && <SettingsPanel board={board} onUpdateBoard={update} onClose={closeSettings} />}
@@ -304,7 +323,7 @@ export function Board() {
               } ${
                 dragOver === id && !collapsed
                   ? "bg-indigo-50 ring-2 ring-indigo-500 dark:bg-indigo-950/40"
-                  : "bg-surface-muted dark:bg-surface/50"
+                  : surface || "bg-surface-muted dark:bg-surface/50"
               }`}
             >
               <ColumnHeader

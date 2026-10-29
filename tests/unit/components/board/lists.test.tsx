@@ -5,6 +5,7 @@ import { addCard, addList, emptyBoard, moveCard, setInsightsList } from "@/lib/b
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/board/Board";
+import { TopBar } from "@/components/app/TopBar";
 
 // Column titles in board order (without the card count badge).
 const headings = () =>
@@ -122,7 +123,12 @@ describe("<Board /> custom lists", () => {
   it("works with WIP limits, moving and archive on a custom list", async () => {
     saveBoard(moveCard(addCard(addList(emptyBoard(), "Review", { id: "r" }), "Task", { id: "t" }), "t", "r"));
     const user = userEvent.setup();
-    render(<Board />);
+    render(
+      <>
+        <TopBar />
+        <Board />
+      </>,
+    );
     const review = screen.getByRole("region", { name: /^Review/ });
     await user.click(screen.getByRole("button", { name: "Settings" }));
     await user.type(screen.getByLabelText("WIP limit for Review"), "1{Enter}");
@@ -140,7 +146,12 @@ describe("<Board /> custom lists", () => {
   it("lets insights use any list as in progress and done, chosen in Settings", async () => {
     saveBoard(addList(emptyBoard(), "Review", { id: "r" }));
     const user = userEvent.setup();
-    render(<Board />);
+    render(
+      <>
+        <TopBar />
+        <Board />
+      </>,
+    );
     await user.click(screen.getByRole("button", { name: "Settings" }));
     const settings = screen.getByRole("dialog", { name: "Settings" });
     expect(within(settings).getByLabelText("In progress list")).toHaveValue("doing");

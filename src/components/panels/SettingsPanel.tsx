@@ -6,6 +6,7 @@ import { boardLists, MAX_WIP_LIMIT, parseWipLimit, setWipLimit } from "@/lib/boa
 import type { Board } from "@/lib/board";
 import { BoardTransfer } from "@/components/app/BoardTransfer";
 import { Button, Dialog, Input } from "@/components/ui";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ListChoice } from "./ListChoice";
 
 function WipLimitRow({
@@ -86,12 +87,19 @@ export function SettingsPanel({
   const headingId = useId();
   const wipHeadingId = useId();
   const transferHeadingId = useId();
+  const themeHeadingId = useId();
   return (
     <Dialog labelledBy={headingId} onRequestClose={onClose}>
       <div className="flex max-w-full min-w-0 flex-col gap-5 p-5">
         <h2 id={headingId} className="text-lg font-semibold">
           Settings
         </h2>
+        <section aria-labelledby={themeHeadingId} className="flex min-w-0 flex-col gap-2">
+          <h3 id={themeHeadingId} className="text-sm font-semibold">
+            Appearance
+          </h3>
+          <ThemeToggle />
+        </section>
         <ListChoice board={board} onUpdateBoard={onUpdateBoard} />
         <section aria-labelledby={wipHeadingId} className="flex min-w-0 flex-col gap-2">
           <h3 id={wipHeadingId} className="text-sm font-semibold">

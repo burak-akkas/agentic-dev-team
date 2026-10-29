@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { moveCardTo } from "../support/cardActions";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
@@ -76,10 +77,9 @@ test("a custom list works with moving, archive and insights", async ({ page }) =
 
   await page.getByLabel("New card title").fill("Ship it");
   await page.getByRole("button", { name: "Add card" }).click();
-  await page.getByRole("button", { name: 'Move "Ship it" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Ship it" to Done' }).click();
-  await expect(page.getByRole("button", { name: 'Move "Ship it" to Review' })).toBeVisible();
-  await page.getByRole("button", { name: 'Move "Ship it" to Review' }).click();
+  await moveCardTo(page, "Ship it", "Doing");
+  await moveCardTo(page, "Ship it", "Done");
+  await moveCardTo(page, "Ship it", "Review");
   await page.getByRole("button", { name: "Archive all cards in Review" }).click();
   await expect(page.getByRole("button", { name: "Archived (1)" })).toBeVisible();
 

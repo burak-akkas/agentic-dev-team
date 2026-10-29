@@ -128,7 +128,9 @@ describe("<Board /> custom lists", () => {
     await user.type(screen.getByLabelText("WIP limit for Review"), "1{Enter}");
     await user.click(screen.getByRole("button", { name: "Close" }));
     expect(within(review).getByText("1 / 1")).toBeInTheDocument();
-    expect(within(review).getByRole("button", { name: 'Move "Task" to Done' })).toBeInTheDocument();
+    await user.click(within(review).getByRole("button", { name: "Task" }));
+    expect(within(screen.getByRole("dialog")).getByLabelText("Status")).toHaveValue("r");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     await user.click(within(review).getByRole("button", { name: "Archive all cards in Review" }));
     expect(screen.getByRole("button", { name: "Archived (1)" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Undo" }));

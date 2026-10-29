@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { deleteCardViaDialog, moveCardTo } from "../support/cardActions";
 
 // Every test gets a fresh browser context, so localStorage starts empty.
 // page.goto("./") resolves against baseURL, which also works for PR previews under /<repo>/pr-N/.
@@ -29,51 +30,46 @@ test("adds a card to To do", async ({ page }) => {
 
 test("moves a card across the board and back", async ({ page }) => {
   await addCard(page, "Ship it");
-  await page.getByRole("button", { name: 'Move "Ship it" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Ship it" to Done' }).click();
+  await moveCardTo(page, "Ship it", "Doing");
+  await moveCardTo(page, "Ship it", "Done");
   await expect(column(page, "Done").getByText("Ship it")).toBeVisible();
 
-  await page.getByRole("button", { name: 'Move "Ship it" to Doing' }).click();
+  await moveCardTo(page, "Ship it", "Doing");
   await expect(column(page, "Doing").getByText("Ship it")).toBeVisible();
   await expect(column(page, "Done").getByText("No cards")).toBeVisible();
 });
 
-test("deletes a card", async ({ page }) => {
+test("deletes a card from its dialog", async ({ page }) => {
   await addCard(page, "Oops");
-  await page.getByRole("button", { name: 'Delete "Oops"' }).click();
+  await deleteCardViaDialog(page, "Oops");
   await expect(page.getByText("Oops")).toHaveCount(0);
 });
 
-test("edits a card title with the keyboard and keeps it after a reload", async ({ page }) => {
+test("cards are read-only on the board", async ({ page }) => {
+  await addCard(page, "Plain card");
+  const card = column(page, "To do").getByRole("listitem");
+  await expect(card.getByRole("button", { name: "Plain card", exact: true })).toBeVisible();
+  await expect(card.getByTestId("priority-badge")).toBeVisible();
+  await expect(card.getByRole("combobox")).toHaveCount(0);
+  await expect(card.getByRole("button")).toHaveCount(1);
+});
+
+test("renames a card in its dialog and keeps it after a reload", async ({ page }) => {
   await addCard(page, "First");
   await addCard(page, "Second");
   await addCard(page, "Third");
 
-  await page.getByRole("button", { name: 'Edit "Second"' }).focus();
-  await page.keyboard.press("Enter");
-  const input = page.getByLabel("Card title", { exact: true });
-  await expect(input).toBeFocused();
-  await expect(input).toHaveValue("Second");
-  await input.fill("  Second, edited ");
-  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Second", exact: true }).click();
+  await page.getByRole("dialog").getByLabel("Title").fill("  Second, edited ");
+  await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
 
   const items = column(page, "To do").getByRole("listitem");
   await expect(items.nth(1)).toContainText("Second, edited");
-  await expect(page.getByRole("button", { name: 'Edit "Second, edited"' })).toBeFocused();
 
   await page.reload();
   await expect(items.nth(0)).toContainText("First");
   await expect(items.nth(1)).toContainText("Second, edited");
   await expect(items.nth(2)).toContainText("Third");
-});
-
-test("Escape cancels editing a card title", async ({ page }) => {
-  await addCard(page, "Keep me");
-  await page.getByRole("button", { name: 'Edit "Keep me"' }).click();
-  await page.getByLabel("Card title", { exact: true }).fill("Nope");
-  await page.keyboard.press("Escape");
-  await expect(column(page, "To do").getByText("Keep me")).toBeVisible();
-  await expect(page.getByText("Nope")).toHaveCount(0);
 });
 
 test("keeps cards after a reload", async ({ page }) => {
@@ -85,7 +81,7 @@ test("keeps cards after a reload", async ({ page }) => {
 test("filters cards with the search box", async ({ page }) => {
   await addCard(page, "Write docs");
   await addCard(page, "Fix bug");
-  await page.getByRole("button", { name: 'Move "Fix bug" to Doing' }).click();
+  await moveCardTo(page, "Fix bug", "Doing");
 
   const search = page.getByLabel("Search cards");
   await search.fill("DOCS");

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { moveCardTo } from "../support/cardActions";
 
 const column = (page: Page, name: string) => page.getByRole("region", { name: new RegExp(`^${name}`) });
 
@@ -31,10 +32,10 @@ test("sets a WIP limit, warns at and over it, persists and clears", async ({ pag
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: /^Doing\s*0 \/ 1$/ })).toBeVisible();
 
-  await page.getByRole("button", { name: 'Move "One" to Doing' }).click();
+  await moveCardTo(page, "One", "Doing");
   await expect(doing.getByText("At limit")).toBeVisible();
 
-  await page.getByRole("button", { name: 'Move "Two" to Doing' }).click();
+  await moveCardTo(page, "Two", "Doing");
   await expect(doing.getByText("Over limit by 1")).toBeVisible();
 
   await page.reload();

@@ -202,12 +202,13 @@ describe("<CardDialog />", () => {
   });
 
   it("deletes only after confirmation", async () => {
-    const { user, onDelete } = setup();
+    const { user, onDelete, onClose } = setup();
     await user.click(screen.getByRole("button", { name: "Delete card" }));
     const confirm = screen.getByRole("dialog", { name: "Delete card" });
     expect(within(confirm).getByText('Delete "Write docs"?')).toBeInTheDocument();
     await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(onDelete).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Delete card" }));
     await user.click(within(screen.getByRole("dialog", { name: "Delete card" })).getByRole("button", { name: "Delete" }));
     expect(onDelete).toHaveBeenCalledTimes(1);

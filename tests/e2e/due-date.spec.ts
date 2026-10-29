@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editCard, moveCardTo } from "../support/cardActions";
 
 const column = (page: Page, name: string) => page.getByRole("region", { name: new RegExp(`^${name}`) });
 
@@ -7,28 +8,29 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Kanban" })).toBeVisible();
 });
 
-test("sets a due date, shows it overdue, persists it and clears it", async ({ page }) => {
+test("sets a due date in the dialog, shows it overdue, persists it and clears it", async ({ page }) => {
   await page.getByLabel("New card title").fill("Pay rent");
   await page.getByRole("button", { name: "Add card" }).click();
+  await expect(page.getByLabel('Due date for "Pay rent"')).toHaveCount(0);
 
-  const input = page.getByLabel('Due date for "Pay rent"', { exact: true });
-  await input.fill("2000-01-01");
+  await editCard(page, "Pay rent", { dueDate: "2000-01-01" });
   await expect(column(page, "To do").getByText("Jan 1")).toBeVisible();
   await expect(column(page, "To do").getByText("Overdue")).toBeVisible();
 
   await page.reload();
-  await expect(input).toHaveValue("2000-01-01");
   await expect(column(page, "To do").getByText("Overdue")).toBeVisible();
 
-  await page.getByRole("button", { name: 'Move "Pay rent" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Pay rent" to Done' }).click();
+  await moveCardTo(page, "Pay rent", "Doing");
+  await moveCardTo(page, "Pay rent", "Done");
   await expect(column(page, "Done").getByText("Pay rent")).toBeVisible();
   await expect(column(page, "Done").getByText("Overdue")).toHaveCount(0);
-  await expect(input).toHaveValue("2000-01-01");
+  await expect(column(page, "Done").getByText("Jan 1")).toBeVisible();
 
-  await page.getByRole("button", { name: 'Clear due date for "Pay rent"' }).click();
-  await expect(input).toHaveValue("");
-  await expect(input).toBeFocused();
+  await page.getByRole("button", { name: "Pay rent", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Clear due date" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(column(page, "Done").getByText("Jan 1")).toHaveCount(0);
 });
 
 test("shows due today and due tomorrow chips, but none for later dates or the done list", async ({ page }) => {
@@ -44,17 +46,14 @@ test("shows due today and due tomorrow chips, but none for later dates or the do
     return [fmt(0), fmt(1), fmt(5)];
   });
 
-  const input = page.getByLabel('Due date for "Soon"', { exact: true });
-  await input.fill(today);
+  await editCard(page, "Soon", { dueDate: today });
   await expect(column(page, "To do").getByText("Due today")).toBeVisible();
-  await input.fill(tomorrow);
+  await editCard(page, "Soon", { dueDate: tomorrow });
   await expect(column(page, "To do").getByText("Due tomorrow")).toBeVisible();
   await expect(column(page, "To do").getByText("Due today")).toHaveCount(0);
-  await input.fill(later);
+  await editCard(page, "Soon", { dueDate: later });
   await expect(column(page, "To do").getByText(/^Due (today|tomorrow)$/)).toHaveCount(0);
 
-  await input.fill(today);
-  await page.getByRole("button", { name: 'Move "Soon" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Soon" to Done' }).click();
+  await editCard(page, "Soon", { dueDate: today, list: "Done" });
   await expect(column(page, "Done").getByText("Due today")).toHaveCount(0);
 });

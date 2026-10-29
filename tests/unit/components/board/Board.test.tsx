@@ -9,6 +9,13 @@ import { UNDO_TOAST_MS } from "@/components/board/UndoToast";
 
 const column = (name: string) => screen.getByRole("region", { name: new RegExp(`^${name}`) });
 
+async function moveVia(user: ReturnType<typeof userEvent.setup>, title: string, list: string) {
+  await user.click(screen.getByRole("button", { name: title }));
+  const dialog = screen.getByRole("dialog");
+  await user.selectOptions(within(dialog).getByLabelText("Status"), list);
+  await user.click(within(dialog).getByRole("button", { name: "Save" }));
+}
+
 describe("<Board />", () => {
   beforeEach(() => resetBoardStore());
 
@@ -31,139 +38,17 @@ describe("<Board />", () => {
     expect(screen.getByRole("button", { name: "Add card" })).toBeDisabled();
   });
 
-  it("moves a card right and left between columns", async () => {
+  it("moves a card between columns through the dialog", async () => {
     const user = userEvent.setup();
     saveBoard(addCard(emptyBoard(), "Ship it", { id: "a" }));
     render(<Board />);
 
-    await user.click(screen.getByRole("button", { name: 'Move "Ship it" to Doing' }));
+    await moveVia(user, "Ship it", "Doing");
     expect(within(column("Doing")).getByText("Ship it")).toBeInTheDocument();
     expect(within(column("To do")).getByText("No cards")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: 'Move "Ship it" to To do' }));
+    await moveVia(user, "Ship it", "To do");
     expect(within(column("To do")).getByText("Ship it")).toBeInTheDocument();
-  });
-
-  it("deletes a card", async () => {
-    const user = userEvent.setup();
-    saveBoard(addCard(emptyBoard(), "Oops", { id: "a" }));
-    render(<Board />);
-
-    await user.click(screen.getByRole("button", { name: 'Delete "Oops"' }));
-    expect(screen.queryByText("Oops")).not.toBeInTheDocument();
-  });
-
-  describe("editing a title", () => {
-    const seed = () => {
-      let board = addCard(emptyBoard(), "Buy milk", { id: "a" });
-      board = addCard(board, "Walk dog", { id: "b" });
-      board = addCard(board, "Read", { id: "c" });
-      saveBoard(board);
-    };
-    const titles = (name: string) =>
-      within(column(name))
-        .getAllByRole("listitem")
-        .map((li) => li.querySelector("button.card-title")?.textContent);
-
-    it("shows a focused, pre-filled input with Save and Cancel", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Buy milk"' }));
-      const input = screen.getByLabelText("Card title");
-      expect(input).toHaveValue("Buy milk");
-      expect(input).toHaveFocus();
-      expect(input).toHaveAttribute("maxlength", "120");
-      expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
-    });
-
-    it("saves a trimmed title with Enter, keeping position, and restores focus", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Walk dog"' }));
-      await user.clear(screen.getByLabelText("Card title"));
-      await user.type(screen.getByLabelText("Card title"), "  Feed cat  {Enter}");
-
-      expect(titles("To do")).toEqual(["Buy milk", "Feed cat", "Read"]);
-      expect(screen.queryByLabelText("Card title")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: 'Edit "Feed cat"' })).toHaveFocus();
-    });
-
-    it("saves with the Save button and persists to localStorage", async () => {
-      const user = userEvent.setup();
-      seed();
-      const { unmount } = render(<Board />);
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Buy milk"' }));
-      await user.clear(screen.getByLabelText("Card title"));
-      await user.type(screen.getByLabelText("Card title"), "Buy oat milk");
-      await user.click(screen.getByRole("button", { name: "Save" }));
-      unmount();
-
-      resetBoardStore();
-      render(<Board />);
-      expect(screen.getByText("Buy oat milk")).toBeInTheDocument();
-    });
-
-    it("keeps a card in its column when renamed", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-      await user.click(screen.getByRole("button", { name: 'Move "Walk dog" to Doing' }));
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Walk dog"' }));
-      await user.type(screen.getByLabelText("Card title"), "gy{Enter}");
-
-      expect(titles("Doing")).toEqual(["Walk doggy"]);
-      expect(titles("To do")).toEqual(["Buy milk", "Read"]);
-    });
-
-    it("discards changes on Escape and on Cancel, restoring focus", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Buy milk"' }));
-      await user.type(screen.getByLabelText("Card title"), " changed{Escape}");
-      expect(screen.getByText("Buy milk")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: 'Edit "Buy milk"' })).toHaveFocus();
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Buy milk"' }));
-      await user.type(screen.getByLabelText("Card title"), " changed");
-      await user.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(screen.getByText("Buy milk")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: 'Edit "Buy milk"' })).toHaveFocus();
-    });
-
-    it("does not save a blank title", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Buy milk"' }));
-      await user.clear(screen.getByLabelText("Card title"));
-      await user.type(screen.getByLabelText("Card title"), "   ");
-      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
-
-      await user.keyboard("{Enter}");
-      expect(screen.getByLabelText("Card title")).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(titles("To do")).toEqual(["Buy milk", "Walk dog", "Read"]);
-    });
-
-    it("saving an unchanged title is harmless", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Buy milk"' }));
-      await user.click(screen.getByRole("button", { name: "Save" }));
-      expect(titles("To do")).toEqual(["Buy milk", "Walk dog", "Read"]);
-    });
   });
 
   describe("due dates", () => {
@@ -171,60 +56,19 @@ describe("<Board />", () => {
       const board = addCard(emptyBoard(), "Pay rent", { id: "a" });
       saveBoard(dueDate ? setDueDate(board, "a", dueDate) : board);
     };
-    const dateInput = () => screen.getByLabelText('Due date for "Pay rent"');
 
-    it("sets, changes and clears a due date, moving focus to the input on clear", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-      expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
-
-      fireEvent.change(dateInput(), { target: { value: "2999-10-28" } });
-      expect(dateInput()).toHaveValue("2999-10-28");
-      expect(screen.getByText(formatDueDate("2999-10-28"))).toBeInTheDocument();
-      expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
-
-      fireEvent.change(dateInput(), { target: { value: "2999-11-02" } });
-      expect(screen.getByText(formatDueDate("2999-11-02"))).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: 'Clear due date for "Pay rent"' }));
-      expect(dateInput()).toHaveValue("");
-      expect(dateInput()).toHaveFocus();
-      expect(screen.queryByRole("button", { name: /Clear due date/ })).not.toBeInTheDocument();
-    });
-
-    it("clears when the native input is emptied", () => {
-      seed("2999-10-28");
-      render(<Board />);
-      fireEvent.change(dateInput(), { target: { value: "" } });
-      expect(screen.queryByRole("time")).not.toBeInTheDocument();
-    });
-
-    it("ignores invalid values from the native input instead of throwing", () => {
-      seed("2999-10-28");
-      render(<Board />);
-      fireEvent.change(dateInput(), { target: { value: "20261-10-28" } });
-      expect(screen.getByRole("time")).toHaveTextContent(formatDueDate("2999-10-28"));
-    });
-
-    it("is reachable with the keyboard", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-      for (let i = 0; i < 14 && document.activeElement !== dateInput(); i++) {
-        await user.tab();
-      }
-      expect(dateInput()).toHaveFocus();
-    });
-
-    it("persists across reloads", () => {
+    it("shows the due date as read-only text, and nothing without one", () => {
       seed();
       const { unmount } = render(<Board />);
-      fireEvent.change(dateInput(), { target: { value: "2999-10-28" } });
+      expect(screen.queryByRole("time")).not.toBeInTheDocument();
       unmount();
+
       resetBoardStore();
+      seed("2999-10-28");
       render(<Board />);
-      expect(dateInput()).toHaveValue("2999-10-28");
+      expect(screen.getByRole("time")).toHaveTextContent(formatDueDate("2999-10-28"));
+      expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Due date for/)).not.toBeInTheDocument();
     });
 
     it("marks past dates overdue unless the card is in Done, and updates on move", async () => {
@@ -233,13 +77,13 @@ describe("<Board />", () => {
       render(<Board />);
       expect(within(column("To do")).getByText(/Overdue/)).toBeInTheDocument();
 
-      await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Doing' }));
+      await moveVia(user, "Pay rent", "Doing");
       expect(within(column("Doing")).getByText(/Overdue/)).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Done' }));
+      await moveVia(user, "Pay rent", "Done");
       expect(within(column("Done")).queryByText(/Overdue/)).not.toBeInTheDocument();
-      expect(dateInput()).toHaveValue("2000-01-01");
+      expect(screen.getByRole("time")).toHaveTextContent(formatDueDate("2000-01-01"));
 
-      await user.click(screen.getByRole("button", { name: 'Move "Pay rent" to Doing' }));
+      await moveVia(user, "Pay rent", "Doing");
       expect(within(column("Doing")).getByText(/Overdue/)).toBeInTheDocument();
     });
 
@@ -260,15 +104,16 @@ describe("<Board />", () => {
       await user.type(screen.getByLabelText("New card title"), "Task{Enter}");
 
       expect(badge("Task")).toHaveTextContent("Medium");
-      expect(screen.getByLabelText('Priority of "Task"')).toHaveValue("medium");
     });
 
-    it("changes the priority with the select, keeping column and persisting", async () => {
+    it("shows the priority set in the dialog, keeping column and persisting", async () => {
       const user = userEvent.setup();
       saveBoard(moveCard(addCard(emptyBoard(), "Task", { id: "a" }), "a", "doing"));
       const { unmount } = render(<Board />);
 
-      await user.selectOptions(screen.getByLabelText('Priority of "Task"'), "high");
+      await user.click(screen.getByRole("button", { name: "Task" }));
+      await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Priority"), "high");
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
       expect(badge("Task")).toHaveTextContent("High");
       expect(within(column("Doing")).getByText("Task")).toBeInTheDocument();
       unmount();
@@ -277,158 +122,53 @@ describe("<Board />", () => {
       render(<Board />);
       expect(badge("Task")).toHaveTextContent("High");
     });
-
-    it("is reachable with the keyboard and keeps priority after rename and move", async () => {
-      const user = userEvent.setup();
-      saveBoard(addCard(emptyBoard(), "Task", { id: "a" }));
-      render(<Board />);
-
-      // Tab through the page chrome and the card's controls until the priority select is reached.
-      const select = screen.getByLabelText('Priority of "Task"');
-      for (let i = 0; i < 16 && document.activeElement !== select; i++) {
-        await user.tab();
-      }
-      expect(select).toHaveFocus();
-      await user.selectOptions(select, "high");
-      expect(badge("Task")).toHaveTextContent("High");
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Task"' }));
-      await user.type(screen.getByLabelText("Card title"), " 2{Enter}");
-      await user.click(screen.getByRole("button", { name: 'Move "Task 2" to Doing' }));
-      expect(badge("Task 2")).toHaveTextContent("High");
-    });
   });
 
-  describe("notes", () => {
-    const seed = (notes?: string) => {
-      const board = addCard(emptyBoard(), "Plan trip", { id: "a" });
-      saveBoard(notes ? setNotes(board, "a", notes) : board);
-    };
-    const textarea = () => screen.getByLabelText('Notes for "Plan trip"');
-    const openButton = (name: string) => screen.getByRole("button", { name: `${name} notes for "Plan trip"` });
-
-    it("shows no indicator or preview on cards without notes", () => {
-      seed();
+  describe("card face", () => {
+    it("has no editing controls", () => {
+      let board = addCard(emptyBoard(), "Plan trip", { id: "a" });
+      board = moveCard(board, "a", "doing");
+      saveBoard(setDueDate(setNotes(board, "a", "Book flights"), "a", "2999-10-28"));
       render(<Board />);
-      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
+
+      expect(screen.getByRole("button", { name: "Plan trip" })).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Priority of /)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Due date for /)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Move / })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Edit / })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^Delete / })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /notes/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Clear" })).not.toBeInTheDocument();
       expect(screen.queryByTestId("notes-preview")).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /Show notes/ })).not.toBeInTheDocument();
     });
 
-    it("adds notes, with Enter inserting a newline, and shows indicator and first-line preview", async () => {
+    it("keeps the title button keyboard focusable", async () => {
       const user = userEvent.setup();
-      seed();
+      saveBoard(addCard(emptyBoard(), "Plan trip", { id: "a" }));
       render(<Board />);
-
-      await user.click(openButton("Add"));
-      expect(textarea()).toHaveAttribute("maxLength", "1000");
-      expect(textarea()).toHaveFocus();
-      await user.type(textarea(), "Book flights{Enter}Pack bags");
-      expect(textarea()).toHaveValue("Book flights\nPack bags");
-
-      await user.click(screen.getByRole("button", { name: "Save notes" }));
-      expect(screen.getByText("Has notes")).toBeInTheDocument();
-      expect(screen.getByTestId("notes-preview")).toHaveTextContent("Book flights");
-      expect(screen.getByTestId("notes-preview")).not.toHaveTextContent("Pack bags");
-      expect(openButton("Edit")).toHaveFocus();
+      const title = screen.getByRole("button", { name: "Plan trip" });
+      for (let i = 0; i < 40 && document.activeElement !== title; i++) {
+        await user.tab();
+      }
+      expect(title).toHaveFocus();
     });
 
-    it("expands to the full text and collapses again", async () => {
-      const user = userEvent.setup();
-      seed("Line one\nLine two");
+    it("shows a Has notes indicator only for cards with notes", () => {
+      let board = addCard(emptyBoard(), "Plan trip", { id: "a" });
+      board = addCard(board, "Other", { id: "b" });
+      saveBoard(setNotes(board, "a", "<b>x</b>"));
       render(<Board />);
-
-      const toggle = screen.getByRole("button", { name: "Show notes" });
-      expect(toggle).toHaveAttribute("aria-expanded", "false");
-      await user.click(toggle);
-      expect(toggle).toHaveAttribute("aria-expanded", "true");
-      expect(toggle).toHaveTextContent("Hide notes");
-      const full = document.getElementById(toggle.getAttribute("aria-controls") as string);
-      expect(full?.textContent).toBe("Line one\nLine two");
-      await user.click(toggle);
-      expect(toggle).toHaveAttribute("aria-expanded", "false");
-      expect(screen.getByTestId("notes-preview")).toHaveTextContent("Line one");
-    });
-
-    it("cancels with Escape, restoring focus and keeping the old notes", async () => {
-      const user = userEvent.setup();
-      seed("Original");
-      render(<Board />);
-
-      await user.click(openButton("Edit"));
-      await user.clear(textarea());
-      await user.type(textarea(), "Changed{Escape}");
-      expect(screen.queryByLabelText('Notes for "Plan trip"')).not.toBeInTheDocument();
-      expect(screen.getByTestId("notes-preview")).toHaveTextContent("Original");
-      expect(openButton("Edit")).toHaveFocus();
-    });
-
-    it("cancels with the Cancel button", async () => {
-      const user = userEvent.setup();
-      seed();
-      render(<Board />);
-
-      await user.click(openButton("Add"));
-      await user.type(textarea(), "Draft");
-      await user.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
-      expect(openButton("Add")).toHaveFocus();
-    });
-
-    it("edits existing notes", async () => {
-      const user = userEvent.setup();
-      seed("Old");
-      render(<Board />);
-
-      await user.click(openButton("Edit"));
-      expect(textarea()).toHaveValue("Old");
-      await user.clear(textarea());
-      await user.type(textarea(), "New");
-      await user.click(screen.getByRole("button", { name: "Save notes" }));
-      expect(screen.getByTestId("notes-preview")).toHaveTextContent("New");
-    });
-
-    it("removes notes by saving blank text or with Remove notes", async () => {
-      const user = userEvent.setup();
-      seed("Something");
-      render(<Board />);
-
-      await user.click(openButton("Edit"));
-      await user.clear(textarea());
-      await user.click(screen.getByRole("button", { name: "Save notes" }));
-      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
-
-      await user.click(openButton("Add"));
-      expect(screen.queryByRole("button", { name: "Remove notes" })).not.toBeInTheDocument();
-      await user.type(textarea(), "Again");
-      await user.click(screen.getByRole("button", { name: "Save notes" }));
-      await user.click(openButton("Edit"));
-      await user.click(screen.getByRole("button", { name: "Remove notes" }));
-      expect(screen.queryByText("Has notes")).not.toBeInTheDocument();
-      expect(openButton("Add")).toHaveFocus();
-    });
-
-    it("renders HTML-like text literally", async () => {
-      const user = userEvent.setup();
-      seed("<b>x</b>");
-      render(<Board />);
-      await user.click(screen.getByRole("button", { name: "Show notes" }));
-      expect(screen.getByText("<b>x</b>")).toBeInTheDocument();
+      expect(screen.getAllByText("Has notes")).toHaveLength(1);
+      expect(within(screen.getByText("Plan trip").closest("li") as HTMLElement).getByText("Has notes")).toBeInTheDocument();
       expect(document.querySelector("b")).toBeNull();
     });
 
-    it("persists across reloads and survives rename and move", async () => {
+    it("keeps notes through a move", async () => {
       const user = userEvent.setup();
-      seed("Keep me");
-      const { unmount } = render(<Board />);
-      await user.click(screen.getByRole("button", { name: 'Edit "Plan trip"' }));
-      await user.type(screen.getByLabelText("Card title"), " 2{Enter}");
-      await user.click(screen.getByRole("button", { name: 'Move "Plan trip 2" to Doing' }));
-      unmount();
-
-      resetBoardStore();
+      saveBoard(setNotes(addCard(emptyBoard(), "Plan trip", { id: "a" }), "a", "Keep me"));
       render(<Board />);
-      expect(within(column("Doing")).getByTestId("notes-preview")).toHaveTextContent("Keep me");
+      await moveVia(user, "Plan trip", "Doing");
+      expect(within(column("Doing")).getByText("Has notes")).toBeInTheDocument();
     });
   });
 
@@ -507,11 +247,13 @@ describe("<Board />", () => {
       render(<Board />);
       await user.type(screen.getByLabelText("Search cards"), "docs");
 
-      await user.click(screen.getByRole("button", { name: 'Move "Write docs" to Doing' }));
+      await moveVia(user, "Write docs", "Doing");
       expect(within(column("Doing")).getByText("Write docs")).toBeInTheDocument();
       expect(screen.getByLabelText("Search cards")).toHaveValue("docs");
 
-      await user.click(screen.getByRole("button", { name: 'Delete "Docs review"' }));
+      await user.click(screen.getByRole("button", { name: "Docs review" }));
+      await user.click(screen.getByRole("button", { name: "Delete card" }));
+      await user.click(within(screen.getByRole("dialog", { name: "Delete card" })).getByRole("button", { name: "Delete" }));
       expect(screen.queryByText("Docs review")).not.toBeInTheDocument();
 
       await user.clear(screen.getByLabelText("Search cards"));
@@ -654,17 +396,11 @@ describe("<Board />", () => {
       expect(within(done).getByText("No cards")).toBeInTheDocument();
     });
 
-    it("keeps the move buttons and does not make an editing card draggable", async () => {
-      const user = userEvent.setup();
+    it("makes cards draggable and has no card-level move buttons", () => {
       seed();
       render(<Board />);
       expect(card("Alpha")).toHaveAttribute("draggable", "true");
-
-      await user.click(screen.getByRole("button", { name: 'Move "Alpha" to Doing' }));
-      expect(within(column("Doing")).getByText("Alpha")).toBeInTheDocument();
-
-      await user.click(screen.getByRole("button", { name: 'Edit "Beta"' }));
-      expect(screen.getByLabelText("Card title").closest("li")).not.toHaveAttribute("draggable");
+      expect(screen.queryByRole("button", { name: /^Move / })).not.toBeInTheDocument();
     });
   });
 
@@ -715,7 +451,7 @@ describe("<Board />", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(within(column("Done")).getByText("Beta")).toBeInTheDocument();
       expect(within(column("Done")).getByTestId("priority-badge")).toHaveTextContent("High");
-      expect(within(column("Done")).getByText("Details")).toBeInTheDocument();
+      expect(within(column("Done")).getByText("Has notes")).toBeInTheDocument();
       expect(localStorage.getItem(localStorage.key(0) as string)).toContain("Details");
 
       await nextFrame();
@@ -861,8 +597,7 @@ describe("<Board />", () => {
       expect(within(summary()).getByText("High priority open: 1")).toBeInTheDocument();
       expect(screen.getByRole("progressbar", { name: "Cards done" })).toHaveAttribute("aria-valuenow", "0");
 
-      await user.click(screen.getByRole("button", { name: 'Move "One" to Doing' }));
-      await user.click(screen.getByRole("button", { name: 'Move "One" to Done' }));
+      await moveVia(user, "One", "Done");
       expect(screen.getByRole("progressbar", { name: "Cards done" })).toHaveAttribute("aria-valuenow", "50");
       expect(within(summary()).getByText("50% done")).toBeInTheDocument();
       expect(within(summary()).getByText("High priority open: 0")).toBeInTheDocument();
@@ -892,8 +627,7 @@ describe("<Board />", () => {
       render(<Board />);
 
       await user.click(within(summary()).getByRole("button", { name: /Overdue: 1/ }));
-      await user.click(screen.getByRole("button", { name: 'Move "Late" to Doing' }));
-      await user.click(screen.getByRole("button", { name: 'Move "Late" to Done' }));
+      await moveVia(user, "Late", "Done");
       expect(within(summary()).getByText("Overdue: 0")).toBeInTheDocument();
       expect(within(column("Done")).getByText("Late")).toBeInTheDocument();
     });

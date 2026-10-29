@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { editCard } from "../support/cardActions";
 
 test("a renamed Done list keeps its marker, no overdue chip and Archive done", async ({ page }) => {
   await page.goto("./");
@@ -6,9 +7,7 @@ test("a renamed Done list keeps its marker, no overdue chip and Archive done", a
 
   await page.getByLabel("New card title").fill("Old task");
   await page.getByRole("button", { name: "Add card" }).click();
-  await page.getByLabel('Due date for "Old task"', { exact: true }).fill("2000-01-01");
-  await page.getByRole("button", { name: 'Move "Old task" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Old task" to Done' }).click();
+  await editCard(page, "Old task", { dueDate: "2000-01-01", list: "Done" });
 
   await page.getByRole("button", { name: "Manage lists" }).click();
   const dialog = page.getByRole("dialog", { name: "Manage lists" });

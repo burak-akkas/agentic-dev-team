@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
+import { moveCardTo } from "../support/cardActions";
 
 const column = (page: Page, name: string) => page.getByRole("region", { name: new RegExp(`^${name}`) });
 
@@ -11,8 +12,7 @@ test.beforeEach(async ({ page }) => {
 test("collapses a list, keeps it after a reload and expands it again", async ({ page }) => {
   await page.getByLabel("New card title").fill("Task");
   await page.getByRole("button", { name: "Add card" }).click();
-  await page.getByRole("button", { name: 'Move "Task" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Task" to Done' }).click();
+  await moveCardTo(page, "Task", "Done");
 
   const collapse = page.getByRole("button", { name: "Collapse Done" });
   await expect(collapse).toHaveAttribute("aria-expanded", "true");

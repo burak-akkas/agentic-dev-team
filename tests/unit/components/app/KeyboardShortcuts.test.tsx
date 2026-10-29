@@ -145,7 +145,7 @@ describe("<KeyboardShortcuts />", () => {
     const user = userEvent.setup();
     saveBoard(addCard(emptyBoard(), "Ship it", { id: "a" }));
     renderPage();
-    const move = screen.getByRole("button", { name: 'Move "Ship it" to Doing' });
+    const move = screen.getByRole("button", { name: "Ship it" });
     move.focus();
 
     await user.keyboard("?");

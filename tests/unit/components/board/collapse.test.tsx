@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addCard, emptyBoard, moveCard, setWipLimit, toggleListCollapsed } from "@/lib/board";
@@ -79,7 +79,9 @@ describe("collapsing lists in <Board />", () => {
     seed();
     render(<Board />);
     await user.click(screen.getByRole("button", { name: "Collapse Doing" }));
-    await user.click(screen.getByRole("button", { name: 'Move "A" to Doing' }));
+    await user.click(screen.getByRole("button", { name: "A" }));
+    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Status"), "Doing");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
     expect(screen.getByRole("heading", { name: "Doing1" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Expand Doing" }));
     expect(screen.getByText("A")).toBeInTheDocument();

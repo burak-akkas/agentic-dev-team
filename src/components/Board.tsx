@@ -277,7 +277,7 @@ export function Board() {
       ) : view === "calendar" ? (
         <CalendarView board={visible} onOpen={setOpenCardId} onUpdateBoard={update} />
       ) : (
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:overflow-x-auto">
+      <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start">
         {lists.map(({ id, name: title }) => {
           const cards = listCards(visible, id);
           return (
@@ -288,7 +288,7 @@ export function Board() {
               onDragOver={(event) => handleDragOver(event, id)}
               onDragLeave={(event) => handleDragLeave(event, id)}
               onDrop={(event) => handleDrop(event, id)}
-              className={`flex flex-col gap-3 rounded-xl p-3 md:min-w-64 md:flex-1 md:basis-0 ${
+              className={`flex flex-col gap-3 rounded-xl p-3 md:min-w-64 md:flex-1 md:basis-64 ${
                 dragOver === id
                   ? "bg-indigo-50 ring-2 ring-indigo-500 dark:bg-indigo-950/40"
                   : "bg-surface-muted dark:bg-surface/50"

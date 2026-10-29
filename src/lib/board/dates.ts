@@ -45,9 +45,9 @@ export function todayString(now: Date = new Date()): string {
   return `${String(now.getFullYear()).padStart(4, "0")}-${month}-${day}`;
 }
 
-// Overdue = due before today and not in the done list (`doneId`: "done" by default, `null` when there is none).
+// Overdue = due before today and not in the done list (`doneId`: the board's resolved done list, `null` when there is none).
 // Due today is not overdue.
-export function isOverdue(card: Card, column: ColumnId, today: string = todayString(), doneId: ColumnId | null = "done"): boolean {
+export function isOverdue(card: Card, column: ColumnId, today: string, doneId: ColumnId | null): boolean {
   return column !== doneId && !!card.dueDate && card.dueDate < today;
 }
 
@@ -68,8 +68,8 @@ function nextDay(date: string): string {
 export function dueStatus(
   card: Card,
   column: ColumnId,
-  today: string = todayString(),
-  doneId: ColumnId | null = "done",
+  today: string,
+  doneId: ColumnId | null,
 ): DueStatus | null {
   if (!card.dueDate || column === doneId) {
     return null;

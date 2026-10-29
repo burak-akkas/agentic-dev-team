@@ -84,7 +84,8 @@ while IFS=$'\t' read -r n kind updated title labels; do
   act gh issue comment "$n" -R "$repo" --body "<!-- agent:watchdog -->
 ⏰ No progress for ${age} minutes in \`${state/none/review pending}\`, and no agent run is active. The last run was probably cancelled or crashed. $note (retry $((done_before + 1)) of $retries)."
   act "$here/progress.sh" $ref "⏰ **Watchdog**: stalled ${age}m in \`${state/none/review pending}\`, $short (retry $((done_before + 1))/$retries)"
-done < <(gh api --paginate --slurp "repos/$repo/issues?state=open&per_page=100" | jq -r '.[][] |
+# Draft PRs are paused on purpose (agents ignore them), so they never count as stalled.
+done < <(gh api --paginate --slurp "repos/$repo/issues?state=open&per_page=100" | jq -r '.[][] | select((.draft // false) | not) |
   [.number, (if .pull_request then "pr" else "issue" end), .updated_at, .title, ([.labels[].name] | join(",") | if . == "" then "-" else . end)] | @tsv')
 
 echo "Stalled items: $stalled"

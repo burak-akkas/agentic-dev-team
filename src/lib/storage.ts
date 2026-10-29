@@ -271,7 +271,9 @@ function normalizeBoard(board: Board): Board {
       insightsLists.done = done;
     }
   }
+  const view: unknown = (board as { view?: unknown }).view;
   return {
+    ...((view === "table" || view === "calendar") && { view }),
     lists,
     ...(Object.keys(wipLimits).length > 0 && { wipLimits }),
     ...(Object.keys(formerLists).length > 0 && { formerLists }),

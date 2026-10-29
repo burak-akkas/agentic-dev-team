@@ -16,7 +16,7 @@ test("switches to the table, sorts, filters, opens a card and remembers the view
   await page.getByRole("button", { name: "Banana", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Banana" });
   await dialog.getByLabel("Status").selectOption({ label: "Doing" });
-  await dialog.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
   await page.getByRole("radio", { name: "Table" }).check({ force: true });
   const table = page.getByRole("table");

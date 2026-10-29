@@ -32,6 +32,7 @@ import {
   undoArchive,
   updateCard,
 } from "@/lib/board";
+import { addCardFromTemplate, boardTemplates, saveAsTemplate } from "@/lib/templates";
 import { useBoard } from "@/lib/useBoard";
 import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "./ArchivePanel";
@@ -44,6 +45,7 @@ import { ListsManager } from "./ListsManager";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
 import { TableView } from "./TableView";
+import { TemplatesPanel } from "./TemplatesPanel";
 import { UndoToast } from "./UndoToast";
 import { ViewSwitch } from "./ViewSwitch";
 import { Button } from "./ui";
@@ -71,6 +73,9 @@ export function Board() {
   const insightsButtonRef = useRef<HTMLButtonElement>(null);
   const [showLists, setShowLists] = useState(false);
   const listsButtonRef = useRef<HTMLButtonElement>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const templatesButtonRef = useRef<HTMLButtonElement>(null);
+  const templates = boardTemplates(board);
   const lists = boardLists(board);
   const view = boardView(board);
   const doneId = insightsListIds(board).done;
@@ -83,6 +88,11 @@ export function Board() {
   function closeLists() {
     setShowLists(false);
     requestAnimationFrame(() => listsButtonRef.current?.focus());
+  }
+
+  function closeTemplates() {
+    setShowTemplates(false);
+    requestAnimationFrame(() => templatesButtonRef.current?.focus());
   }
   const [undo, setUndo] = useState<{ cards: Card[]; listId: ColumnId; message: string } | null>(null);
   const dismissUndo = useCallback(() => setUndo(null), []);
@@ -178,13 +188,39 @@ export function Board() {
             update((b) => duplicateCard(b, openCardId, { id }));
             setOpenCardId(id);
           }}
+          onSaveTemplate={() => {
+            try {
+              const id = crypto.randomUUID();
+              const next = saveAsTemplate(board, openCardId, undefined, { id });
+              const name = boardTemplates(next).find((t) => t.id === id)?.name ?? "";
+              update(() => next);
+              return { ok: true, message: `Saved template "${name}".` };
+            } catch (error) {
+              return { ok: false, message: error instanceof Error ? error.message : "Could not save the template." };
+            }
+          }}
           onClose={() => closeDialog(openCardId)}
           onUpdateBoard={update}
         />
       )}
       <SummaryBar stats={stats} overdueOnly={showOverdueOnly} onToggleOverdue={() => setOverdueOnly(!showOverdueOnly)} />
 
-      <AddCardForm onAdd={(title) => update((b) => addCard(b, title))} />
+      <AddCardForm
+        onAdd={(title) => update((b) => addCard(b, title))}
+        templates={templates}
+        lists={lists}
+        onAddFromTemplate={(templateId, listId, title) => {
+          const id = crypto.randomUUID();
+          update((b) => {
+            const template = boardTemplates(b).find((t) => t.id === templateId);
+            if (!template) {
+              return b;
+            }
+            const added = addCardFromTemplate(b, templateId, listId, { id });
+            return title.trim() === template.title ? added : renameCard(added, id, title);
+          });
+        }}
+      />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="flex-1">
@@ -206,8 +242,12 @@ export function Board() {
         <Button ref={listsButtonRef} aria-haspopup="dialog" onClick={() => setShowLists(true)} className="bg-surface">
           Manage lists
         </Button>
+        <Button ref={templatesButtonRef} aria-haspopup="dialog" onClick={() => setShowTemplates(true)} className="bg-surface">
+          Templates
+        </Button>
       </div>
       {showLists && <ListsManager board={board} onUpdateBoard={update} onClose={closeLists} />}
+      {showTemplates && <TemplatesPanel board={board} onUpdateBoard={update} onClose={closeTemplates} />}
       {showInsights && (
         <InsightsPanel
           board={board}

@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState, type DragEvent } from "react";
-import { findCard, isCardOverdue, isValidDueDate, setDueDate, todayString, type Board } from "@/lib/board";
+import { DueChip } from "@/components/card/DueChip";
+import { cardDueStatus, findCard, isValidDueDate, setDueDate, todayString, type Board } from "@/lib/board";
 import {
   calendarCards,
   formatLongDate,
@@ -64,7 +65,7 @@ export function CalendarView({
   }
 
   function renderCard({ card, listId }: CalendarCard) {
-    const overdue = isCardOverdue(board, card, listId, today);
+    const status = cardDueStatus(board, card, listId, today);
     return (
       <li
         key={card.id}
@@ -83,9 +84,9 @@ export function CalendarView({
           className="min-w-0 flex-1 px-1.5 py-1 text-left hover:underline focus-visible:outline-2 focus-visible:outline-accent"
         >
           <span className="block truncate">{card.title}</span>{" "}
-          {overdue && (
-            <span className="block font-semibold text-red-700 dark:text-red-300">
-              <span aria-hidden="true">⚠ </span>Overdue
+          {status && (
+            <span className="block">
+              <DueChip status={status} />
             </span>
           )}
         </button>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addCard,
   emptyBoard,
+  dueStatus,
   findCard,
   formatDueDate,
   isOverdue,
@@ -71,5 +72,28 @@ describe("due dates", () => {
   it("formats the date without a timezone shift", () => {
     expect(formatDueDate("2026-10-28")).toMatch(/28/);
     expect(formatDueDate("2026-01-01")).toMatch(/1/);
+  });
+});
+
+describe("dueStatus", () => {
+  const due = (dueDate?: string) => findCard(setDueDate(addCard(emptyBoard(), "T", { id: "a" }), "a", dueDate), "a")!.card;
+
+  it("classifies overdue, today and tomorrow, and nothing for later dates", () => {
+    expect(dueStatus(due("2026-10-28"), "todo", "2026-10-29")).toBe("overdue");
+    expect(dueStatus(due("2026-10-29"), "todo", "2026-10-29")).toBe("today");
+    expect(dueStatus(due("2026-10-30"), "todo", "2026-10-29")).toBe("tomorrow");
+    expect(dueStatus(due("2026-10-31"), "todo", "2026-10-29")).toBeNull();
+  });
+
+  it("handles month and year ends", () => {
+    expect(dueStatus(due("2027-01-01"), "todo", "2026-12-31")).toBe("tomorrow");
+    expect(dueStatus(due("2026-03-01"), "todo", "2026-02-28")).toBe("tomorrow");
+  });
+
+  it("is null without a due date or in the done list", () => {
+    expect(dueStatus(due(), "todo", "2026-10-29")).toBeNull();
+    expect(dueStatus(due("2026-10-28"), "done", "2026-10-29")).toBeNull();
+    expect(dueStatus(due("2026-10-29"), "done", "2026-10-29")).toBeNull();
+    expect(dueStatus(due("2026-10-30"), "done", "2026-10-29")).toBeNull();
   });
 });

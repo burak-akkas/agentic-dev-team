@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { boardLabels, boardLists, checklistProgress, formatDueDate, PRIORITIES, type Board } from "@/lib/board";
+import { boardLabels, boardLists, cardDueStatus, checklistProgress, formatDueDate, PRIORITIES, type Board } from "@/lib/board";
 import {
   filterRows,
   lastActivityAt,
@@ -11,6 +11,7 @@ import {
   type SortDir,
   type SortKey,
 } from "@/lib/tableView";
+import { DueChip } from "@/components/card/DueChip";
 import { LabelChip } from "@/components/card/LabelChip";
 import { Select } from "@/components/ui";
 
@@ -95,8 +96,9 @@ export function TableView({ board, onOpen }: { board: Board; onOpen: (cardId: st
                 </td>
               </tr>
             ) : (
-              rows.map(({ card, listName }) => {
+              rows.map(({ card, listId: rowListId, listName }) => {
                 const progress = checklistProgress(card);
+                const status = cardDueStatus(board, card, rowListId);
                 return (
                   <tr
                     key={card.id}
@@ -117,7 +119,14 @@ export function TableView({ board, onOpen }: { board: Board; onOpen: (cardId: st
                     </td>
                     <td className="px-3 py-2">{listName}</td>
                     <td className="px-3 py-2">{priorityLabel(card.priority)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{card.dueDate ? formatDueDate(card.dueDate) : ""}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {card.dueDate ? formatDueDate(card.dueDate) : ""}
+                      {status && (
+                        <span className="ml-2 text-xs">
+                          <DueChip status={status} />
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
                         {(card.labels ?? []).map((l) => (

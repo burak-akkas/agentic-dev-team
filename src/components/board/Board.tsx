@@ -42,6 +42,7 @@ import { ColumnHeader } from "./ColumnHeader";
 import { InsightsPanel } from "@/components/panels/InsightsPanel";
 import { LabelFilter } from "@/components/card/LabelFilter";
 import { ListsManager } from "./ListsManager";
+import { SettingsPanel } from "@/components/panels/SettingsPanel";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
 import { TableView } from "@/components/views/TableView";
@@ -73,6 +74,8 @@ export function Board() {
   const insightsButtonRef = useRef<HTMLButtonElement>(null);
   const [showLists, setShowLists] = useState(false);
   const listsButtonRef = useRef<HTMLButtonElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const templatesButtonRef = useRef<HTMLButtonElement>(null);
   const templates = boardTemplates(board);
@@ -88,6 +91,11 @@ export function Board() {
   function closeLists() {
     setShowLists(false);
     requestAnimationFrame(() => listsButtonRef.current?.focus());
+  }
+
+  function closeSettings() {
+    setShowSettings(false);
+    requestAnimationFrame(() => settingsButtonRef.current?.focus());
   }
 
   function closeTemplates() {
@@ -245,8 +253,12 @@ export function Board() {
         <Button ref={templatesButtonRef} aria-haspopup="dialog" onClick={() => setShowTemplates(true)} className="bg-surface">
           Templates
         </Button>
+        <Button ref={settingsButtonRef} aria-haspopup="dialog" onClick={() => setShowSettings(true)} className="bg-surface">
+          Settings
+        </Button>
       </div>
       {showLists && <ListsManager board={board} onUpdateBoard={update} onClose={closeLists} />}
+      {showSettings && <SettingsPanel board={board} onUpdateBoard={update} onClose={closeSettings} />}
       {showTemplates && <TemplatesPanel board={board} onUpdateBoard={update} onClose={closeTemplates} />}
       {showInsights && (
         <InsightsPanel

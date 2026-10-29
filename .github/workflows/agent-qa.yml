@@ -1,7 +1,8 @@
 name: "Agent · QA"
 
 # Runs when a PR gets `agent:qa` (the Reviewer approved and AGENT_QA == 'true').
-#   1. Waits until the PR preview serves this exact commit (<preview>/version.txt == head SHA)
+#   1. Waits for the required checks (AGENT_REQUIRED_CHECKS): red goes straight back to the Implementor, no QA run
+#      Then waits until the PR preview serves this exact commit (<preview>/version.txt == head SHA)
 #   2. Runs the project's Playwright e2e suite against the preview
 #   3. The QA agent tests the acceptance criteria in a real browser (Playwright MCP) and takes screenshots
 #   4. Screenshots go to the PR as a gallery. pass -> merge gate, fail -> Implementor fixes, unsure -> Lead
@@ -99,9 +100,32 @@ jobs:
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # QA is the most expensive agent run, and the merge gate requires these checks anyway: don't
+      # spend a QA round on a commit that can never merge. Red checks go straight back to the Implementor.
+      - name: Wait for required checks
+        id: ci
+        if: steps.guard.outputs.stop != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REQUIRED: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
+        run: |
+          # Same rules as the merge gate: only workflows listed in REQUIRED count. Up to 25 minutes;
+          # on timeout QA runs anyway (the merge gate still waits for the checks).
+          filter='[.[] | select(.workflow as $w | ($req | split(",") | map(gsub("^ +| +$"; ""))) | index($w))]'
+          for _ in $(seq 1 50); do
+            json=$(gh pr checks "$PR" -R "$GITHUB_REPOSITORY" --json workflow,name,bucket,link 2>/dev/null || true)
+            checks=$(echo "${json:-[]}" | jq --arg req "$REQUIRED" "$filter")
+            failed=$(echo "$checks" | jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | "[\(.name)](\(.link))"] | join(", ")')
+            pending=$(echo "$checks" | jq '[.[] | select(.bucket == "pending")] | length')
+            if [ -n "$failed" ]; then echo "result=fail" >> "$GITHUB_OUTPUT"; echo "failed=$failed" >> "$GITHUB_OUTPUT"; exit 0; fi
+            if [ "$(echo "$checks" | jq length)" -gt 0 ] && [ "$pending" -eq 0 ]; then echo "result=pass" >> "$GITHUB_OUTPUT"; exit 0; fi
+            sleep 30
+          done
+          echo "result=timeout" >> "$GITHUB_OUTPUT"
+
       - name: Wait for the preview of this commit
         id: preview
-        if: steps.guard.outputs.stop != 'true'
+        if: steps.guard.outputs.stop != 'true' && steps.ci.outputs.result != 'fail'
         env:
           URL: ${{ steps.guard.outputs.url }}
         run: |
@@ -217,8 +241,19 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           OUT: ${{ steps.agent.outputs.structured_output }}
           READY: ${{ steps.preview.outputs.ready }}
+          CI_RESULT: ${{ steps.ci.outputs.result }}
+          CI_FAILED: ${{ steps.ci.outputs.failed }}
           URL: ${{ steps.guard.outputs.url }}
         run: |
+          if [ "$CI_RESULT" = "fail" ]; then
+            stale=$("$BIN/pr-still-current.sh" "$PR" "$HEAD_SHA" agent:qa)
+            if [ -n "$stale" ]; then echo "CI failed, but ${stale#skip=}" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+            "$BIN/transition.sh" "$PR" agent:changes-requested
+            gh pr comment "$PR" --body "<!-- agent:merge -->
+          ❌ Required checks failed on \`${HEAD_SHA:0:7}\`: $CI_FAILED. QA was skipped, since this commit can't merge. Implementor: open the failing check, reproduce it locally, fix it, and run \`npm run check\` again before pushing."
+            "$BIN/progress.sh" --pr "$PR" "🧪 **QA**: skipped, required checks failed on #$PR, back to the Implementor"
+            exit 0
+          fi
           if [ "$READY" != "true" ]; then
             "$BIN/transition.sh" "$PR" agent:needs-decision
             gh pr comment "$PR" --body "⚠️ QA could not start: the preview at $URL never served commit \`${HEAD_SHA:0:7}\`. Check the Preview workflow. Handing to the Lead."

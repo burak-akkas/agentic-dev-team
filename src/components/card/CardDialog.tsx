@@ -115,7 +115,7 @@ export function CardDialog({
 
   return (
     // Escape and backdrop clicks go through requestClose so unsaved changes can be confirmed first.
-    <Dialog labelledBy={headingId} onRequestClose={requestClose}>
+    <Dialog labelledBy={headingId} onRequestClose={requestClose} size="lg">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
         <h2 id={headingId} className="break-words text-lg font-semibold">
           {card.title}

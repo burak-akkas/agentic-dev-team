@@ -20,7 +20,7 @@ function normalizeTitle(title: string): string {
 export function addCard(
   board: Board,
   title: string,
-  { id = crypto.randomUUID(), now = new Date() }: { id?: string; now?: Date } = {},
+  { id = crypto.randomUUID(), now = new Date(), listId }: { id?: string; now?: Date; listId?: string } = {},
 ): Board {
   const base: Card = {
     id,
@@ -29,9 +29,10 @@ export function addCard(
     priority: DEFAULT_PRIORITY,
   };
   const card = withActivity(base, { type: "created" }, { now });
-  // New cards go to the first list.
-  const first = boardLists(board)[0].id;
-  return { ...board, columns: { ...board.columns, [first]: [...listCards(board, first), card] } };
+  // New cards go to the chosen list, or the first list when none (or an unknown one) is given.
+  const lists = boardLists(board);
+  const target = lists.find((l) => l.id === listId)?.id ?? lists[0].id;
+  return { ...board, columns: { ...board.columns, [target]: [...listCards(board, target), card] } };
 }
 
 export function setPriority(board: Board, cardId: string, priority: Priority, opts: ActivityOptions = {}): Board {

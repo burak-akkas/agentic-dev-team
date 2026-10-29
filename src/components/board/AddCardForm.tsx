@@ -10,8 +10,8 @@ export function AddCardForm({
   lists = [],
   onAddFromTemplate,
 }: {
-  onAdd: (title: string) => void;
-  // With at least one template (and a handler) the form offers "From template" and "Target list".
+  onAdd: (title: string, listId: string) => void;
+  // With lists the form offers "Target list"; with at least one template (and a handler) also "From template".
   templates?: readonly CardTemplate[];
   lists?: readonly List[];
   // `title` is the (possibly edited) title field, which replaces the template's title.
@@ -41,7 +41,7 @@ export function AddCardForm({
     if (template && onAddFromTemplate) {
       onAddFromTemplate(template.id, targetId, title);
     } else {
-      onAdd(title);
+      onAdd(title, targetId);
     }
     setTitle("");
     setTemplateId("");
@@ -67,7 +67,7 @@ export function AddCardForm({
         onChange={(event) => setTitle(event.target.value)}
         className="min-w-0 flex-1"
       />
-      {withTemplates && (
+      {lists.length > 0 && (
         <Select aria-label="Target list" value={targetId} onChange={(event) => setListId(event.target.value)}>
           {lists.map((l) => (
             <option key={l.id} value={l.id}>

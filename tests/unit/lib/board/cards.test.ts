@@ -33,6 +33,20 @@ describe("addCard", () => {
     });
   });
 
+  it("adds to the end of the chosen list", () => {
+    let board = addCard(emptyBoard(), "a", { id: "a", listId: "doing" });
+    board = addCard(board, "b", { id: "b", listId: "doing" });
+
+    expect(ids(board.columns.doing)).toEqual(["a", "b"]);
+    expect(board.columns.todo).toEqual([]);
+    expect(board.columns.doing[0].activity).toEqual([expect.objectContaining({ type: "created" })]);
+  });
+
+  it("falls back to the first list for an unknown list", () => {
+    const board = addCard(emptyBoard(), "a", { id: "a", listId: "nope" });
+    expect(ids(board.columns.todo)).toEqual(["a"]);
+  });
+
   it("rejects empty and too long titles", () => {
     expect(() => addCard(emptyBoard(), "   ")).toThrow(/must not be empty/);
     expect(() => addCard(emptyBoard(), "x".repeat(MAX_TITLE_LENGTH + 1))).toThrow(/at most/);

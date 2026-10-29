@@ -34,7 +34,11 @@ env:
 jobs:
   watch:
     # Skipped agent runs (most label events) carry no information, so they don't restart the wait.
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped'
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
+    if: >-
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped'
+      ) }}
     # Job-level, so skipped runs never enter the group. The debounced runs share one group and cancel
     # each other; scheduled and manual runs queue in their own group.
     concurrency:

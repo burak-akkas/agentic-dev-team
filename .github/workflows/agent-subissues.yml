@@ -15,7 +15,11 @@ env:
 
 jobs:
   advance:
-    if: contains(github.event.issue.body, '<!-- agent:sub-issue') && !github.event.issue.pull_request
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
+    if: >-
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        contains(github.event.issue.body, '<!-- agent:sub-issue') && !github.event.issue.pull_request
+      ) }}
     # One at a time across the repo: two sub-issues closing together must not both close the parent.
     concurrency:
       group: agent-subissues

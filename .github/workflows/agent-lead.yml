@@ -19,9 +19,11 @@ env:
 
 jobs:
   lead:
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
     if: >-
-      ${{ github.event.label.name == 'agent:needs-decision' &&
-        (github.event_name == 'issues' || github.event.pull_request.head.repo.full_name == github.repository) }}
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        github.event.label.name == 'agent:needs-decision' && (github.event_name == 'issues' || github.event.pull_request.head.repo.full_name == github.repository)
+      ) }}
     concurrency:
       group: agent-${{ github.event.issue.number || github.event.pull_request.number }}
       cancel-in-progress: false

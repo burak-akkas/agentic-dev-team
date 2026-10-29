@@ -17,12 +17,11 @@ env:
 
 jobs:
   review:
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
     if: >-
-      ${{ !github.event.pull_request.draft &&
-        github.event.pull_request.head.repo.full_name == github.repository && (
-          (github.event.action != 'labeled' && startsWith(github.event.pull_request.head.ref, 'agent/')) ||
-          (github.event.action == 'labeled' && github.event.label.name == 'agent:review')
-        ) }}
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository && ( (github.event.action != 'labeled' && startsWith(github.event.pull_request.head.ref, 'agent/')) || (github.event.action == 'labeled' && github.event.label.name == 'agent:review') )
+      ) }}
     concurrency:
       group: agent-${{ github.event.pull_request.number }}
       cancel-in-progress: false

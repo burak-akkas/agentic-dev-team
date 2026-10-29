@@ -21,7 +21,11 @@ env:
 
 jobs:
   implement:
-    if: github.event_name == 'issues' && github.event.label.name == 'agent:ready' && !github.event.issue.pull_request
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
+    if: >-
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        github.event_name == 'issues' && github.event.label.name == 'agent:ready' && !github.event.issue.pull_request
+      ) }}
     concurrency:
       group: agent-${{ github.event.issue.number }}
       cancel-in-progress: false
@@ -134,10 +138,11 @@ jobs:
           fi
 
   fix:
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
     if: >-
-      github.event_name == 'pull_request_target' &&
-      github.event.label.name == 'agent:changes-requested' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        github.event_name == 'pull_request_target' && github.event.label.name == 'agent:changes-requested' && github.event.pull_request.head.repo.full_name == github.repository
+      ) }}
     concurrency:
       group: agent-${{ github.event.pull_request.number }}
       cancel-in-progress: false

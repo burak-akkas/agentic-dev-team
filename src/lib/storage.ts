@@ -5,6 +5,7 @@ import {
   DEFAULT_LISTS,
   DEFAULT_PRIORITY,
   isCoverColor,
+  isValidBackground,
   isValidDueDate,
   isValidWipLimit,
   MAX_ACTIVITY_ENTRIES,
@@ -330,7 +331,11 @@ function normalizeBoard(board: Board): Board {
   }
   const templates = normalizeTemplates((board as { templates?: unknown }).templates);
   const view: unknown = (board as { view?: unknown }).view;
+  const background: unknown = (board as { background?: unknown }).background;
   return {
+    ...(isValidBackground(background) && {
+      background: background.type === "color" ? { type: "color" as const, value: background.value } : { type: "image" as const, url: background.url },
+    }),
     ...((view === "table" || view === "calendar") && { view }),
     lists,
     ...(templates.length > 0 && { templates }),

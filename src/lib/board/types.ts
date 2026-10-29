@@ -91,7 +91,13 @@ export type BoardView = "board" | "calendar" | "table";
 
 export const BOARD_VIEWS: readonly BoardView[] = ["board", "calendar", "table"];
 
+export type BoardBackground = { type: "color"; value: string } | { type: "image"; url: string };
+
+export const MAX_BACKGROUND_URL_LENGTH = 2048;
+
 export interface Board {
+  // Optional board background: a `#rrggbb` color or an http(s) image URL. Absent means the default look.
+  background?: BoardBackground;
   // Which view is shown. Absent means the list view ("board").
   view?: BoardView;
   // Card templates of this board. Not part of `columns`, so search, insights, calendar and table never see them.

@@ -339,3 +339,35 @@ describe("export and import", () => {
     expect(exportFilename(new Date(2026, 9, 28))).toBe("kanban-board-2026-10-28.json");
   });
 });
+
+describe("board background storage", () => {
+  const withBackground = (background: unknown) =>
+    JSON.stringify({ ...emptyBoard(), archive: [], background });
+
+  it("loads boards without a background unchanged", () => {
+    const result = parseBoard(JSON.stringify(emptyBoard()));
+    expect(result.ok && result.board.background).toBeUndefined();
+  });
+
+  it("round-trips a color and an image background through export and import", () => {
+    for (const background of [
+      { type: "color", value: "#aabbcc" },
+      { type: "image", url: "https://example.com/a.jpg" },
+    ]) {
+      const result = parseBoard(serializeBoard({ ...emptyBoard(), background } as ReturnType<typeof emptyBoard>));
+      expect(result.ok && result.board.background).toEqual(background);
+    }
+  });
+
+  it.each([
+    "red",
+    { type: "color", value: "red" },
+    { type: "image", url: "javascript:alert(1)" },
+    { type: "image", url: "data:image/png;base64,AAAA" },
+    { type: "nope" },
+  ])("drops the invalid background %j and keeps the board", (background) => {
+    const result = parseBoard(withBackground(background));
+    expect(result.ok).toBe(true);
+    expect(result.ok && "background" in result.board).toBe(false);
+  });
+});

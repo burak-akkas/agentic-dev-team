@@ -4,9 +4,12 @@ name: "Agent · QA"
 #   1. Waits for the required checks (AGENT_REQUIRED_CHECKS): red goes straight back to the Implementor, no QA run
 #      Then waits until the PR preview serves this exact commit (<preview>/version.txt == head SHA)
 #   2. Runs the project's Playwright e2e suite against the preview
-#   3. The QA agent tests the acceptance criteria in a real browser (Playwright MCP) and takes screenshots
+#   3. The QA agent tests the acceptance criteria in a real browser (Playwright MCP), compares the changed
+#      screens with the baseline site (the base branch, before this PR) and takes screenshots
 #   4. Screenshots go to the PR as a gallery. pass -> merge gate, fail -> Implementor fixes, unsure -> Lead
 # Preview URL template: AGENT_PREVIEW_URL (default https://{owner}.github.io/{repo}/pr-{pr}/).
+# Baseline URL template: AGENT_BASELINE_URL (default https://{owner}.github.io/{repo}/, the production deploy
+# of the base branch; `none` turns the visual comparison off). It should serve version.txt too.
 # PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
 # conflicts (GitHub creates no merge commit for those), and it always runs this workflow
 # file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
@@ -40,6 +43,7 @@ jobs:
       BIN: .agent-trusted/scripts/agents
       MAX_ROUNDS: ${{ vars.AGENT_MAX_QA_ROUNDS || '3' }}
       URL_TEMPLATE: ${{ vars.AGENT_PREVIEW_URL || 'https://{owner}.github.io/{repo}/pr-{pr}/' }}
+      BASELINE_TEMPLATE: ${{ vars.AGENT_BASELINE_URL || 'https://{owner}.github.io/{repo}/' }}
     steps:
       - uses: actions/create-github-app-token@v2
         id: app
@@ -136,6 +140,33 @@ jobs:
           done
           echo "::warning::Preview at $URL never served $HEAD_SHA (last seen: ${live:-nothing})"
 
+      # The "before" side of QA's visual comparison. It's informational: QA runs either way, and is told
+      # when the baseline lags the base branch (e.g. a production deploy still running).
+      - name: Find the baseline
+        id: baseline
+        if: steps.preview.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if [ "$BASELINE_TEMPLATE" = "none" ]; then
+            echo "info=none (visual comparison turned off)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          url=$(echo "$BASELINE_TEMPLATE" | sed -e "s|{owner}|${GITHUB_REPOSITORY_OWNER}|g" -e "s|{repo}|${GITHUB_REPOSITORY#*/}|g")
+          live=$(curl -fsSL "${url}version.txt?t=$(date +%s)" 2>/dev/null | tr -d '[:space:]' || true)
+          base_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BASE" --jq .commit.sha 2>/dev/null || true)
+          if ! curl -fsSL -o /dev/null "$url" 2>/dev/null; then
+            info="none (the baseline at $url is unreachable)"
+          elif [ -z "$live" ]; then
+            info="$url (serves an unknown commit: no version.txt)"
+          elif [ "$live" = "$base_sha" ]; then
+            info="$url (serves ${live:0:7}, the head of \`$BASE\`)"
+          else
+            info="$url (serves ${live:0:7}, but \`$BASE\` is at ${base_sha:0:7}, so it lags the base branch)"
+          fi
+          echo "info=$info" | tee -a "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v4
         if: steps.preview.outputs.ready == 'true'
         with:
@@ -174,6 +205,7 @@ jobs:
             Pull request: #${{ github.event.pull_request.number }}
             QA round: ${{ steps.guard.outputs.round }} of ${{ env.MAX_ROUNDS }}
             Preview URL (serving commit ${{ github.event.pull_request.head.sha }}): ${{ steps.guard.outputs.url }}
+            Baseline URL (the base branch without this PR): ${{ steps.baseline.outputs.info }}
             Automated e2e results: .agent-out/e2e-results.txt (exit code ${{ steps.e2e.outputs.exit }}; 0 = all passed)
 
             Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).

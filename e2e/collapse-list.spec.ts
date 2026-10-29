@@ -32,6 +32,18 @@ test("collapses a list, keeps it after a reload and expands it again", async ({ 
   await expect(column(page, "Done").getByText("Task")).toBeVisible();
 });
 
+test("collapsing a list discards an unsaved WIP limit edit", async ({ page }) => {
+  await page.getByRole("button", { name: "Set WIP limit for Doing" }).click();
+  await page.getByRole("textbox", { name: "WIP limit for Doing" }).fill("4");
+
+  await page.getByRole("button", { name: "Collapse Doing" }).click();
+  await page.getByRole("button", { name: "Expand Doing" }).click();
+
+  await expect(page.getByRole("button", { name: "Collapse Doing" })).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "WIP limit for Doing" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Set WIP limit for Doing" })).toHaveAttribute("aria-expanded", "false");
+});
+
 test("keeps the list headers intact at phone width, collapsed or expanded", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });
   const width = page.viewportSize()!.width;

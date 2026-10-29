@@ -77,6 +77,12 @@ export function ColumnHeader({
 
   // The header remounts as a different tree, so focus goes back to the button after the toggle.
   function toggle() {
+    if (!collapsed) {
+      // Collapsing discards a half-finished limit edit, like Cancel (without moving focus).
+      setEditing(false);
+      setError(null);
+      setDraft("");
+    }
     onToggleCollapsed();
     requestAnimationFrame(() => toggleRef.current?.focus());
   }

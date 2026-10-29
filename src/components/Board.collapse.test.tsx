@@ -52,6 +52,58 @@ describe("collapsing lists in <Board />", () => {
     expect(screen.getByRole("heading", { name: "Done1" })).toBeInTheDocument();
   });
 
+  it("collapsing a list discards an unsaved WIP limit edit and keeps focus on the toggle", async () => {
+    const user = userEvent.setup();
+    seed();
+    render(<Board />);
+    await user.click(screen.getByRole("button", { name: "Set WIP limit for Done" }));
+    await user.type(screen.getByRole("textbox", { name: "WIP limit for Done" }), "5");
+
+    await user.click(screen.getByRole("button", { name: "Collapse Done" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Expand Done" })).toHaveFocus());
+
+    await user.click(screen.getByRole("button", { name: "Expand Done" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Collapse Done" })).toHaveFocus());
+    expect(screen.queryByRole("textbox", { name: "WIP limit for Done" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Set WIP limit for Done", expanded: false })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Done1" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Set WIP limit for Done" }));
+    expect(screen.getByRole("textbox", { name: "WIP limit for Done" })).toHaveValue("");
+  });
+
+  it("collapsing a list clears a pending WIP limit error", async () => {
+    const user = userEvent.setup();
+    seed();
+    render(<Board />);
+    await user.click(screen.getByRole("button", { name: "Set WIP limit for Done" }));
+    await user.type(screen.getByRole("textbox", { name: "WIP limit for Done" }), "abc{Enter}");
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Collapse Done" }));
+    await user.click(screen.getByRole("button", { name: "Expand Done" }));
+    await user.click(screen.getByRole("button", { name: "Set WIP limit for Done" }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("collapsing keeps the saved WIP limit", async () => {
+    const user = userEvent.setup();
+    seed();
+    render(<Board />);
+    await user.click(screen.getByRole("button", { name: "Set WIP limit for Done" }));
+    await user.type(screen.getByRole("textbox", { name: "WIP limit for Done" }), "3{Enter}");
+    await user.click(screen.getByRole("button", { name: "Edit WIP limit for Done" }));
+    await user.clear(screen.getByRole("textbox", { name: "WIP limit for Done" }));
+    await user.type(screen.getByRole("textbox", { name: "WIP limit for Done" }), "9");
+
+    await user.click(screen.getByRole("button", { name: "Collapse Done" }));
+    expect(screen.getByRole("heading", { name: "Done1 / 3" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Expand Done" }));
+    expect(screen.queryByRole("textbox", { name: "WIP limit for Done" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit WIP limit for Done", expanded: false })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Done1 / 3" })).toBeInTheDocument();
+  });
+
   it("counts a card moved into a collapsed list and shows it when expanded", async () => {
     const user = userEvent.setup();
     seed();

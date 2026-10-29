@@ -10,7 +10,8 @@ test("the URL follows the board, the back button returns to the previous board, 
   await expect(selected(page)).toHaveText("My board");
   await expect(page).toHaveURL(/\?board=.+/);
 
-  await page.getByRole("button", { name: "New board" }).click();
+  await page.getByRole("button", { name: "Board actions" }).click();
+  await page.getByRole("menuitem", { name: "New board" }).click();
   await page.getByLabel("Board name").fill("Work");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(selected(page)).toHaveText("Work");

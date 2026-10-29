@@ -4,7 +4,7 @@ import { useId, useState, type FormEvent } from "react";
 import { MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
 import { useBoards } from "@/hooks/useBoard";
 
-import { Button, ConfirmDialog, Dialog, Input, Select } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, Input, Menu, MoreIcon, Select } from "@/components/ui";
 
 type Dialogs = "create" | "rename" | "delete" | null;
 
@@ -92,15 +92,15 @@ export function BoardSwitcher() {
           </option>
         ))}
       </Select>
-      <Button aria-label="New board" onClick={() => setDialog("create")}>
-        New
-      </Button>
-      <Button aria-label="Rename board" onClick={() => setDialog("rename")}>
-        Rename
-      </Button>
-      <Button aria-label="Delete board" disabled={boards.length <= 1} onClick={() => setDialog("delete")}>
-        Delete
-      </Button>
+      <Menu
+        label="Board actions"
+        icon={<MoreIcon />}
+        items={[
+          { label: "New board", onSelect: () => setDialog("create") },
+          { label: "Rename board", onSelect: () => setDialog("rename") },
+          { label: "Delete board", disabled: boards.length <= 1, onSelect: () => setDialog("delete") },
+        ]}
+      />
       {dialog === "create" && (
         <BoardNameDialog title="New board" submitLabel="Create" initialName="" onSubmit={createBoard} onClose={close} />
       )}

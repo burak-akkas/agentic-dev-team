@@ -20,8 +20,13 @@ const select = () => screen.getByRole("combobox", { name: "Board" });
 const selectedName = () => (select() as HTMLSelectElement).selectedOptions[0]?.textContent;
 const optionNames =() => within(select()).getAllByRole("option").map((o) => o.textContent);
 
+async function choose(user: ReturnType<typeof userEvent.setup>, item: string) {
+  await user.click(screen.getByRole("button", { name: "Board actions" }));
+  await user.click(screen.getByRole("menuitem", { name: item }));
+}
+
 async function create(user: ReturnType<typeof userEvent.setup>, name: string) {
-  await user.click(screen.getByRole("button", { name: "New board" }));
+  await choose(user, "New board");
   const input = screen.getByLabelText("Board name");
   await user.clear(input);
   await user.type(input, name);
@@ -69,7 +74,7 @@ describe("<BoardSwitcher />", () => {
   describe("create", () => {
     it("shows the character limit and creates an empty current board", async () => {
       const { user } = setup();
-      await user.click(screen.getByRole("button", { name: "New board" }));
+      await choose(user, "New board");
       expect(screen.getByText(/up to 40 characters/i)).toBeInTheDocument();
       await user.type(screen.getByLabelText("Board name"), "Work");
       await user.click(screen.getByRole("button", { name: "Create" }));
@@ -84,7 +89,7 @@ describe("<BoardSwitcher />", () => {
       ["duplicate (case-insensitive)", "MY BOARD", /already exists/i],
     ])("rejects a %s name and adds nothing", async (_label, name, message) => {
       const { user } = setup();
-      await user.click(screen.getByRole("button", { name: "New board" }));
+      await choose(user, "New board");
       const input = screen.getByLabelText("Board name");
       if (name.trim()) {
         await user.click(input);
@@ -101,7 +106,7 @@ describe("<BoardSwitcher />", () => {
   describe("rename", () => {
     it("is prefilled and renames the current board", async () => {
       const { user } = setup();
-      await user.click(screen.getByRole("button", { name: "Rename board" }));
+      await choose(user, "Rename board");
       const input = screen.getByLabelText("Board name");
       expect(input).toHaveValue("My board");
       await user.clear(input);
@@ -113,7 +118,7 @@ describe("<BoardSwitcher />", () => {
     it("allows changing only the casing, and rejects duplicates without changing anything", async () => {
       const { user } = setup();
       await create(user, "Work");
-      await user.click(screen.getByRole("button", { name: "Rename board" }));
+      await choose(user, "Rename board");
       let input = screen.getByLabelText("Board name");
       await user.clear(input);
       await user.type(input, "my board");
@@ -130,20 +135,24 @@ describe("<BoardSwitcher />", () => {
   });
 
   describe("delete", () => {
-    it("is disabled for the last board", () => {
-      setup();
-      expect(screen.getByRole("button", { name: "Delete board" })).toBeDisabled();
+    it("is disabled for the last board", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      const item = screen.getByRole("menuitem", { name: "Delete board" });
+      expect(item).toHaveAttribute("aria-disabled", "true");
+      await user.click(item);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
     it("keeps the board when cancelled or escaped", async () => {
       const { user } = setup();
       await create(user, "Work");
-      await user.click(screen.getByRole("button", { name: "Delete board" }));
+      await choose(user, "Delete board");
       expect(screen.getByRole("dialog")).toHaveTextContent(/delete .work. and all its cards/i);
       await user.click(screen.getByRole("button", { name: "Cancel" }));
       expect(optionNames()).toEqual(["My board", "Work"]);
 
-      await user.click(screen.getByRole("button", { name: "Delete board" }));
+      await choose(user, "Delete board");
       const dialog = screen.getByRole("dialog");
       fireEvent(dialog, createEvent("cancel", dialog, { cancelable: true }));
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -153,12 +162,21 @@ describe("<BoardSwitcher />", () => {
     it("removes the board after confirming and makes another current", async () => {
       const { user } = setup();
       await create(user, "Work");
-      await user.click(screen.getByRole("button", { name: "Delete board" }));
+      await choose(user, "Delete board");
       await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
       expect(optionNames()).toEqual(["My board"]);
       expect(selectedName()).toBe("My board");
-      expect(screen.getByRole("button", { name: "Delete board" })).toBeDisabled();
     });
+  });
+
+  it("shows a single Board actions button instead of separate board buttons", () => {
+    setup();
+    const trigger = screen.getByRole("button", { name: "Board actions" });
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    for (const name of ["New board", "Rename board", "Delete board"]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
   });
 
   it("remembers the last used board", async () => {

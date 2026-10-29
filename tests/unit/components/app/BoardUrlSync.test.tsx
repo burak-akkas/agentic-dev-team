@@ -87,14 +87,16 @@ describe("<BoardUrlSync />", () => {
   it("puts a new board in the URL, and the next current board after a delete", async () => {
     seed("a");
     const { user } = setup();
-    await user.click(screen.getByRole("button", { name: "New board" }));
+    await user.click(screen.getByRole("button", { name: "Board actions" }));
+    await user.click(screen.getByRole("menuitem", { name: "New board" }));
     await user.type(screen.getByLabelText("Board name"), "Third");
     await user.click(screen.getByRole("button", { name: "Create" }));
     expect(selectedName()).toBe("Third");
     expect(param()).toBe((select() as HTMLSelectElement).value);
     expect(param()).not.toMatch(/^[ab]$/);
 
-    await user.click(screen.getByRole("button", { name: "Delete board" }));
+    await user.click(screen.getByRole("button", { name: "Board actions" }));
+    await user.click(screen.getByRole("menuitem", { name: "Delete board" }));
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
     expect(selectedName()).toBe("My board");
     expect(param()).toBe("a");

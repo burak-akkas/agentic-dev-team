@@ -64,7 +64,8 @@ test("keeps the list headers intact at phone width, collapsed or expanded", asyn
 
 test("remembers collapsed lists per board", async ({ page }) => {
   await page.getByRole("button", { name: "Collapse Done" }).click();
-  await page.getByRole("button", { name: "New board" }).click();
+  await page.getByRole("button", { name: "Board actions" }).click();
+  await page.getByRole("menuitem", { name: "New board" }).click();
   await page.getByLabel("Board name").fill("Other");
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByRole("combobox", { name: "Board" }).locator("option:checked")).toHaveText("Other");

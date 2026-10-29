@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, listCards, updateCard } from "@/lib/board";
 import { saveAsTemplate } from "@/lib/templates";
 import { saveBoard } from "../../support/testStorage";
-import { resetBoardStore } from "@/lib/useBoard";
+import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/Board";
 
 function boardWithTemplate() {

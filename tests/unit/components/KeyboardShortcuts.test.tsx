@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addCard, emptyBoard } from "@/lib/board";
 import { saveBoard } from "../../support/testStorage";
-import { resetBoardStore } from "@/lib/useBoard";
+import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/Board";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 

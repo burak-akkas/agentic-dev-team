@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addCard, boardView, emptyBoard, setView } from "@/lib/board";
 import { loadBoards, parseBoard, serializeBoard } from "@/lib/storage";
-import { loadBoard, saveBoard } from "../../support/testStorage";
+import { loadBoard, saveBoard } from "../../../support/testStorage";
 
 describe("board view", () => {
   it("defaults to board", () => {

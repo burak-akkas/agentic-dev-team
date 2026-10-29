@@ -280,3 +280,17 @@ describe("storage migration", () => {
     expect(board.insightsLists).toEqual({ done: "done" });
   });
 });
+
+describe("helpers", () => {
+  it("findCard reports the column", () => {
+    const board = moveCard(addCard(emptyBoard(), "a", { id: "a" }), "a", "doing");
+    expect(findCard(board, "a")?.column).toBe("doing");
+    expect(findCard(board, "nope")).toBeUndefined();
+  });
+
+  it("adjacentColumn walks the column order", () => {
+    expect(adjacentColumn("todo", -1)).toBeUndefined();
+    expect(adjacentColumn("todo", 1)).toBe("doing");
+    expect(adjacentColumn("done", 1)).toBeUndefined();
+  });
+});

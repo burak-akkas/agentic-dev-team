@@ -2,7 +2,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { THEME_KEY } from "@/lib/theme";
-import { resetThemeStore } from "@/lib/useTheme";
+import { resetThemeStore } from "@/hooks/useTheme";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 type Listener = () => void;

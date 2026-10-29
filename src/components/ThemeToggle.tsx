@@ -1,7 +1,7 @@
 "use client";
 
 import type { ThemePreference } from "@/lib/theme";
-import { useTheme } from "@/lib/useTheme";
+import { useTheme } from "@/hooks/useTheme";
 
 const OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "system", label: "System" },

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Board } from "@/components/Board";
 import { BoardSwitcher } from "@/components/BoardSwitcher";
-import { resetBoardStore } from "@/lib/useBoard";
+import { resetBoardStore } from "@/hooks/useBoard";
 
 function setup() {
   const user = userEvent.setup();

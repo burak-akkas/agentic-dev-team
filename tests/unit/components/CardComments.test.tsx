@@ -13,7 +13,7 @@ import {
   type Board as BoardData,
 } from "@/lib/board";
 import { saveBoard } from "../../support/testStorage";
-import { resetBoardStore } from "@/lib/useBoard";
+import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/Board";
 import { CardComments } from "@/components/CardComments";
 

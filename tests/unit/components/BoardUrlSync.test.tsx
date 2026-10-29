@@ -5,7 +5,7 @@ import { BoardSwitcher } from "@/components/BoardSwitcher";
 import { BoardUrlSync } from "@/components/BoardUrlSync";
 import { createBoardEntry, initialBoardList } from "@/lib/boards";
 import { saveBoards } from "@/lib/storage";
-import { resetBoardStore } from "@/lib/useBoard";
+import { resetBoardStore } from "@/hooks/useBoard";
 
 const select = () => screen.getByRole("combobox", { name: "Board" });
 const selectedName = () => (select() as HTMLSelectElement).selectedOptions[0]?.textContent;

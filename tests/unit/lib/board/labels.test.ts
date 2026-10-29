@@ -21,7 +21,7 @@ import {
   type CardEdits,
 } from "@/lib/board";
 import { parseBoard, serializeBoard } from "@/lib/storage";
-import { loadBoard, saveBoard } from "../../support/testStorage";
+import { loadBoard, saveBoard } from "../../../support/testStorage";
 
 function boardWithLabels(): Board {
   let board = emptyBoard();

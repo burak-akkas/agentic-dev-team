@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { resolveBoardId } from "@/lib/boards";
-import { useBoards } from "@/lib/useBoard";
+import { useBoards } from "@/hooks/useBoard";
 
 const noopSubscribe = () => () => {};
 

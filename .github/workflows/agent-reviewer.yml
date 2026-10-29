@@ -4,6 +4,8 @@ name: "Agent · Reviewer"
 #   - agent PRs (branch `agent/*`) are opened, updated or marked ready
 #   - a human applies `agent:review` to any same-repo PR
 # Loop guard: after AGENT_MAX_REVIEW_ROUNDS reviewer summaries since the last Lead decision (default 3) the PR goes to the Lead (`agent:needs-decision`).
+# GitHub's clean update-branch merge on top of an approved commit skips review and QA (CI still runs,
+# and the merge gate waits for it). AGENT_QA_ON_BASE_UPDATE == 'true' sends it to QA instead.
 # PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
 # conflicts (GitHub creates no merge commit for those), and it always runs this workflow
 # file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
@@ -64,6 +66,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           QA: ${{ vars.AGENT_QA }}
+          QA_ON_BASE_UPDATE: ${{ vars.AGENT_QA_ON_BASE_UPDATE }}
         run: |
           mkdir -p .agent-out
           # A queued run may be stale by now (new commits, merge-gate verdict, conflict): don't spend a round on it.
@@ -74,16 +77,19 @@ jobs:
             exit 0
           fi
           # The merge gate merged the base into an approved PR (update-branch): the PR's own changes are
-          # exactly what was approved, so skip re-review. QA still tests the combined code.
+          # exactly what was approved and tested, so skip re-review, and QA unless asked for. CI tests the
+          # combined code, and the merge gate waits for it.
           if [ "${{ github.event.action }}" = "synchronize" ] \
              && approved=$("$BIN/clean-base-update.sh" "$PR" "${{ github.event.pull_request.head.sha }}"); then
             echo "Skipped review: only a clean merge of the base on top of approved ${approved:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"
-            if [ "$QA" = "true" ]; then
+            if [ "$QA" = "true" ] && [ "$QA_ON_BASE_UPDATE" = "true" ]; then
               "$BIN/transition.sh" "$PR" agent:qa
+              skipped="re-review skipped, sent to QA"
             else
               "$BIN/approve.sh" "$PR" "${{ github.event.pull_request.head.sha }}" reviewer
+              skipped="re-review$([ "$QA" = "true" ] && echo " and QA") skipped, CI decides"
             fi
-            "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer**: only the base branch was merged in since the approved commit, re-review skipped"
+            "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer**: only the base branch was merged in since the approved commit, $skipped"
             echo "stop=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi

@@ -7,6 +7,7 @@ import {
   boardLabels,
   boardLists,
   boardStats,
+  boardView,
   deleteArchived,
   deleteCard,
   duplicateCard,
@@ -26,6 +27,7 @@ import {
   setDueDate,
   setNotes,
   setPriority,
+  setView,
   setWipLimit,
   undoArchive,
   updateCard,
@@ -41,7 +43,9 @@ import { LabelFilter } from "./LabelFilter";
 import { ListsManager } from "./ListsManager";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
+import { TableView } from "./TableView";
 import { UndoToast } from "./UndoToast";
+import { ViewSwitch } from "./ViewSwitch";
 import { Button } from "./ui";
 
 export function Board() {
@@ -68,6 +72,7 @@ export function Board() {
   const [showLists, setShowLists] = useState(false);
   const listsButtonRef = useRef<HTMLButtonElement>(null);
   const lists = boardLists(board);
+  const view = boardView(board);
   const doneId = insightsListIds(board).done;
 
   function closeInsights() {
@@ -186,6 +191,7 @@ export function Board() {
           <SearchBox value={query} onChange={setQuery} />
         </div>
         <LabelFilter labels={labelsInUse} value={activeLabel} onChange={setLabelFilter} />
+        <ViewSwitch value={view} onChange={(next) => update((b) => setView(b, next))} />
         <Button
           aria-expanded={showArchive}
           aria-controls="archive-panel"
@@ -225,6 +231,9 @@ export function Board() {
 
       {undo && <UndoToast message={undo.message} onUndo={undoLastArchive} onDismiss={dismissUndo} />}
 
+      {view === "table" ? (
+        <TableView board={visible} onOpen={setOpenCardId} />
+      ) : (
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:overflow-x-auto">
         {lists.map(({ id, name: title }) => {
           const cards = listCards(visible, id);
@@ -294,6 +303,7 @@ export function Board() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

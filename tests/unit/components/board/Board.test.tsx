@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, setPriority, todayString } from "@/lib/board";
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
+import { resetSummaryCollapsedStore } from "@/hooks/useSummaryCollapsed";
+import { SUMMARY_COLLAPSED_KEY } from "@/lib/summaryCollapsed";
 import { Board } from "@/components/board/Board";
 import { UNDO_TOAST_MS } from "@/components/board/UndoToast";
 
@@ -17,7 +19,10 @@ async function moveVia(user: ReturnType<typeof userEvent.setup>, title: string, 
 }
 
 describe("<Board />", () => {
-  beforeEach(() => resetBoardStore());
+  beforeEach(() => {
+    resetBoardStore();
+    resetSummaryCollapsedStore();
+  });
 
   it("adds a card to To do and clears the input", async () => {
     const user = userEvent.setup();
@@ -630,6 +635,56 @@ describe("<Board />", () => {
       await moveVia(user, "Late", "Done");
       expect(within(summary()).getByText("Overdue: 0")).toBeInTheDocument();
       expect(within(column("Done")).getByText("Late")).toBeInTheDocument();
+    });
+
+    it("clears the overdue filter when the summary is collapsed and keeps it off after expanding", async () => {
+      const user = userEvent.setup();
+      let board = addCard(addCard(emptyBoard(), "Late", { id: "a" }), "Fine", { id: "b" });
+      board = setDueDate(board, "a", "2000-01-01");
+      saveBoard(board);
+      render(<Board />);
+
+      await user.click(within(summary()).getByRole("button", { name: /Overdue: 1/ }));
+      expect(within(column("To do")).queryByText("Fine")).not.toBeInTheDocument();
+
+      await user.click(within(summary()).getByRole("button", { name: "Collapse board summary" }));
+      expect(within(column("To do")).getByText("Fine")).toBeInTheDocument();
+
+      await user.click(within(summary()).getByRole("button", { name: "Expand board summary" }));
+      expect(within(summary()).getByRole("button", { name: /Overdue: 1/ })).toHaveAttribute("aria-pressed", "false");
+      expect(within(column("To do")).getByText("Fine")).toBeInTheDocument();
+    });
+
+    it("renders collapsed when a collapsed value is persisted", () => {
+      localStorage.setItem(SUMMARY_COLLAPSED_KEY, "1");
+      saveBoard(addCard(emptyBoard(), "One", { id: "a" }));
+      render(<Board />);
+
+      expect(within(summary()).getByRole("button", { name: "Expand board summary" })).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByRole("progressbar", { name: "Cards done" })).not.toBeInTheDocument();
+      expect(within(summary()).getByText("0% done")).toBeInTheDocument();
+    });
+
+    it("hides the stats and progress bar when collapsed and restores them when expanded", async () => {
+      const user = userEvent.setup();
+      saveBoard(addCard(emptyBoard(), "One", { id: "a" }));
+      render(<Board />);
+
+      const collapse = within(summary()).getByRole("button", { name: "Collapse board summary" });
+      expect(collapse).toHaveAttribute("aria-expanded", "true");
+      await user.click(collapse);
+
+      const expand = within(summary()).getByRole("button", { name: "Expand board summary" });
+      expect(expand).toHaveAttribute("aria-expanded", "false");
+      expect(screen.queryByRole("progressbar", { name: "Cards done" })).not.toBeInTheDocument();
+      expect(within(summary()).queryByText(/cards? total/)).not.toBeInTheDocument();
+      expect(within(summary()).getByText("0% done")).toBeInTheDocument();
+      expect(localStorage.getItem(SUMMARY_COLLAPSED_KEY)).toBe("1");
+
+      await user.click(expand);
+      expect(screen.getByRole("progressbar", { name: "Cards done" })).toBeInTheDocument();
+      expect(within(summary()).getByText(/cards? total/)).toBeInTheDocument();
+      expect(localStorage.getItem(SUMMARY_COLLAPSED_KEY)).toBe("0");
     });
   });
 });

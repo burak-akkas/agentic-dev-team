@@ -18,7 +18,7 @@ import {
   type Card,
   type ColumnId,
   insightsListIds,
-  isCardOverdue,
+  cardDueStatus,
   isFiltering,
   isListCollapsed,
   listCards,
@@ -330,7 +330,7 @@ export function Board() {
                       card={card}
                       column={id}
                       lists={lists}
-                      overdue={isCardOverdue(board, card, id)}
+                      dueStatus={cardDueStatus(board, card, id)}
                       onMove={(to) => update((b) => moveCard(b, card.id, to))}
                       onDelete={() => update((b) => deleteCard(b, card.id))}
                       onRename={(title) => update((b) => renameCard(b, card.id, title))}

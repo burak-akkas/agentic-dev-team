@@ -56,6 +56,38 @@ export function isCardOverdue(board: Board, card: Card, column: ColumnId, today:
   return isOverdue(card, column, today, insightsListIds(board).done ?? null);
 }
 
+export type DueStatus = "overdue" | "today" | "tomorrow";
+
+// Day after `date` (`YYYY-MM-DD`), as a local calendar day.
+function nextDay(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return todayString(new Date(year, month - 1, day + 1));
+}
+
+// Due status of a card in `column`: overdue, due today or due tomorrow, else null (also for the done list).
+export function dueStatus(
+  card: Card,
+  column: ColumnId,
+  today: string = todayString(),
+  doneId: ColumnId | null = "done",
+): DueStatus | null {
+  if (!card.dueDate || column === doneId) {
+    return null;
+  }
+  if (isOverdue(card, column, today, doneId)) {
+    return "overdue";
+  }
+  if (card.dueDate === today) {
+    return "today";
+  }
+  return card.dueDate === nextDay(today) ? "tomorrow" : null;
+}
+
+// Due status of a card in `column` on this board.
+export function cardDueStatus(board: Board, card: Card, column: ColumnId, today: string = todayString()): DueStatus | null {
+  return dueStatus(card, column, today, insightsListIds(board).done ?? null);
+}
+
 // Short readable date (e.g. "Oct 28"). Parsed as a local date so the day never shifts by timezone.
 export function formatDueDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);

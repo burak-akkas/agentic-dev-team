@@ -13,10 +13,12 @@ import {
   type Card,
   type ColumnId,
   type CoverColor,
+  type DueStatus,
   type List,
   type Priority,
 } from "@/lib/board";
 import { coverStyles } from "./coverColors";
+import { DueChip } from "./DueChip";
 import { LabelChip } from "./LabelChip";
 import { Button, Input, Select, Textarea } from "@/components/ui";
 
@@ -38,7 +40,7 @@ export function CardItem({
   card,
   column,
   lists,
-  overdue,
+  dueStatus,
   onMove,
   onDelete,
   onRename,
@@ -53,7 +55,7 @@ export function CardItem({
   card: Card;
   column: ColumnId;
   lists: readonly List[];
-  overdue: boolean;
+  dueStatus: DueStatus | null;
   onMove: (to: ColumnId) => void;
   onDelete: () => void;
   onRename: (title: string) => void;
@@ -289,11 +291,7 @@ export function CardItem({
         {card.dueDate && (
           <>
             <time dateTime={card.dueDate}>{formatDueDate(card.dueDate)}</time>
-            {overdue && (
-              <span className="rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300">
-                <span aria-hidden="true">⚠ </span>Overdue
-              </span>
-            )}
+            {dueStatus && <DueChip status={dueStatus} />}
             <Button
               variant="ghost"
               size="xs"

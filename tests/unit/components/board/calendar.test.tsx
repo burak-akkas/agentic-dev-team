@@ -15,7 +15,8 @@ describe("<Board /> calendar view", () => {
     const { unmount } = render(<Board />);
     await user.click(screen.getByRole("radio", { name: "Calendar" }));
     expect(screen.getByRole("button", { name: "Next month" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pay rent" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Pay rent/ })).toBeInTheDocument();
+    expect(screen.getByText("Due today")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /^To do/ })).not.toBeInTheDocument();
 
     unmount();
@@ -30,7 +31,7 @@ describe("<Board /> calendar view", () => {
     const user = userEvent.setup();
     render(<Board />);
     await user.click(screen.getByRole("radio", { name: "Calendar" }));
-    await user.click(screen.getByRole("button", { name: "Pay rent" }));
+    await user.click(screen.getByRole("button", { name: /^Pay rent/ }));
     expect(screen.getByRole("dialog", { name: "Pay rent" })).toBeInTheDocument();
   });
 });

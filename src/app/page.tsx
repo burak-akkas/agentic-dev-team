@@ -1,5 +1,4 @@
 import { BoardSwitcher } from "@/components/app/BoardSwitcher";
-import { BoardTransfer } from "@/components/app/BoardTransfer";
 import { BoardUrlSync } from "@/components/app/BoardUrlSync";
 import { KeyboardShortcuts } from "@/components/app/KeyboardShortcuts";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
@@ -19,7 +18,6 @@ export default function Home() {
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <ThemeToggle />
-          <BoardTransfer />
           <KeyboardShortcuts />
         </div>
       </header>

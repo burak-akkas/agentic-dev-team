@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import type { FormEvent } from "react";
 import { boardLists, MAX_WIP_LIMIT, parseWipLimit, setWipLimit } from "@/lib/board";
 import type { Board } from "@/lib/board";
+import { BoardTransfer } from "@/components/app/BoardTransfer";
 import { Button, Dialog, Input } from "@/components/ui";
 import { ListChoice } from "./ListChoice";
 
@@ -84,6 +85,7 @@ export function SettingsPanel({
 }) {
   const headingId = useId();
   const wipHeadingId = useId();
+  const transferHeadingId = useId();
   return (
     <Dialog labelledBy={headingId} onRequestClose={onClose}>
       <div className="flex max-w-full min-w-0 flex-col gap-5 p-5">
@@ -106,6 +108,12 @@ export function SettingsPanel({
               />
             ))}
           </ul>
+        </section>
+        <section aria-labelledby={transferHeadingId} className="flex min-w-0 flex-col gap-2">
+          <h3 id={transferHeadingId} className="text-sm font-semibold">
+            Import / Export
+          </h3>
+          <BoardTransfer />
         </section>
         <div className="flex">
           <Button variant="primary" size="sm" onClick={onClose}>

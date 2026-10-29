@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addCard, addList, emptyBoard, moveCard } from "@/lib/board";
+import { addCard, addList, emptyBoard, moveCard, setInsightsList } from "@/lib/board";
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/board/Board";
@@ -122,9 +122,9 @@ describe("<Board /> custom lists", () => {
     const user = userEvent.setup();
     render(<Board />);
     const review = screen.getByRole("region", { name: /^Review/ });
-    await user.click(within(review).getByRole("button", { name: "Set WIP limit for Review" }));
-    await user.type(screen.getByLabelText("WIP limit for Review"), "1");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.type(screen.getByLabelText("WIP limit for Review"), "1{Enter}");
+    await user.click(screen.getByRole("button", { name: "Close" }));
     expect(within(review).getByText("1 / 1")).toBeInTheDocument();
     expect(within(review).getByRole("button", { name: 'Move "Task" to Done' })).toBeInTheDocument();
     await user.click(within(review).getByRole("button", { name: "Archive all cards in Review" }));
@@ -133,16 +133,30 @@ describe("<Board /> custom lists", () => {
     expect(within(screen.getByRole("region", { name: /^Review/ })).getByText("Task")).toBeInTheDocument();
   });
 
-  it("lets insights use any list as in progress and done", async () => {
+  it("lets insights use any list as in progress and done, chosen in Settings", async () => {
     saveBoard(addList(emptyBoard(), "Review", { id: "r" }));
+    const user = userEvent.setup();
+    render(<Board />);
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const settings = screen.getByRole("dialog", { name: "Settings" });
+    expect(within(settings).getByLabelText("In progress list")).toHaveValue("doing");
+    await user.selectOptions(within(settings).getByLabelText("In progress list"), "Review");
+    await user.selectOptions(within(settings).getByLabelText("Done list"), "Not set");
+    await user.click(within(settings).getByRole("button", { name: "Close" }));
+
+    await user.click(screen.getByRole("button", { name: "Board insights" }));
+    const panel = screen.getByRole("dialog", { name: "Board insights" });
+    expect(within(panel).queryByLabelText("In progress list")).not.toBeInTheDocument();
+    expect(within(panel).getByRole("table", { name: "Cards in Review per day" })).toBeInTheDocument();
+  });
+
+  it("points insights to Settings when no list is chosen", async () => {
+    saveBoard(setInsightsList(setInsightsList(emptyBoard(), "done", undefined), "doing", undefined));
     const user = userEvent.setup();
     render(<Board />);
     await user.click(screen.getByRole("button", { name: "Board insights" }));
     const panel = screen.getByRole("dialog", { name: "Board insights" });
-    expect(within(panel).getByLabelText("In progress list")).toHaveValue("doing");
-    await user.selectOptions(within(panel).getByLabelText("In progress list"), "Review");
-    await user.selectOptions(within(panel).getByLabelText("Done list"), "Not set");
-    expect(within(panel).getByRole("table", { name: "Cards in Review per day" })).toBeInTheDocument();
-    expect(within(panel).getByText(/Pick the lists/)).toBeInTheDocument();
+    expect(within(panel).getByText("Choose the in-progress and done lists in Settings.")).toBeInTheDocument();
+    expect(within(panel).queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

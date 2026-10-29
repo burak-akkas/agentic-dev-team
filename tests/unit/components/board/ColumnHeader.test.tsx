@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { addCard, emptyBoard, moveCard, setWipLimit } from "@/lib/board";
@@ -29,69 +29,21 @@ describe("WIP limits in <Board />", () => {
     boardWith(["A", "B"], 2);
     render(<Board />);
     expect(screen.getByRole("heading", { name: "Doing2" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Set WIP limit for Doing" })).toBeInTheDocument();
   });
 
-  it("sets a limit with the keyboard and shows count / limit", async () => {
-    const user = userEvent.setup();
-    boardWith(["A", "B"], 2);
+  it("shows count / limit for a limit set in Settings", () => {
+    boardWith(["A", "B"], 2, 4);
     render(<Board />);
-
-    screen.getByRole("button", { name: "Set WIP limit for Doing" }).focus();
-    await user.keyboard("{Enter}");
-    await user.keyboard("4{Enter}");
-
     expect(screen.getByRole("heading", { name: "Doing2 / 4" })).toBeInTheDocument();
     expect(screen.queryByText(/limit by/)).not.toBeInTheDocument();
     expect(screen.queryByText("At limit")).not.toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Edit WIP limit for Doing" })).toHaveFocus());
   });
 
-  it("clears the limit with empty input", async () => {
-    const user = userEvent.setup();
+  it("has no limit editor in the column header", () => {
     boardWith(["A"], 1, 3);
     render(<Board />);
-
-    await user.click(screen.getByRole("button", { name: "Edit WIP limit for Doing" }));
-    await user.clear(screen.getByLabelText("WIP limit for Doing"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(screen.getByRole("heading", { name: "Doing1" })).toBeInTheDocument();
-  });
-
-  it("clears the limit with the Clear button", async () => {
-    const user = userEvent.setup();
-    boardWith(["A"], 1, 3);
-    render(<Board />);
-
-    await user.click(screen.getByRole("button", { name: "Edit WIP limit for Doing" }));
-    await user.click(screen.getByRole("button", { name: "Clear WIP limit for Doing" }));
-    expect(screen.getByRole("heading", { name: "Doing1" })).toBeInTheDocument();
-  });
-
-  it.each(["0", "-1", "1.5", "abc", "100", "99999999999"])("rejects %j and keeps the old limit", async (input) => {
-    const user = userEvent.setup();
-    boardWith(["A"], 1, 3);
-    render(<Board />);
-
-    await user.click(screen.getByRole("button", { name: "Edit WIP limit for Doing" }));
-    await user.clear(screen.getByLabelText("WIP limit for Doing"));
-    await user.type(screen.getByLabelText("WIP limit for Doing"), input);
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    expect(screen.getByRole("alert")).toHaveTextContent("Enter a whole number from 1 to 99.");
-    expect(screen.getByLabelText("WIP limit for Doing")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByRole("heading", { name: "Doing1 / 3" })).toBeInTheDocument();
-  });
-
-  it("cancels with Escape", async () => {
-    const user = userEvent.setup();
-    boardWith(["A"], 1);
-    render(<Board />);
-
-    await user.click(screen.getByRole("button", { name: "Set WIP limit for Doing" }));
-    await user.type(screen.getByLabelText("WIP limit for Doing"), "2{Escape}");
-    expect(screen.queryByLabelText("WIP limit for Doing")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Doing1" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /WIP limit/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /(Set|Edit) limit/ })).not.toBeInTheDocument();
   });
 
   it("flags the at-limit state with text", () => {
@@ -104,18 +56,6 @@ describe("WIP limits in <Board />", () => {
     boardWith(["A", "B", "C"], 3, 1);
     render(<Board />);
     expect(within(column("Doing")).getByText("Over limit by 2")).toBeInTheDocument();
-  });
-
-  it("shows no warning below the limit and warns right after lowering it", async () => {
-    const user = userEvent.setup();
-    boardWith(["A", "B", "C"], 3, 5);
-    render(<Board />);
-    expect(screen.queryByText(/limit by|At limit/)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Edit WIP limit for Doing" }));
-    await user.clear(screen.getByLabelText("WIP limit for Doing"));
-    await user.type(screen.getByLabelText("WIP limit for Doing"), "2{Enter}");
-    expect(screen.getByText("Over limit by 1")).toBeInTheDocument();
   });
 
   it("is never blocked: moving into a full column works and warns", async () => {
@@ -137,5 +77,37 @@ describe("WIP limits in <Board />", () => {
     await user.type(screen.getByLabelText("Search cards"), "Alpha");
     expect(screen.getByRole("heading", { name: "Doing3 / 3" })).toBeInTheDocument();
     expect(screen.getByText("At limit")).toBeInTheDocument();
+  });
+});
+
+describe("column header icon buttons", () => {
+  beforeEach(() => resetBoardStore());
+
+  it("collapse is an icon-only button with a name, a tooltip and aria-expanded", async () => {
+    const user = userEvent.setup();
+    boardWith(["A"], 1);
+    render(<Board />);
+
+    const collapse = screen.getByRole("button", { name: "Collapse Doing", expanded: true });
+    expect(collapse).toHaveAttribute("title", "Collapse Doing");
+    expect(collapse).toHaveTextContent("");
+    await user.click(collapse);
+    const expand = screen.getByRole("button", { name: "Expand Doing", expanded: false });
+    expect(expand).toHaveAttribute("title", "Expand Doing");
+    expect(expand).toHaveTextContent("");
+  });
+
+  it("archive is an icon-only button, disabled when empty and shows the undo toast", async () => {
+    const user = userEvent.setup();
+    boardWith(["A"], 1);
+    render(<Board />);
+
+    expect(screen.getByRole("button", { name: "Archive all cards in To do" })).toBeDisabled();
+    const archive = screen.getByRole("button", { name: "Archive all cards in Doing" });
+    expect(archive).toHaveAttribute("title", "Archive all cards in Doing");
+    expect(archive).toHaveTextContent("");
+    await user.click(archive);
+    expect(screen.getByRole("status")).toHaveTextContent("Archived 1 card");
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
   });
 });

@@ -64,8 +64,12 @@ test("a custom list works with moving, archive and insights", async ({ page }) =
   await page.getByRole("button", { name: "Archive all cards in Review" }).click();
   await expect(page.getByRole("button", { name: "Archived (1)" })).toBeVisible();
 
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByLabel("Done list").selectOption({ label: "Review" });
+  await page.keyboard.press("Escape");
+
   await page.getByRole("button", { name: "Board insights" }).click();
   const panel = page.getByRole("dialog", { name: "Board insights" });
-  await panel.getByLabel("Done list").selectOption({ label: "Review" });
   await expect(panel.getByRole("table", { name: "Cards moved to Review per week" })).toBeVisible();
 });

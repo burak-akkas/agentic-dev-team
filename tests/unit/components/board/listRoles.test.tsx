@@ -32,12 +32,12 @@ describe("<Board /> done and in-progress markers", () => {
     expect(screen.queryByText("In progress list")).not.toBeInTheDocument();
   });
 
-  it("moves the marker when the Insights panel selection changes", async () => {
+  it("moves the marker when the Settings selection changes", async () => {
     saveBoard(emptyBoard());
     render(<Board />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Board insights" }));
-    const panel = screen.getByRole("dialog", { name: "Board insights" });
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    const panel = screen.getByRole("dialog", { name: "Settings" });
     await user.selectOptions(within(panel).getByLabelText("Done list"), "To do");
     expect(within(region(/^To do/)).getByText("Done list")).toBeInTheDocument();
     expect(within(region(/^Done/)).queryByText("Done list")).not.toBeInTheDocument();

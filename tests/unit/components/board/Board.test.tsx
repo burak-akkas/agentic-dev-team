@@ -765,7 +765,7 @@ describe("<Board />", () => {
 
     it("disables Archive done when Done is empty", () => {
       render(<Board />);
-      expect(screen.getByRole("button", { name: "Archive done" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Archive done cards in Done" })).toBeDisabled();
     });
 
     it("archives Done cards, leaves other columns and shows an Undo notification", async () => {
@@ -773,7 +773,7 @@ describe("<Board />", () => {
       seed();
       render(<Board />);
 
-      await user.click(screen.getByRole("button", { name: "Archive done" }));
+      await user.click(screen.getByRole("button", { name: "Archive done cards in Done" }));
       expect(within(column("Done")).getByText("No cards")).toBeInTheDocument();
       expect(within(column("To do")).getByText("Third")).toBeInTheDocument();
       expect(screen.getByRole("status")).toHaveTextContent("Archived 2 done cards");
@@ -795,7 +795,7 @@ describe("<Board />", () => {
         const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
         seed();
         render(<Board />);
-        await user.click(screen.getByRole("button", { name: "Archive done" }));
+        await user.click(screen.getByRole("button", { name: "Archive done cards in Done" }));
         expect(screen.getByRole("status")).toBeInTheDocument();
         act(() => {
           vi.advanceTimersByTime(UNDO_TOAST_MS + 100);
@@ -825,7 +825,7 @@ describe("<Board />", () => {
       const user = userEvent.setup();
       seed();
       render(<Board />);
-      await user.click(screen.getByRole("button", { name: "Archive done" }));
+      await user.click(screen.getByRole("button", { name: "Archive done cards in Done" }));
       await user.click(screen.getByRole("button", { name: "Archived (2)" }));
 
       const panel = screen.getByRole("region", { name: "Archived cards" });

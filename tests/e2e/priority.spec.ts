@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editCard, moveCardTo } from "../support/cardActions";
 
 const column = (page: Page, name: string) => page.getByRole("region", { name: new RegExp(`^${name}`) });
 
@@ -7,22 +8,20 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Kanban" })).toBeVisible();
 });
 
-test("changes a card's priority and keeps it after a reload and a move", async ({ page }) => {
+test("changes a card's priority in the dialog and keeps it after a reload and a move", async ({ page }) => {
   await page.getByLabel("New card title").fill("Urgent thing");
   await page.getByRole("button", { name: "Add card" }).click();
 
-  const select = page.getByLabel('Priority of "Urgent thing"');
   const card = column(page, "To do").getByRole("listitem");
-  await expect(select).toHaveValue("medium");
-  await expect(card.getByText("Medium", { exact: true }).first()).toBeVisible();
+  await expect(card.getByTestId("priority-badge")).toHaveText("Medium");
+  await expect(page.getByLabel('Priority of "Urgent thing"')).toHaveCount(0);
 
-  await select.selectOption("high");
-  await expect(select).toHaveValue("high");
+  await editCard(page, "Urgent thing", { priority: "high" });
   await expect(card.getByTestId("priority-badge")).toHaveText("High");
 
   await page.reload();
-  await expect(page.getByLabel('Priority of "Urgent thing"')).toHaveValue("high");
+  await expect(column(page, "To do").getByTestId("priority-badge")).toHaveText("High");
 
-  await page.getByRole("button", { name: 'Move "Urgent thing" to Doing' }).click();
+  await moveCardTo(page, "Urgent thing", "Doing");
   await expect(column(page, "Doing").getByTestId("priority-badge")).toHaveText("High");
 });

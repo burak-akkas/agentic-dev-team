@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { deleteCardViaDialog } from "../support/cardActions";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
@@ -50,7 +51,7 @@ test("keeps the checklist through export and import", async ({ page }, testInfo)
   const path = testInfo.outputPath("board.json");
   await (await downloadPromise).saveAs(path);
 
-  await page.getByRole("button", { name: 'Delete "Packed"' }).click();
+  await deleteCardViaDialog(page, "Packed");
   await expect(page.getByRole("img", { name: /checklist items done/ })).toHaveCount(0);
   await page.getByLabel("Import board file").setInputFiles(path);
   await page.getByRole("button", { name: "Replace" }).click();

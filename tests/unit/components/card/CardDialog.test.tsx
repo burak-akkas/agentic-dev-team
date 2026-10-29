@@ -200,9 +200,12 @@ describe("<CardDialog />", () => {
 
   it("deletes only after confirmation", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    const { user, onDelete } = setup();
+    const { user, onDelete, onClose } = setup();
     await user.click(screen.getByRole("button", { name: "Delete card" }));
+    expect(confirm).toHaveBeenCalledWith('Delete "Write docs"?');
     expect(onDelete).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Delete card" }));
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(onDelete).toHaveBeenCalledTimes(1);

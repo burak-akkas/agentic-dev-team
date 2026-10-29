@@ -124,7 +124,9 @@ describe("WIP limits in <Board />", () => {
     render(<Board />);
     expect(screen.getByText("At limit")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: 'Move "B" to Doing' }));
+    await user.click(screen.getByRole("button", { name: "B" }));
+    await user.selectOptions(within(screen.getByRole("dialog")).getByLabelText("Status"), "Doing");
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save" }));
     expect(within(column("Doing")).getByText("B")).toBeInTheDocument();
     expect(screen.getByText("Over limit by 1")).toBeInTheDocument();
   });

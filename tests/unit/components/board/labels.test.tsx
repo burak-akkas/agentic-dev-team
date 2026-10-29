@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, setLabels } from "@/lib/board";
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
@@ -23,6 +23,7 @@ describe("<Board /> labels", () => {
     resetBoardStore();
     seed();
   });
+  afterEach(() => vi.restoreAllMocks());
 
   it("filters by clicking a chip, combines with search and clears", async () => {
     const user = userEvent.setup();
@@ -58,7 +59,9 @@ describe("<Board /> labels", () => {
     const user = userEvent.setup();
     render(<Board />);
     await user.click(screen.getByRole("button", { name: 'Filter by label "bug"' }));
-    await user.click(screen.getByRole("button", { name: 'Delete "Fix crash"' }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await user.click(screen.getByRole("button", { name: "Fix crash" }));
+    await user.click(screen.getByRole("button", { name: "Delete card" }));
     expect(within(column("To do")).getByText("Style page")).toBeInTheDocument();
     expect(within(column("To do")).getByText("Plain")).toBeInTheDocument();
   });

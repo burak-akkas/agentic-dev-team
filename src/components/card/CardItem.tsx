@@ -1,26 +1,19 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
+import { useId, type DragEvent } from "react";
 import {
-  adjacentColumn,
   checklistProgress,
   COVER_COLORS,
   formatDueDate,
-  isValidDueDate,
-  MAX_NOTES_LENGTH,
-  MAX_TITLE_LENGTH,
   PRIORITIES,
   type Card,
-  type ColumnId,
   type CoverColor,
   type DueStatus,
-  type List,
   type Priority,
 } from "@/lib/board";
 import { coverStyles } from "./coverColors";
 import { DueChip } from "./DueChip";
 import { LabelChip } from "./LabelChip";
-import { Button, Input, Select, Textarea } from "@/components/ui";
 
 export const CARD_DRAG_TYPE = "application/x-kanban-card";
 
@@ -38,171 +31,27 @@ const cardSurface = "group rounded-lg border border-line bg-surface p-3 shadow-s
 
 export function CardItem({
   card,
-  column,
-  lists,
   dueStatus,
-  onMove,
-  onDelete,
-  onRename,
-  onSetDueDate,
-  onSetNotes,
-  onSetPriority,
   onOpen,
   onFilterLabel,
   onDragStart,
   onDragEnd,
 }: {
   card: Card;
-  column: ColumnId;
-  lists: readonly List[];
   dueStatus: DueStatus | null;
-  onMove: (to: ColumnId) => void;
-  onDelete: () => void;
-  onRename: (title: string) => void;
-  onSetDueDate: (date: string | undefined) => void;
-  onSetNotes: (notes: string | undefined) => void;
-  onSetPriority: (priority: Priority) => void;
   onOpen: () => void;
   onFilterLabel?: (label: string) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
 }) {
-  const columnTitle = (id: ColumnId) => lists.find((l) => l.id === id)?.name ?? id;
-  const previous = adjacentColumn(column, -1, lists);
-  const next = adjacentColumn(column, 1, lists);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(card.title);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const editRef = useRef<HTMLButtonElement>(null);
-  const dateRef = useRef<HTMLInputElement>(null);
-  const restoreFocus = useRef(false);
   const progress = checklistProgress(card);
   const commentCount = card.comments?.length ?? 0;
-  const [editingNotes, setEditingNotes] = useState(false);
-  const [notesDraft, setNotesDraft] = useState(card.notes ?? "");
-  const [expanded, setExpanded] = useState(false);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
-  const notesButtonRef = useRef<HTMLButtonElement>(null);
-  const restoreNotesFocus = useRef(false);
-  const notesId = useId();
   const coverId = useId();
-
-  useEffect(() => {
-    if (editingNotes) {
-      notesRef.current?.focus();
-    } else if (restoreNotesFocus.current) {
-      restoreNotesFocus.current = false;
-      notesButtonRef.current?.focus();
-    }
-  }, [editingNotes]);
-
-  function startEditingNotes() {
-    setNotesDraft(card.notes ?? "");
-    setEditingNotes(true);
-  }
-
-  function stopEditingNotes() {
-    restoreNotesFocus.current = true;
-    setEditingNotes(false);
-  }
-
-  function handleNotesSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSetNotes(notesDraft.trim() || undefined);
-    stopEditingNotes();
-  }
-
-  function removeNotes() {
-    onSetNotes(undefined);
-    stopEditingNotes();
-  }
-
-  function handleNotesKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      stopEditingNotes();
-    }
-  }
-
-  useEffect(() => {
-    if (editing) {
-      inputRef.current?.focus();
-    } else if (restoreFocus.current) {
-      restoreFocus.current = false;
-      editRef.current?.focus();
-    }
-  }, [editing]);
-
-  function clearDueDate() {
-    onSetDueDate(undefined);
-    dateRef.current?.focus();
-  }
-
-  function handleDueDateChange(event: ChangeEvent<HTMLInputElement>) {
-    const { value } = event.target;
-    if (!value) {
-      onSetDueDate(undefined);
-    } else if (isValidDueDate(value)) {
-      onSetDueDate(value);
-    }
-  }
-
-  function startEditing() {
-    setDraft(card.title);
-    setEditing(true);
-  }
-
-  function stopEditing() {
-    restoreFocus.current = true;
-    setEditing(false);
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!draft.trim()) {
-      return;
-    }
-    onRename(draft);
-    stopEditing();
-  }
 
   function handleDragStart(event: DragEvent<HTMLLIElement>) {
     event.dataTransfer.setData(CARD_DRAG_TYPE, card.id);
     event.dataTransfer.effectAllowed = "move";
     onDragStart?.();
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      stopEditing();
-    }
-  }
-
-  if (editing) {
-    return (
-      <li className={cardSurface}>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <Input
-            ref={inputRef}
-            aria-label="Card title"
-            value={draft}
-            maxLength={MAX_TITLE_LENGTH}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={handleKeyDown}
-            className="min-w-0"
-          />
-          <div className="flex items-center gap-1">
-            <Button type="submit" variant="primary" size="xs" disabled={!draft.trim()}>
-              Save
-            </Button>
-            <Button variant="ghost" size="xs" onClick={stopEditing}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </li>
-    );
   }
 
   return (
@@ -279,147 +128,21 @@ export function CardItem({
           </span>
         </div>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-        <Input
-          ref={dateRef}
-          type="date"
-          fieldSize="sm"
-          aria-label={`Due date for "${card.title}"`}
-          value={card.dueDate ?? ""}
-          onChange={handleDueDateChange}
-        />
-        {card.dueDate && (
-          <>
-            <time dateTime={card.dueDate}>{formatDueDate(card.dueDate)}</time>
-            {dueStatus && <DueChip status={dueStatus} />}
-            <Button
-              variant="ghost"
-              size="xs"
-              aria-label={`Clear due date for "${card.title}"`}
-              onClick={clearDueDate}
-            >
-              Clear
-            </Button>
-          </>
-        )}
-      </div>
-      {editingNotes ? (
-        <form onSubmit={handleNotesSubmit} className="mt-2 flex flex-col gap-2">
-          <Textarea
-            ref={notesRef}
-            aria-label={`Notes for "${card.title}"`}
-            value={notesDraft}
-            maxLength={MAX_NOTES_LENGTH}
-            rows={4}
-            onChange={(event) => setNotesDraft(event.target.value)}
-            onKeyDown={handleNotesKeyDown}
-            className="min-w-0"
-          />
-          <div className="flex items-center gap-1">
-            <Button type="submit" variant="primary" size="xs">
-              Save notes
-            </Button>
-            <Button variant="ghost" size="xs" onClick={stopEditingNotes}>
-              Cancel
-            </Button>
-            {card.notes && (
-              <Button variant="danger" size="xs" onClick={removeNotes}>
-                Remove notes
-              </Button>
-            )}
-            <span className="ml-auto text-xs text-muted" aria-hidden="true">
-              {notesDraft.length}/{MAX_NOTES_LENGTH}
+      {(card.dueDate || card.notes) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+          {card.dueDate && (
+            <>
+              <time dateTime={card.dueDate}>{formatDueDate(card.dueDate)}</time>
+              {dueStatus && <DueChip status={dueStatus} />}
+            </>
+          )}
+          {card.notes && (
+            <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+              <span aria-hidden="true">📝 </span>Has notes
             </span>
-          </div>
-        </form>
-      ) : (
-        <div className="mt-2 flex flex-col gap-1 text-xs text-muted">
-          <div className="flex items-center gap-1">
-            {card.notes && (
-              <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-                <span aria-hidden="true">📝 </span>Has notes
-              </span>
-            )}
-            <Button
-              ref={notesButtonRef}
-              variant="ghost"
-              size="xs"
-              aria-label={`${card.notes ? "Edit" : "Add"} notes for "${card.title}"`}
-              onClick={startEditingNotes}
-            >
-              {card.notes ? "Edit notes" : "Add notes"}
-            </Button>
-            {card.notes && (
-              <Button
-                variant="ghost"
-                size="xs"
-                aria-expanded={expanded}
-                aria-controls={notesId}
-                onClick={() => setExpanded(!expanded)}
-              >
-                {expanded ? "Hide notes" : "Show notes"}
-              </Button>
-            )}
-          </div>
-          {card.notes &&
-            (expanded ? (
-              <p id={notesId} className="whitespace-pre-wrap break-words text-sm text-subtle">
-                {card.notes}
-              </p>
-            ) : (
-              <p id={notesId} data-testid="notes-preview" className="truncate">
-                {card.notes.split("\n")[0]}
-              </p>
-            ))}
+          )}
         </div>
       )}
-      <div className="mt-2 flex items-center gap-1">
-        <Select
-          fieldSize="sm"
-          aria-label={`Priority of "${card.title}"`}
-          value={card.priority}
-          onChange={(event) => onSetPriority(event.target.value as Priority)}
-        >
-          {PRIORITIES.map(({ id, label }) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </Select>
-        {previous && (
-          <Button
-            variant="ghost"
-            size="xs"
-            aria-label={`Move "${card.title}" to ${columnTitle(previous)}`}
-            onClick={() => onMove(previous)}
-          >
-            ←
-          </Button>
-        )}
-        {next && (
-          <Button
-            variant="ghost"
-            size="xs"
-            aria-label={`Move "${card.title}" to ${columnTitle(next)}`}
-            onClick={() => onMove(next)}
-          >
-            →
-          </Button>
-        )}
-        <Button
-          ref={editRef}
-          variant="ghost"
-          size="xs"
-          className="ml-auto"
-          aria-label={`Edit "${card.title}"`}
-          onClick={startEditing}
-        >
-          Edit
-        </Button>
-        <Button variant="danger" size="xs" aria-label={`Delete "${card.title}"`} onClick={onDelete}>
-          Delete
-        </Button>
-      </div>
     </li>
   );
 }

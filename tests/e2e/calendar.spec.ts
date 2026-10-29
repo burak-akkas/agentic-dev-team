@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editCard } from "../support/cardActions";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
@@ -26,7 +27,7 @@ async function addCard(page: Page, title: string) {
 test("shows cards on their due day, moves them by Move to date and drag and drop, and remembers the view", async ({ page }) => {
   await addCard(page, "Pay rent");
   await addCard(page, "Someday");
-  await page.getByLabel('Due date for "Pay rent"', { exact: true }).fill(today);
+  await editCard(page, "Pay rent", { dueDate: today });
 
   await page.getByRole("radio", { name: "Calendar" }).check({ force: true });
   await expect(page.getByRole("button", { name: "Next month" })).toBeVisible();
@@ -68,7 +69,7 @@ test("marks an overdue card with text and does not scroll the page sideways on a
   await page.setViewportSize({ width: 375, height: 700 });
   await addCard(page, "Late one");
   const past = new Date(now.getFullYear(), now.getMonth(), 1);
-  await page.getByLabel('Due date for "Late one"', { exact: true }).fill(iso(past));
+  await editCard(page, "Late one", { dueDate: iso(past) });
   await page.getByRole("radio", { name: "Calendar" }).check({ force: true });
   if (now.getDate() > 1) {
     await expect(cell(page, past).getByText("Overdue")).toBeVisible();

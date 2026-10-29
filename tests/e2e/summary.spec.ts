@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { editCard, moveCardTo } from "../support/cardActions";
 
 const column = (page: Page, name: string) => page.getByRole("region", { name: new RegExp(`^${name}`) });
 
@@ -15,7 +16,7 @@ test("summary bar shows progress and filters to overdue cards", async ({ page })
     await page.getByLabel("New card title").fill(title);
     await page.getByRole("button", { name: "Add card" }).click();
   }
-  await page.getByLabel('Due date for "Pay rent"', { exact: true }).fill("2000-01-01");
+  await editCard(page, "Pay rent", { dueDate: "2000-01-01" });
 
   const progress = page.getByRole("progressbar", { name: "Cards done" });
   await expect(progress).toHaveAttribute("aria-valuenow", "0");
@@ -28,8 +29,7 @@ test("summary bar shows progress and filters to overdue cards", async ({ page })
   await summary.getByRole("button", { name: /Overdue: 1/ }).click();
   await expect(column(page, "To do").getByText("Buy milk")).toBeVisible();
 
-  await page.getByRole("button", { name: 'Move "Buy milk" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Buy milk" to Done' }).click();
+  await moveCardTo(page, "Buy milk", "Done");
   await expect(progress).toHaveAttribute("aria-valuenow", "50");
   await expect(summary.getByText("50% done")).toBeVisible();
 });

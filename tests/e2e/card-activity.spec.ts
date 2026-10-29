@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { moveCardTo } from "../support/cardActions";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
@@ -13,7 +14,7 @@ async function openCard(page: Page, title: string) {
 test("shows a persistent activity log newest first, then archive and restore entries", async ({ page }) => {
   await page.getByLabel("New card title").fill("Track me");
   await page.getByRole("button", { name: "Add card" }).click();
-  await page.getByRole("button", { name: 'Move "Track me" to Doing' }).click();
+  await moveCardTo(page, "Track me", "Doing");
 
   let dialog = await openCard(page, "Track me");
   await dialog.getByLabel("Priority").selectOption("high");

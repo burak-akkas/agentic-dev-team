@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { editCard, moveCardTo } from "../support/cardActions";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
@@ -8,12 +9,12 @@ test.beforeEach(async ({ page }) => {
 test("shows cycle time and overdue cards and opens an overdue card", async ({ page }) => {
   await page.getByLabel("New card title").fill("Pay rent");
   await page.getByRole("button", { name: "Add card" }).click();
-  await page.getByLabel('Due date for "Pay rent"', { exact: true }).fill("2000-01-01");
+  await editCard(page, "Pay rent", { dueDate: "2000-01-01" });
 
   await page.getByLabel("New card title").fill("Ship it");
   await page.getByRole("button", { name: "Add card" }).click();
-  await page.getByRole("button", { name: 'Move "Ship it" to Doing' }).click();
-  await page.getByRole("button", { name: 'Move "Ship it" to Done' }).click();
+  await moveCardTo(page, "Ship it", "Doing");
+  await moveCardTo(page, "Ship it", "Done");
 
   const opener = page.getByRole("button", { name: "Board insights" });
   await opener.click();

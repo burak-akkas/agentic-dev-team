@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { moveCardTo } from "../support/cardActions";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("./");
@@ -8,8 +9,7 @@ test.beforeEach(async ({ page }) => {
 async function addDoneCard(page: import("@playwright/test").Page, title: string) {
   await page.getByLabel("New card title").fill(title);
   await page.getByRole("button", { name: "Add card" }).click();
-  await page.getByRole("button", { name: `Move "${title}" to Doing` }).click();
-  await page.getByRole("button", { name: `Move "${title}" to Done` }).click();
+  await moveCardTo(page, title, "Done");
 }
 
 test("archives Done cards, undoes, restores, deletes and persists", async ({ page }) => {

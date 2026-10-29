@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
+import { deleteCardViaDialog } from "../support/cardActions";
 
 const column = (page: Page, name: string) => page.getByRole("region", { name: new RegExp(`^${name}`) });
 
@@ -20,7 +21,7 @@ test("exports the board and imports it back after confirming", async ({ page }, 
   await download.saveAs(path);
   expect(await readFile(path, "utf8")).toContain("Backup me");
 
-  await page.getByRole("button", { name: 'Delete "Backup me"' }).click();
+  await deleteCardViaDialog(page, "Backup me");
   await expect(page.getByText("Backup me")).toHaveCount(0);
 
   await page.getByLabel("Import board file").setInputFiles(path);

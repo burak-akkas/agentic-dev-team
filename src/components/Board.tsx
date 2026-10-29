@@ -20,6 +20,7 @@ import {
   insightsListIds,
   isCardOverdue,
   isFiltering,
+  isListCollapsed,
   listCards,
   moveCard,
   renameCard,
@@ -29,6 +30,7 @@ import {
   setPriority,
   setView,
   setWipLimit,
+  toggleListCollapsed,
   undoArchive,
   updateCard,
 } from "@/lib/board";
@@ -280,16 +282,20 @@ export function Board() {
       <div className="flex flex-col gap-4 md:flex-row md:flex-wrap md:items-start">
         {lists.map(({ id, name: title }) => {
           const cards = listCards(visible, id);
+          const collapsed = isListCollapsed(board, id);
           return (
             <section
               key={id}
               aria-labelledby={`column-${id}`}
-              onDragEnter={(event) => handleDragOver(event, id)}
-              onDragOver={(event) => handleDragOver(event, id)}
-              onDragLeave={(event) => handleDragLeave(event, id)}
-              onDrop={(event) => handleDrop(event, id)}
-              className={`flex flex-col gap-3 rounded-xl p-3 md:min-w-64 md:flex-1 md:basis-64 ${
-                dragOver === id
+              // Drag and drop onto a collapsed list is not supported.
+              onDragEnter={collapsed ? undefined : (event) => handleDragOver(event, id)}
+              onDragOver={collapsed ? undefined : (event) => handleDragOver(event, id)}
+              onDragLeave={collapsed ? undefined : (event) => handleDragLeave(event, id)}
+              onDrop={collapsed ? undefined : (event) => handleDrop(event, id)}
+              className={`flex flex-col gap-3 rounded-xl p-3 ${
+                collapsed ? "md:max-w-64 md:flex-none" : "md:min-w-64 md:flex-1 md:basis-64"
+              } ${
+                dragOver === id && !collapsed
                   ? "bg-indigo-50 ring-2 ring-indigo-500 dark:bg-indigo-950/40"
                   : "bg-surface-muted dark:bg-surface/50"
               }`}
@@ -300,6 +306,8 @@ export function Board() {
                 total={listCards(board, id).length}
                 limit={board.wipLimits?.[id]}
                 onSetLimit={(limit) => update((b) => setWipLimit(b, id, limit))}
+                collapsed={collapsed}
+                onToggleCollapsed={() => update((b) => toggleListCollapsed(b, id))}
               >
                 <Button
                   size="xs"
@@ -310,7 +318,7 @@ export function Board() {
                   {id === doneId ? "Archive done" : "Archive all"}
                 </Button>
               </ColumnHeader>
-              {cards.length === 0 ? (
+              {collapsed ? null : cards.length === 0 ? (
                 <p className="px-1 py-4 text-center text-xs text-muted">
                   {filtering ? "No matching cards" : "No cards"}
                 </p>

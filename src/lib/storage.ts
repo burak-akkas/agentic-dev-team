@@ -301,6 +301,11 @@ function normalizeBoard(board: Board): Board {
       }
     }
   }
+  // Collapsed lists: unique ids of existing lists only.
+  const storedCollapsed: unknown = (board as { collapsedLists?: unknown }).collapsedLists;
+  const collapsedLists = Array.isArray(storedCollapsed)
+    ? lists.map((l) => l.id).filter((id) => storedCollapsed.includes(id))
+    : [];
   // A stored choice keeps its valid ids; without one the lists named Doing / Done are chosen.
   const chosen: unknown = (board as { insightsLists?: unknown }).insightsLists;
   const insightsLists: InsightsLists = {};
@@ -330,6 +335,7 @@ function normalizeBoard(board: Board): Board {
     lists,
     ...(templates.length > 0 && { templates }),
     ...(Object.keys(wipLimits).length > 0 && { wipLimits }),
+    ...(collapsedLists.length > 0 && { collapsedLists }),
     ...(Object.keys(formerLists).length > 0 && { formerLists }),
     insightsLists,
     columns,

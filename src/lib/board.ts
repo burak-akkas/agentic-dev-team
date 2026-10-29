@@ -104,6 +104,8 @@ export interface Board {
   archive: Card[];
   // Optional soft WIP limits per list (whole numbers from 1 to MAX_WIP_LIMIT). Never blocks anything.
   wipLimits?: Partial<Record<ColumnId, number>>;
+  // Ids of lists shown as a narrow strip. Purely visual; absent when no list is collapsed.
+  collapsedLists?: ColumnId[];
   // Last name of deleted lists, so old activity entries stay readable.
   formerLists?: Record<ColumnId, string>;
   // Which lists insights treat as "in progress" and "done". Absent: the lists named Doing / Done.
@@ -337,6 +339,14 @@ export function deleteList(board: Board, id: ColumnId, moveTo?: ColumnId): Board
       next.wipLimits = limits;
     } else {
       delete next.wipLimits;
+    }
+  }
+  if (board.collapsedLists) {
+    const collapsed = board.collapsedLists.filter((c) => c !== id);
+    if (collapsed.length > 0) {
+      next.collapsedLists = collapsed;
+    } else {
+      delete next.collapsedLists;
     }
   }
   if (board.insightsLists) {
@@ -678,7 +688,24 @@ export function setWipLimit(board: Board, column: ColumnId, limit: number | unde
   return Object.keys(next).length === 0 ? rest : { ...rest, wipLimits: next };
 }
 
-export type WipState = "none" | "ok" | "at" | "over";
+export function isListCollapsed(board: Board, id: ColumnId): boolean {
+  return board.collapsedLists?.includes(id) ?? false;
+}
+
+// Collapses an expanded list or expands a collapsed one. Unknown ids are ignored; the key is removed once empty.
+export function toggleListCollapsed(board: Board, id: ColumnId): Board {
+  const { collapsedLists, ...rest } = board;
+  if (collapsedLists?.includes(id)) {
+    const remaining = collapsedLists.filter((c) => c !== id);
+    return remaining.length === 0 ? rest : { ...rest, collapsedLists: remaining };
+  }
+  if (!boardLists(board).some((l) => l.id === id)) {
+    return board;
+  }
+  return { ...rest, collapsedLists: [...(collapsedLists ?? []), id] };
+}
+
+export type WipState ="none" | "ok" | "at" | "over";
 
 // How a column's real card count compares to its limit. `over` is how many cards exceed it.
 export function wipStatus(count: number, limit: number | undefined): { state: WipState; over: number } {

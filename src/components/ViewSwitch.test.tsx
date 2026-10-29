@@ -25,6 +25,14 @@ describe("<ViewSwitch />", () => {
     await user.tab();
     expect(screen.getByRole("radio", { name: "Board" })).toHaveFocus();
     await user.keyboard("{ArrowRight}");
-    expect(onChange).toHaveBeenCalledWith("table");
+    expect(onChange).toHaveBeenCalledWith("calendar");
+  });
+
+  it("offers Board, Calendar and Table", async () => {
+    const onChange = vi.fn();
+    render(<ViewSwitch value="board" onChange={onChange} />);
+    expect(screen.getAllByRole("radio").map((r) => (r as HTMLInputElement).value)).toEqual(["board", "calendar", "table"]);
+    await userEvent.setup().click(screen.getByRole("radio", { name: "Calendar" }));
+    expect(onChange).toHaveBeenCalledWith("calendar");
   });
 });

@@ -35,6 +35,7 @@ import {
 import { useBoard } from "@/lib/useBoard";
 import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "./ArchivePanel";
+import { CalendarView } from "./CalendarView";
 import { CardDialog } from "./CardDialog";
 import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
 import { ColumnHeader } from "./ColumnHeader";
@@ -233,6 +234,8 @@ export function Board() {
 
       {view === "table" ? (
         <TableView board={visible} onOpen={setOpenCardId} />
+      ) : view === "calendar" ? (
+        <CalendarView board={visible} onOpen={setOpenCardId} onUpdateBoard={update} />
       ) : (
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:overflow-x-auto">
         {lists.map(({ id, name: title }) => {

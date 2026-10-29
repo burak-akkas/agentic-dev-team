@@ -2,9 +2,10 @@
 
 import type { BoardView } from "@/lib/board";
 
-// Views offered in the switch ("calendar" is added by a later change).
+// Views offered in the switch.
 const OPTIONS: readonly { id: BoardView; label: string }[] = [
   { id: "board", label: "Board" },
+  { id: "calendar", label: "Calendar" },
   { id: "table", label: "Table" },
 ];
 

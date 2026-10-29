@@ -28,7 +28,20 @@ describe("<Board /> templates", () => {
     saveBoard(emptyBoard());
     render(<Board />);
     expect(screen.queryByLabelText("From template")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Target list")).not.toBeInTheDocument();
+  });
+
+  it("adds a plain card to the chosen list without templates", async () => {
+    saveBoard(emptyBoard());
+    render(<Board />);
+    const user = userEvent.setup();
+    expect(screen.getByLabelText("Target list")).toHaveValue("todo");
+    await user.type(screen.getByLabelText("New card title"), "Plain");
+    await user.selectOptions(screen.getByLabelText("Target list"), "Doing");
+    await user.click(screen.getByRole("button", { name: "Add card" }));
+    const doing = screen.getByRole("region", { name: /^Doing/ });
+    expect(within(doing).getByRole("button", { name: "Plain" })).toBeInTheDocument();
+    const todo = screen.getByRole("region", { name: /^To do/ });
+    expect(within(todo).queryByRole("button", { name: "Plain" })).not.toBeInTheDocument();
   });
 
   it("saves a card as a template from the card dialog", async () => {

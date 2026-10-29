@@ -235,7 +235,7 @@ export function Board() {
       />
 
       <AddCardForm
-        onAdd={(title) => update((b) => addCard(b, title))}
+        onAdd={(title, listId) => update((b) => addCard(b, title, { listId }))}
         templates={templates}
         lists={lists}
         onAddFromTemplate={(templateId, listId, title) => {

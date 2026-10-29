@@ -1,4 +1,4 @@
-:HL["/agentic-dev-team/pr-77/_next/static/chunks/15po7x52iujne.css","style"]
+:HL["/agentic-dev-team/pr-77/_next/static/chunks/0f0vzcw_heopf.css","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"/_not-found","h":96,"c":"$Q2"}]]
-0:{"b":"E0o4duTUnlZdTv71f4VwN","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"Lz8CRafm09CAlhhBruyDZ","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

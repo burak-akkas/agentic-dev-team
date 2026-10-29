@@ -34,6 +34,7 @@ import {
 import { addCardFromTemplate, boardTemplates, saveAsTemplate } from "@/lib/templates";
 import { useBackgroundImageOk } from "@/hooks/useBackgroundImageOk";
 import { useBoard } from "@/hooks/useBoard";
+import { useSummaryCollapsed } from "@/hooks/useSummaryCollapsed";
 import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "@/components/panels/ArchivePanel";
 import { CalendarView } from "@/components/views/CalendarView";
@@ -58,7 +59,9 @@ export function Board() {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const stats = boardStats(board);
   // The filter lapses by itself once nothing is overdue any more.
-  const showOverdueOnly = overdueOnly && stats.overdue > 0;
+  // It is also ignored while the summary is collapsed, since its control is hidden then.
+  const [summaryCollapsed, setSummaryCollapsed] = useSummaryCollapsed();
+  const showOverdueOnly = overdueOnly && stats.overdue > 0 && !summaryCollapsed;
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const labelsInUse = boardLabels(board);
   // Like the overdue filter, the label filter lapses once no card has the label any more.
@@ -220,7 +223,16 @@ export function Board() {
         />
       )}
       <div className={`flex flex-col gap-6 ${backgroundStyle ? `rounded-xl p-3 ${surface}` : ""}`}>
-      <SummaryBar stats={stats} overdueOnly={showOverdueOnly} onToggleOverdue={() => setOverdueOnly(!showOverdueOnly)} />
+      <SummaryBar
+        stats={stats}
+        overdueOnly={showOverdueOnly}
+        onToggleOverdue={() => setOverdueOnly(!showOverdueOnly)}
+        collapsed={summaryCollapsed}
+        onToggleCollapsed={() => {
+          if (!summaryCollapsed) setOverdueOnly(false);
+          setSummaryCollapsed(!summaryCollapsed);
+        }}
+      />
 
       <AddCardForm
         onAdd={(title) => update((b) => addCard(b, title))}

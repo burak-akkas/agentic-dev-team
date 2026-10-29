@@ -7,10 +7,14 @@ export function SummaryBar({
   stats,
   overdueOnly,
   onToggleOverdue,
+  collapsed,
+  onToggleCollapsed,
 }: {
   stats: BoardStats;
   overdueOnly: boolean;
   onToggleOverdue: () => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   if (stats.total === 0) {
     return (
@@ -20,9 +24,31 @@ export function SummaryBar({
     );
   }
 
+  const toggle = (
+    <button
+      type="button"
+      aria-expanded={!collapsed}
+      aria-label={collapsed ? "Expand board summary" : "Collapse board summary"}
+      onClick={onToggleCollapsed}
+      className="rounded-md border border-line px-2 py-0.5 text-xs font-medium text-subtle hover:bg-surface-muted"
+    >
+      <span aria-hidden="true">{collapsed ? "▸" : "▾"}</span>
+    </button>
+  );
+
+  if (collapsed) {
+    return (
+      <Surface aria-label="Board summary" className="flex items-center gap-3 text-sm">
+        {toggle}
+        <span className="text-xs text-subtle">{stats.percentDone}% done</span>
+      </Surface>
+    );
+  }
+
   return (
     <Surface aria-label="Board summary" className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        {toggle}
         <p>
           <span className="font-semibold">{stats.total}</span> {stats.total === 1 ? "card" : "cards"} total
         </p>

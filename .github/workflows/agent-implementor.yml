@@ -117,6 +117,11 @@ jobs:
             scripts/agents/transition.sh "$N" agent:pr-open
             pr=$(echo "${OUT:-null}" | jq -r '.pr_number // empty')
             if [ -n "$pr" ]; then
+              # Reviewer, QA and the merge gate ignore drafts (that's how humans pause the agents), so an
+              # agent PR must never stay one. Marking it ready triggers the Reviewer.
+              if [ "$(gh pr view "$pr" --json isDraft --jq .isDraft)" = "true" ]; then
+                gh pr ready "$pr"
+              fi
               stats=$(gh pr view "$pr" --json additions,deletions,changedFiles --jq '"+\(.additions)/−\(.deletions), \(.changedFiles) files"')
               url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/pr-$pr/"
               scripts/agents/progress.sh "$N" "🛠 **Implementor**: opened #$pr ($stats) · [preview]($url)"

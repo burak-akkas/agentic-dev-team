@@ -7,8 +7,9 @@ name: "Agent · Watchdog"
 # what stalls). See scripts/agents/watchdog.sh. Manual runs can override the threshold and do a dry run.
 #
 # When it runs:
-#   - AGENT_WATCHDOG_MINUTES after the last agent run finished (debounced: every finished run restarts
-#     the wait and cancels the previous one). This is the main trigger: stalls start when activity stops.
+#   - AGENT_WATCHDOG_MINUTES after an agent run finished. One check waits at a time and later runs queue
+#     behind it (GitHub keeps only the newest pending one), so while agents are busy elsewhere a stall is
+#     still caught within about two thresholds instead of only when all activity stops.
 #   - every 10 minutes as a backup. GitHub's scheduler is best effort and can skip runs entirely.
 on:
   workflow_run:
@@ -39,11 +40,12 @@ jobs:
       ${{ vars.AGENT_PAUSED != 'true' && (
         github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'skipped'
       ) }}
-    # Job-level, so skipped runs never enter the group. The debounced runs share one group and cancel
-    # each other; scheduled and manual runs queue in their own group.
+    # Job-level, so skipped runs never enter the group. Runs after agent activity share one group and
+    # queue instead of cancelling each other: cancelling meant no check ever finished while any other
+    # issue kept the agents busy. Scheduled and manual runs queue in their own group.
     concurrency:
-      group: agent-watchdog-${{ github.event_name == 'workflow_run' && 'debounce' || 'check' }}
-      cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+      group: agent-watchdog-${{ github.event_name == 'workflow_run' && 'after-run' || 'check' }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

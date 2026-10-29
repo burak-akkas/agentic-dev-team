@@ -20,6 +20,23 @@ describe("<Dialog />", () => {
     expect(screen.getByRole("dialog", { name: "Details" })).toHaveAttribute("open");
   });
 
+  it("is max-w-lg by default and max-w-3xl for size lg", () => {
+    const { unmount } = render(
+      <Dialog labelledBy="title" onRequestClose={vi.fn()}>
+        <h2 id="title">Details</h2>
+      </Dialog>,
+    );
+    expect(screen.getByRole("dialog")).toHaveClass("max-w-lg");
+    unmount();
+    render(
+      <Dialog labelledBy="title" onRequestClose={vi.fn()} size="lg">
+        <h2 id="title">Details</h2>
+      </Dialog>,
+    );
+    expect(screen.getByRole("dialog")).toHaveClass("max-w-3xl");
+    expect(screen.getByRole("dialog")).not.toHaveClass("max-w-lg");
+  });
+
   it("asks to close on Escape (cancel) and keeps the dialog open itself", () => {
     const { onRequestClose } = setup();
     const notPrevented = fireEvent(screen.getByRole("dialog"), new Event("cancel", { bubbles: false, cancelable: true }));

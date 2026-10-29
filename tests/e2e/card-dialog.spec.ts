@@ -173,3 +173,20 @@ test("renders in dark mode", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
+
+test("the card dialog is wide on desktop and fits a mobile viewport", async ({ page }) => {
+  await addCard(page, "Plan trip");
+  await page.getByRole("button", { name: "Plan trip", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Plan trip" });
+  await expect(dialog).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const wide = await dialog.boundingBox();
+  expect(wide?.width).toBeGreaterThan(512);
+  expect(wide?.width).toBeLessThanOrEqual(1280);
+
+  await page.setViewportSize({ width: 375, height: 700 });
+  const narrow = await dialog.boundingBox();
+  expect(narrow?.width).toBeLessThanOrEqual(375);
+  expect(narrow?.x).toBeGreaterThanOrEqual(0);
+});

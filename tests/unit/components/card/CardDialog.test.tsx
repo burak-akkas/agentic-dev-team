@@ -34,6 +34,13 @@ function setup(overrides: Partial<Card> = {}, onDuplicate?: () => void) {
 
 afterEach(() => vi.restoreAllMocks());
 
+describe("<CardDialog /> size", () => {
+  it("uses the wide dialog size", () => {
+    setup();
+    expect(screen.getByRole("dialog")).toHaveClass("max-w-3xl");
+  });
+});
+
 describe("<CardDialog /> activity", () => {
   it("shows the stored log read-only and unaffected by editing the draft", async () => {
     const { user } = setup({

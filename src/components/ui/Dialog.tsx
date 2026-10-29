@@ -2,15 +2,20 @@
 
 import { useEffect, useRef, type ReactNode, type SyntheticEvent } from "react";
 
+const SIZE_CLASSES = { md: "max-w-lg", lg: "max-w-3xl" };
+
 export function Dialog({
   labelledBy,
   onRequestClose,
+  size = "md",
   children,
 }: {
   /** id of the element that names the dialog. */
   labelledBy: string;
   /** Called on Escape and on a backdrop click. The dialog stays open until the parent unmounts it. */
   onRequestClose: () => void;
+  /** Maximum width: "md" (32rem, default) or "lg" (48rem). */
+  size?: keyof typeof SIZE_CLASSES;
   children: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -41,7 +46,7 @@ export function Dialog({
           onRequestClose();
         }
       }}
-      className="m-auto max-h-[90dvh] w-[calc(100%-1rem)] max-w-lg overflow-y-auto rounded-xl border border-line bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 dark:border-field"
+      className={`m-auto max-h-[90dvh] w-[calc(100%-1rem)] ${SIZE_CLASSES[size]} overflow-y-auto rounded-xl border border-line bg-surface p-0 text-foreground shadow-xl backdrop:bg-black/50 dark:border-field`}
     >
       {children}
     </dialog>

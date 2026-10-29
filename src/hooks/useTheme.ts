@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import { loadTheme, resolveTheme, saveTheme, THEME_KEY, type ThemePreference } from "./theme";
+import { loadTheme, resolveTheme, saveTheme, THEME_KEY, type ThemePreference } from "@/lib/theme";
 
 // Same pattern as useBoard: a tiny localStorage-backed external store whose
 // server snapshot is "system", so the static export hydrates without a mismatch.

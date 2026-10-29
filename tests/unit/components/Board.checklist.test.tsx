@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, addChecklistItem, emptyBoard, MAX_CHECKLIST_ITEM_LENGTH, toggleChecklistItem } from "@/lib/board";
 import { saveBoard } from "../../support/testStorage";
-import { resetBoardStore } from "@/lib/useBoard";
+import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/Board";
 
 function seed(items: string[] = []) {

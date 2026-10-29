@@ -13,7 +13,7 @@ import {
   setPriority,
   toggleChecklistItem,
 } from "@/lib/board";
-import { loadBoard, saveBoard } from "../../support/testStorage";
+import { loadBoard, saveBoard } from "../../../support/testStorage";
 
 const NOW = new Date("2030-05-05T10:00:00.000Z");
 

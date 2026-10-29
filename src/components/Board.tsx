@@ -35,7 +35,7 @@ import {
   updateCard,
 } from "@/lib/board";
 import { addCardFromTemplate, boardTemplates, saveAsTemplate } from "@/lib/templates";
-import { useBoard } from "@/lib/useBoard";
+import { useBoard } from "@/hooks/useBoard";
 import { AddCardForm } from "./AddCardForm";
 import { ArchivePanel } from "./ArchivePanel";
 import { CalendarView } from "./CalendarView";

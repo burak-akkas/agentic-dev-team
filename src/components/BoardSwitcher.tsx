@@ -2,7 +2,7 @@
 
 import { useId, useState, type FormEvent } from "react";
 import { MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
-import { useBoards } from "@/lib/useBoard";
+import { useBoards } from "@/hooks/useBoard";
 
 import { Button, Dialog, Input, Select } from "./ui";
 

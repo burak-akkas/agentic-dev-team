@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { addCard } from "@/lib/board";
 import { initialBoardList } from "@/lib/boards";
 import { saveBoards, STORAGE_KEY } from "@/lib/storage";
-import { resetBoardStore, useBoard, useBoards } from "@/lib/useBoard";
+import { resetBoardStore, useBoard, useBoards } from "@/hooks/useBoard";
 
 function setup() {
   return renderHook(() => ({ board: useBoard(), boards: useBoards() }));

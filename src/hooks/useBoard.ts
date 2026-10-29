@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import type { Board } from "./board";
+import type { Board } from "@/lib/board";
 import {
   createBoardEntry,
   currentEntry,
@@ -13,8 +13,8 @@ import {
   validateBoardName,
   type BoardList,
   type NameResult,
-} from "./boards";
-import { loadBoards, saveBoards, STORAGE_KEY } from "./storage";
+} from "@/lib/boards";
+import { loadBoards, saveBoards, STORAGE_KEY } from "@/lib/storage";
 
 // A tiny external store backed by localStorage. useSyncExternalStore renders the
 // empty server snapshot during the static export, then switches to the stored

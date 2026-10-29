@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, formatDueDate, moveCard, setDueDate, setNotes, setPriority, todayString } from "@/lib/board";
 import { saveBoard } from "../../support/testStorage";
-import { resetBoardStore } from "@/lib/useBoard";
+import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/Board";
 import { UNDO_TOAST_MS } from "@/components/UndoToast";
 

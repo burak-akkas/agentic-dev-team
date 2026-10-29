@@ -3,7 +3,7 @@
 import { useRef, useState, type ChangeEvent } from "react";
 import { boardLists, listCards, type Board } from "@/lib/board";
 import { exportFilename, parseBoard, serializeBoard } from "@/lib/storage";
-import { useBoard } from "@/lib/useBoard";
+import { useBoard } from "@/hooks/useBoard";
 
 import { Button } from "./ui";
 

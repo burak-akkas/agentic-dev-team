@@ -11,7 +11,7 @@ import {
   wipStatus,
 } from "@/lib/board";
 import { LEGACY_STORAGE_KEY, parseBoard, serializeBoard } from "@/lib/storage";
-import { loadBoard, saveBoard } from "../../support/testStorage";
+import { loadBoard, saveBoard } from "../../../support/testStorage";
 
 function memoryStorage(initial?: string): Storage {
   const data = new Map<string, string>(initial === undefined ? [] : [[LEGACY_STORAGE_KEY, initial]]);

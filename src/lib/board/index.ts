@@ -30,3 +30,4 @@ export * from "./comments";
 export * from "./labels";
 export * from "./checklist";
 export * from "./filters";
+export * from "./title";

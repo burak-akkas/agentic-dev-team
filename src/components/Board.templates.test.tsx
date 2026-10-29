@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addCard, emptyBoard, listCards, updateCard } from "@/lib/board";
@@ -89,7 +89,7 @@ describe("<Board /> templates", () => {
     expect(within(dialog).getByText(/No templates yet/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(screen.queryByLabelText("From template")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Templates" })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Templates" })).toHaveFocus());
   });
 
   it("keeps templates off the board", () => {

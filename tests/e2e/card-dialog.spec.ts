@@ -58,31 +58,37 @@ test("blocks Save for an empty title", async ({ page }) => {
 test("cancel, Escape and backdrop confirm before discarding changes", async ({ page }) => {
   await addCard(page, "Plan trip");
   const open = page.getByRole("button", { name: "Plan trip", exact: true });
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "Plan trip" });
+  const confirm = page.getByRole("dialog", { name: "Discard changes" });
 
   // No changes: closes without asking.
-  page.once("dialog", (d) => {
-    throw new Error(`unexpected confirm: ${d.message()}`);
-  });
   await open.click();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  page.removeAllListeners("dialog");
+  await expect(confirm).toBeHidden();
 
-  // Dirty + decline: stays open.
+  // Dirty + decline: the in-app confirmation appears and the edits stay.
   await open.click();
   await dialog.getByLabel("Title").fill("Changed");
-  page.once("dialog", (d) => void d.dismiss());
   await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toBeVisible();
+  await expect(confirm.getByText("Discard your unsaved changes?")).toBeVisible();
+  await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toBeHidden();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Title")).toHaveValue("Changed");
+
+  // Escape asks again, and Escape in the confirmation only dismisses it.
+  await page.keyboard.press("Escape");
+  await expect(confirm).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(confirm).toBeHidden();
   await expect(dialog).toBeVisible();
 
-  page.once("dialog", (d) => void d.dismiss());
+  // Dirty + discard: closed and focus returns to the card.
   await page.keyboard.press("Escape");
-  await expect(dialog).toBeVisible();
-
-  // Dirty + accept via Escape: discarded and focus returns to the card.
-  page.once("dialog", (d) => void d.accept());
-  await page.keyboard.press("Escape");
+  await confirm.getByRole("button", { name: "Discard" }).click();
   await expect(dialog).toBeHidden();
   await expect(open).toBeFocused();
   await expect(open).toHaveText("Plan trip");
@@ -90,8 +96,13 @@ test("cancel, Escape and backdrop confirm before discarding changes", async ({ p
   // Backdrop click (top-left corner, outside the centred dialog).
   await open.click();
   await dialog.getByLabel("Title").fill("Changed again");
-  page.once("dialog", (d) => void d.accept());
   await page.mouse.click(2, 2);
+  await expect(confirm).toBeVisible();
+  await page.mouse.click(2, 2);
+  await expect(confirm).toBeHidden();
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(2, 2);
+  await confirm.getByRole("button", { name: "Discard" }).click();
   await expect(dialog).toBeHidden();
   await expect(open).toHaveText("Plan trip");
 });
@@ -99,14 +110,17 @@ test("cancel, Escape and backdrop confirm before discarding changes", async ({ p
 test("deleting asks for confirmation", async ({ page }) => {
   await addCard(page, "Plan trip");
   await page.getByRole("button", { name: "Plan trip", exact: true }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "Plan trip" });
+  const confirm = page.getByRole("dialog", { name: "Delete card" });
 
-  page.once("dialog", (d) => void d.dismiss());
   await dialog.getByRole("button", { name: "Delete card" }).click();
+  await expect(confirm.getByText('Delete "Plan trip"?')).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toBeHidden();
   await expect(dialog).toBeVisible();
 
-  page.once("dialog", (d) => void d.accept());
   await dialog.getByRole("button", { name: "Delete card" }).click();
+  await confirm.getByRole("button", { name: "Delete" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("button", { name: "Plan trip", exact: true })).toHaveCount(0);
 });

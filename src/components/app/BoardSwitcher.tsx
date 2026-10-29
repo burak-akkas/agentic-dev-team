@@ -4,7 +4,7 @@ import { useId, useState, type FormEvent } from "react";
 import { MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
 import { useBoards } from "@/hooks/useBoard";
 
-import { Button, Dialog, Input, Select } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, Input, Select } from "@/components/ui";
 
 type Dialogs = "create" | "rename" | "delete" | null;
 
@@ -72,30 +72,6 @@ function BoardNameDialog({
   );
 }
 
-function DeleteBoardDialog({ name, onConfirm, onClose }: { name: string; onConfirm: () => void; onClose: () => void }) {
-  const id = useId();
-  return (
-    <Dialog labelledBy={`${id}-title`} onRequestClose={onClose}>
-      <div className="flex flex-col gap-3 p-5">
-        <h2 id={`${id}-title`} className="text-lg font-semibold">
-          Delete board
-        </h2>
-        <p className="text-sm">
-          Delete &ldquo;{name}&rdquo; and all its cards? This cannot be undone.
-        </p>
-        <div className="flex justify-end gap-2">
-          <Button autoFocus onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={onConfirm}>
-            Delete
-          </Button>
-        </div>
-      </div>
-    </Dialog>
-  );
-}
-
 export function BoardSwitcher() {
   const { boards, currentId, createBoard, renameBoard, deleteBoard, selectBoard } = useBoards();
   const [dialog, setDialog] = useState<Dialogs>(null);
@@ -138,13 +114,15 @@ export function BoardSwitcher() {
         />
       )}
       {dialog === "delete" && (
-        <DeleteBoardDialog
-          name={current.name}
+        <ConfirmDialog
+          title="Delete board"
+          message={<>Delete &ldquo;{current.name}&rdquo; and all its cards? This cannot be undone.</>}
+          confirmLabel="Delete"
           onConfirm={() => {
             deleteBoard(current.id);
             close();
           }}
-          onClose={close}
+          onCancel={close}
         />
       )}
     </div>

@@ -25,6 +25,8 @@ export function Dialog({
   function handleCancel(event: SyntheticEvent<HTMLDialogElement>) {
     // Escape: take over from the browser so the parent can decide whether to close.
     event.preventDefault();
+    // React bubbles cancel through the component tree, which would also reach a dialog this one is nested in.
+    event.stopPropagation();
     onRequestClose();
   }
 

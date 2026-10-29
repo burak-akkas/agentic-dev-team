@@ -69,21 +69,20 @@ describe("<CardDialog /> cover color", () => {
 
   it("treats a color change as unsaved and discards it on cancel", async () => {
     const { user, onClose } = setup();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     await user.click(screen.getByRole("radio", { name: "Cover color: Pink" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(confirm).toHaveBeenCalled();
+    const confirm = screen.getByRole("dialog", { name: "Discard changes" });
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(onClose).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Discard changes" })).getByRole("button", { name: "Discard" }));
     expect(onClose).toHaveBeenCalled();
   });
 
   it("does not prompt when the color is unchanged", async () => {
     const { user, onClose } = setup({ cover: "teal" });
-    const confirm = vi.spyOn(window, "confirm");
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(confirm).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Discard changes" })).not.toBeInTheDocument();
     expect(onClose).toHaveBeenCalled();
   });
 });

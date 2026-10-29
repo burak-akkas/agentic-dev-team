@@ -73,6 +73,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_REQUIRE_DESIGN_APPROVAL` | `true` | – | When `true`, every design waits for a human `agent:ready` |
 | `AGENT_QA` | – | `true` | Reviewer approval goes to the QA agent before merge (needs a preview deploy) |
 | `AGENT_AUTO_MERGE` | – | `true` | **Kill switch** for the merge gate |
+| `AGENT_PAUSED` | | | `true` pauses every agent job (see Human controls) |
 | `AGENT_AUTO_MERGE_HIGH_RISK` | – | – | `true` lets the agents merge `risk:high` changes too (not recommended) |
 | `AGENT_REQUIRED_CHECKS` | | `CI` | Comma-separated workflow names that must pass before merge |
 | `AGENT_SPLIT` | | | `false` stops the Architect from splitting big issues into sub-issues |
@@ -101,7 +102,8 @@ You don't need to do anything in autonomous mode. These are overrides:
 | Get a review of your own PR | Add `agent:review` |
 | Ask for something ad hoc | Comment `@claude …` |
 | Stop merging | Set `AGENT_AUTO_MERGE` to anything but `true` |
-| Stop everything | Disable the workflows (Actions tab), or remove the `agent:*` labels |
+| Pause all agents | Set the repo variable `AGENT_PAUSED` to `true`: every agent job (including the merge gate and watchdog) skips. Events during the pause are not queued, so to resume, delete the variable and run the watchdog once (`gh workflow run agent-watchdog.yml`); it re-triggers everything that changed state meanwhile |
+| Stop everything for good | Disable the workflows (Actions tab), or remove the `agent:*` labels |
 
 ## Safety rails built in
 

@@ -18,7 +18,11 @@ env:
 
 jobs:
   architect:
-    if: github.event.label.name == 'agent:analyzed' && !github.event.issue.pull_request
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
+    if: >-
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        github.event.label.name == 'agent:analyzed' && !github.event.issue.pull_request
+      ) }}
     concurrency:
       group: agent-${{ github.event.issue.number }}
       cancel-in-progress: false

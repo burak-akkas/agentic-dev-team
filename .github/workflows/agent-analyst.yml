@@ -18,16 +18,10 @@ env:
 
 jobs:
   analyst:
+    # AGENT_PAUSED == 'true' stops every agent job (global pause switch).
     if: >-
-      ${{ !github.event.issue.pull_request && (
-        (github.event.action == 'opened' && vars.AGENT_AUTO_START == 'true' &&
-         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) &&
-         !contains(github.event.issue.labels.*.name, 'agent:start')) ||
-        (github.event.action == 'labeled' && github.event.label.name == 'agent:start') ||
-        (github.event_name == 'issue_comment' &&
-         contains(github.event.issue.labels.*.name, 'agent:needs-info') &&
-         github.event.comment.user.type != 'Bot' &&
-         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+      ${{ vars.AGENT_PAUSED != 'true' && (
+        !github.event.issue.pull_request && ( (github.event.action == 'opened' && vars.AGENT_AUTO_START == 'true' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association) && !contains(github.event.issue.labels.*.name, 'agent:start')) || (github.event.action == 'labeled' && github.event.label.name == 'agent:start') || (github.event_name == 'issue_comment' && contains(github.event.issue.labels.*.name, 'agent:needs-info') && github.event.comment.user.type != 'Bot' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) )
       ) }}
     concurrency:
       group: agent-${{ github.event.issue.number }}

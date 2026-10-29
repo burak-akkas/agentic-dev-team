@@ -7,6 +7,7 @@ import type { Board } from "@/lib/board";
 import { BoardTransfer } from "@/components/app/BoardTransfer";
 import { Button, Dialog, Input } from "@/components/ui";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
+import { BackgroundSettings } from "./BackgroundSettings";
 import { ListChoice } from "./ListChoice";
 
 function WipLimitRow({
@@ -99,6 +100,7 @@ export function SettingsPanel({
             Appearance
           </h3>
           <ThemeToggle />
+          <BackgroundSettings board={board} onUpdateBoard={onUpdateBoard} />
         </section>
         <ListChoice board={board} onUpdateBoard={onUpdateBoard} />
         <section aria-labelledby={wipHeadingId} className="flex min-w-0 flex-col gap-2">

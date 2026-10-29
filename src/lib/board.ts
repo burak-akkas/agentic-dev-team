@@ -87,7 +87,13 @@ export interface CardTemplate {
   checklist?: { id: string; text: string }[];
 }
 
+export type BoardView = "board" | "calendar" | "table";
+
+export const BOARD_VIEWS: readonly BoardView[] = ["board", "calendar", "table"];
+
 export interface Board {
+  // Which view is shown. Absent means the list view ("board").
+  view?: BoardView;
   // Card templates of this board. Not part of `columns`, so search, insights, calendar and table never see them.
   templates?: CardTemplate[];
   // Ordered lists. Absent on boards built before custom lists: they have the default three (see `boardLists`).
@@ -192,6 +198,22 @@ export function emptyBoard(): Board {
     archive: [],
     insightsLists: { doing: "doing", done: "done" },
   };
+}
+
+export function boardView(board: Board): BoardView {
+  return board.view ?? "board";
+}
+
+// Chooses the view. "board" removes the key; the same view returns the same board.
+export function setView(board: Board, view: BoardView): Board {
+  if (boardView(board) === view) {
+    return board;
+  }
+  const next: Board = { ...board, view };
+  if (view === "board") {
+    delete next.view;
+  }
+  return next;
 }
 
 export function boardLists(board: Board): readonly List[] {

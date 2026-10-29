@@ -324,7 +324,9 @@ function normalizeBoard(board: Board): Board {
     }
   }
   const templates = normalizeTemplates((board as { templates?: unknown }).templates);
+  const view: unknown = (board as { view?: unknown }).view;
   return {
+    ...((view === "table" || view === "calendar") && { view }),
     lists,
     ...(templates.length > 0 && { templates }),
     ...(Object.keys(wipLimits).length > 0 && { wipLimits }),

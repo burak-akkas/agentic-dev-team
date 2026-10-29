@@ -6,7 +6,7 @@ const remoteURL = process.env.E2E_BASE_URL;
 const PORT = 3100;
 
 export default defineConfig({
-  testDir: "e2e",
+  testDir: "tests/e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -26,7 +26,7 @@ export default defineConfig({
   webServer: remoteURL
     ? undefined
     : {
-        command: `node e2e/serve.mjs out ${PORT}`,
+        command: `node tests/support/serve.mjs out ${PORT}`,
         url: `http://localhost:${PORT}/`,
         reuseExistingServer: !process.env.CI,
       },

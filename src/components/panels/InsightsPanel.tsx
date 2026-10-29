@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import type { ReactNode } from "react";
-import { boardLists, formatDueDate, insightsListIds, listName, setInsightsList } from "@/lib/board";
+import { formatDueDate, insightsListIds, listName } from "@/lib/board";
 import type { Board } from "@/lib/board";
 import { barRects, chartBounds, chartMax, linePoints } from "@/lib/chart";
 import type { ChartSize } from "@/lib/chart";
@@ -14,7 +14,8 @@ import {
   summarizeCycleTimes,
   weeklyThroughput,
 } from "@/lib/insights";
-import { Button, Dialog, Select } from "@/components/ui";
+import { Button, Dialog } from "@/components/ui";
+import { ListChoice } from "./ListChoice";
 
 // Names of the lists insights use; a placeholder when none is chosen.
 function insightsNames(board: Board): { doing: string; done: string } {
@@ -23,51 +24,6 @@ function insightsNames(board: Board): { doing: string; done: string } {
     doing: doing === undefined ? "the in-progress list" : listName(board, doing),
     done: done === undefined ? "the done list" : listName(board, done),
   };
-}
-
-function ListChoice({
-  board,
-  onUpdateBoard,
-}: {
-  board: Board;
-  onUpdateBoard: (change: (board: Board) => Board) => void;
-}) {
-  const headingId = useId();
-  const ids = insightsListIds(board);
-  const field = (kind: "doing" | "done", label: string) => (
-    <label className="flex flex-col gap-1 text-xs font-medium text-subtle">
-      {label}
-      <Select
-        fieldSize="sm"
-        value={ids[kind] ?? ""}
-        onChange={(event) => {
-          const id = event.target.value || undefined;
-          onUpdateBoard((b) => (id === undefined || boardLists(b).some((l) => l.id === id) ? setInsightsList(b, kind, id) : b));
-        }}
-      >
-        <option value="">Not set</option>
-        {boardLists(board).map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.name}
-          </option>
-        ))}
-      </Select>
-    </label>
-  );
-  return (
-    <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
-      <h3 id={headingId} className="text-sm font-semibold">
-        Lists used
-      </h3>
-      <div className="grid grid-cols-2 gap-3">
-        {field("doing", "In progress list")}
-        {field("done", "Done list")}
-      </div>
-      {(ids.doing === undefined || ids.done === undefined) && (
-        <p className="text-xs text-muted">Pick the lists that mean in progress and done to see these numbers.</p>
-      )}
-    </section>
-  );
 }
 
 function CycleTimeSection({ board, now }: { board: Board; now?: Date }) {

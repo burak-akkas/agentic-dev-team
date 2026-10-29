@@ -38,6 +38,7 @@ export function CardDialog({
   onSave,
   onDelete,
   onDuplicate,
+  onSaveTemplate,
   onClose,
   onChecklist,
   onUpdateBoard,
@@ -52,6 +53,8 @@ export function CardDialog({
   onDelete: () => void;
   // Duplicates the saved card (unsaved edits in this dialog are not copied).
   onDuplicate?: () => void;
+  // Saves the saved card as a template of the board and reports the outcome (shown in the dialog).
+  onSaveTemplate?: () => { ok: boolean; message: string };
   onClose: () => void;
   onUpdateBoard: (fn: (board: Board) => Board) => void;
 }) {
@@ -65,6 +68,7 @@ export function CardDialog({
   const [cover, setCover] = useState<CoverColor | undefined>(card.cover);
   const [labelInput, setLabelInput] = useState("");
   const [labelError, setLabelError] = useState<string | null>(null);
+  const [templateResult, setTemplateResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   function addLabel() {
     try {
@@ -331,10 +335,25 @@ export function CardDialog({
               Duplicate
             </Button>
           )}
+          {onSaveTemplate && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Saves the saved card as a template (unsaved edits are not copied)"
+              onClick={() => setTemplateResult(onSaveTemplate())}
+            >
+              Save as template
+            </Button>
+          )}
           <Button variant="danger" size="sm" className="ml-auto" onClick={handleDelete}>
             Delete card
           </Button>
         </div>
+        {templateResult && (
+          <p role={templateResult.ok ? "status" : "alert"} className={`text-xs ${templateResult.ok ? "text-muted" : "text-danger"}`}>
+            {templateResult.message}
+          </p>
+        )}
       </form>
     </Dialog>
   );

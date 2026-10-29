@@ -24,7 +24,7 @@ test("edits every field in the dialog, saves, and persists", async ({ page }) =>
   await dialog.getByLabel("Status").selectOption("doing");
   await dialog.getByLabel("Priority").selectOption("high");
   await dialog.getByLabel("Due date").fill("2031-05-06");
-  await dialog.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
   await expect(dialog).toBeHidden();
   const doing = page.getByRole("region", { name: /^Doing/ });
@@ -41,7 +41,7 @@ test("edits every field in the dialog, saves, and persists", async ({ page }) =>
   await expect(reopened.getByLabel("Due date")).toHaveValue("2031-05-06");
 
   await reopened.getByRole("button", { name: "Clear due date" }).click();
-  await reopened.getByRole("button", { name: "Save" }).click();
+  await reopened.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByRole("button", { name: "Plan holiday", exact: true }).click();
   await expect(page.getByRole("dialog").getByLabel("Due date")).toHaveValue("");
 });
@@ -52,7 +52,7 @@ test("blocks Save for an empty title", async ({ page }) => {
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Title").fill("   ");
   await expect(dialog.getByRole("alert")).toHaveText("Title must not be empty");
-  await expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 });
 
 test("cancel, Escape and backdrop confirm before discarding changes", async ({ page }) => {
@@ -146,7 +146,7 @@ test("fits a phone viewport", async ({ page }) => {
   expect(box?.x).toBeGreaterThanOrEqual(0);
   expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(375);
   expect(box?.height).toBeLessThanOrEqual(500);
-  const save = dialog.getByRole("button", { name: "Save" });
+  const save = dialog.getByRole("button", { name: "Save", exact: true });
   await save.scrollIntoViewIfNeeded();
   await expect(save).toBeInViewport();
 });

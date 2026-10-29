@@ -21,7 +21,7 @@ test("duplicates a card with the keyboard, keeps its details, and survives a rel
   await dialog.getByRole("button", { name: "Add item" }).click();
   await dialog.getByLabel("New comment").fill("A comment");
   await dialog.getByRole("button", { name: "Add comment" }).click();
-  await dialog.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
   await page.getByRole("button", { name: "Plan trip", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "Plan trip" });

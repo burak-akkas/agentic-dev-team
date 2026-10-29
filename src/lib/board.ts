@@ -75,6 +75,18 @@ export interface InsightsLists {
   done?: ColumnId;
 }
 
+// A reusable card blueprint. Checklist items have no `done` flag, so templates are always unticked.
+export interface CardTemplate {
+  id: string;
+  name: string;
+  title: string;
+  notes?: string;
+  labels?: string[];
+  priority: Priority;
+  cover?: CoverColor;
+  checklist?: { id: string; text: string }[];
+}
+
 export type BoardView = "board" | "calendar" | "table";
 
 export const BOARD_VIEWS: readonly BoardView[] = ["board", "calendar", "table"];
@@ -82,6 +94,8 @@ export const BOARD_VIEWS: readonly BoardView[] = ["board", "calendar", "table"];
 export interface Board {
   // Which view is shown. Absent means the list view ("board").
   view?: BoardView;
+  // Card templates of this board. Not part of `columns`, so search, insights, calendar and table never see them.
+  templates?: CardTemplate[];
   // Ordered lists. Absent on boards built before custom lists: they have the default three (see `boardLists`).
   lists?: List[];
   // Cards per list id.

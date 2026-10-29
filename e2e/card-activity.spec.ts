@@ -17,7 +17,7 @@ test("shows a persistent activity log newest first, then archive and restore ent
 
   let dialog = await openCard(page, "Track me");
   await dialog.getByLabel("Priority").selectOption("high");
-  await dialog.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(dialog).toBeHidden();
 
   dialog = await openCard(page, "Track me");
@@ -33,7 +33,7 @@ test("shows a persistent activity log newest first, then archive and restore ent
   dialog = await openCard(page, "Track me");
   await expect(dialog.getByRole("list", { name: "Activity" }).getByRole("listitem")).toHaveCount(3);
   await dialog.getByLabel("Status").selectOption("done");
-  await dialog.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
   await page.getByRole("button", { name: "Archive done" }).click();
   await page.getByRole("button", { name: "Archived (1)" }).click();

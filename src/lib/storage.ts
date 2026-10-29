@@ -11,6 +11,7 @@ import {
   MAX_COMMENT_LENGTH,
   MAX_LIST_NAME_LENGTH,
   MAX_NOTES_LENGTH,
+  MAX_TITLE_LENGTH,
   normalizeChecklistText,
   PRIORITIES,
   todayString,
@@ -19,11 +20,13 @@ import {
   type Board,
   type Card,
   type CardComment,
+  type CardTemplate,
   type ChecklistItem,
   type ColumnId,
   type InsightsLists,
   type List,
 } from "./board";
+import { MAX_TEMPLATES, validateTemplateName } from "./templates";
 
 export const STORAGE_KEY = "kanban-boards-v2";
 // Only read, to migrate old data; never written or removed.
@@ -218,6 +221,55 @@ function normalizeLabels(value: unknown): string[] {
   return result;
 }
 
+// Keeps valid templates only: malformed entries, duplicate ids, bad or duplicate names and bad titles are dropped.
+// Notes, labels, priority, cover and checklist text go through the card normalizers (checklist items lose `done`).
+function normalizeTemplates(value: unknown): CardTemplate[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const ids = new Set<string>();
+  const result: CardTemplate[] = [];
+  for (const entry of value) {
+    const t = entry as Record<string, unknown> | null;
+    if (typeof t !== "object" || t === null || typeof t.id !== "string" || ids.has(t.id) || typeof t.title !== "string") {
+      continue;
+    }
+    const name = validateTemplateName(typeof t.name === "string" ? t.name : "", result);
+    const title = t.title.trim();
+    if (!name.ok || !title || title.length > MAX_TITLE_LENGTH || result.length >= MAX_TEMPLATES) {
+      continue;
+    }
+    const card = normalizeCard({
+      id: t.id,
+      title,
+      createdAt: "",
+      priority: t.priority as Card["priority"],
+      notes: t.notes as string,
+      cover: t.cover as Card["cover"],
+      labels: t.labels as string[],
+      checklist: normalizeChecklist(
+        Array.isArray(t.checklist) ? t.checklist.map((i: Record<string, unknown> | null) => ({ ...i, done: false })) : [],
+      ),
+    });
+    ids.add(t.id);
+    const template: CardTemplate = { id: t.id, name: name.name, title, priority: card.priority };
+    if (card.notes !== undefined) {
+      template.notes = card.notes;
+    }
+    if (card.labels) {
+      template.labels = card.labels;
+    }
+    if (card.cover !== undefined) {
+      template.cover = card.cover;
+    }
+    if (card.checklist) {
+      template.checklist = card.checklist.map(({ id, text }) => ({ id, text }));
+    }
+    result.push(template);
+  }
+  return result;
+}
+
 // Boards saved before archiving have no `archive`; a corrupt one is dropped and invalid cards are skipped.
 function normalizeBoard(board: Board): Board {
   const archive: unknown = (board as { archive?: unknown }).archive;
@@ -271,10 +323,12 @@ function normalizeBoard(board: Board): Board {
       insightsLists.done = done;
     }
   }
+  const templates = normalizeTemplates((board as { templates?: unknown }).templates);
   const view: unknown = (board as { view?: unknown }).view;
   return {
     ...((view === "table" || view === "calendar") && { view }),
     lists,
+    ...(templates.length > 0 && { templates }),
     ...(Object.keys(wipLimits).length > 0 && { wipLimits }),
     ...(Object.keys(formerLists).length > 0 && { formerLists }),
     insightsLists,

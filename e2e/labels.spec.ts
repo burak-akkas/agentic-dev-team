@@ -19,7 +19,7 @@ test("adds a label, filters by chip click, combines with search and clears", asy
   await dialog.getByLabel("Labels").fill("bug");
   await dialog.getByRole("button", { name: "Add label" }).click();
   await expect(dialog.getByRole("alert")).toContainText("already exists");
-  await dialog.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
 
   const chip = page.getByRole("button", { name: 'Filter by label "Bug"' });
   await expect(chip).toBeVisible();

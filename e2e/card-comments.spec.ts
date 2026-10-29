@@ -51,7 +51,7 @@ test("adds, edits and deletes comments, with a count badge that persists and sur
   // Move to Done, archive and restore: the comments come along.
   await page.getByRole("button", { name: "Plan trip", exact: true }).click();
   await page.getByRole("dialog").getByLabel("Status").selectOption("done");
-  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
   await page.getByRole("button", { name: "Archive done" }).click();
   await expect(page.getByLabel("2 comments")).toHaveCount(0);
   await page.getByRole("button", { name: "Archived (1)" }).click();

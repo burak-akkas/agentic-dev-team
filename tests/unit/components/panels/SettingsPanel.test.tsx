@@ -39,6 +39,22 @@ describe("<SettingsPanel />", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("has an Import / Export section with Export and Import buttons", () => {
+    renderPanel();
+    const section = screen.getByRole("region", { name: "Import / Export" });
+    expect(within(section).getByRole("button", { name: "Export" })).toBeInTheDocument();
+    expect(within(section).getByRole("button", { name: "Import" })).toBeInTheDocument();
+    expect(within(section).getByLabelText("Import board file")).toBeInTheDocument();
+  });
+
+  it("shows an error for an invalid import file inside the dialog", async () => {
+    renderPanel();
+    const file = new File(['{"hello":"world"}'], "other.json", { type: "application/json" });
+    await userEvent.upload(screen.getByLabelText("Import board file"), file);
+    const dialog = screen.getByRole("dialog", { name: "Settings" });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(/not a Kanban board/);
+  });
+
   it("sets and unsets the done and in progress lists", async () => {
     renderPanel();
     await userEvent.selectOptions(screen.getByLabelText("Done list"), "Doing");

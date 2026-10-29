@@ -46,14 +46,19 @@ test("keeps the checklist through export and import", async ({ page }, testInfo)
   await dialog.getByRole("button", { name: "Add item" }).click();
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export" }).click();
+  await settings.getByRole("button", { name: "Export" }).click();
   const path = testInfo.outputPath("board.json");
   await (await downloadPromise).saveAs(path);
+  await settings.getByRole("button", { name: "Close" }).click();
 
   await deleteCardViaDialog(page, "Packed");
   await expect(page.getByRole("img", { name: /checklist items done/ })).toHaveCount(0);
-  await page.getByLabel("Import board file").setInputFiles(path);
-  await page.getByRole("button", { name: "Replace" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await settings.getByLabel("Import board file").setInputFiles(path);
+  await settings.getByRole("button", { name: "Replace" }).click();
+  await settings.getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("img", { name: "0 of 1 checklist items done" })).toBeVisible();
 });

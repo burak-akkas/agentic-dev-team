@@ -82,7 +82,7 @@ export function BoardTransfer() {
   }
 
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div className="flex min-w-0 flex-col items-start gap-2">
       <div className="flex gap-2">
         <Button size="sm" onClick={exportBoard}>
           Export
@@ -103,7 +103,7 @@ export function BoardTransfer() {
       {error && (
         <p
           role="alert"
-          className="max-w-xs rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+          className="max-w-full rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
         >
           {error}
         </p>
@@ -112,7 +112,7 @@ export function BoardTransfer() {
         <div
           role="alertdialog"
           aria-labelledby="import-confirm-text"
-          className="max-w-xs rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
+          className="max-w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100"
         >
           <p id="import-confirm-text">
             Replace the current board with the imported one ({countCards(pending)} {countCards(pending) === 1 ? "card" : "cards"})? This cannot be undone.

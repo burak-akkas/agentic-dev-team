@@ -77,15 +77,20 @@ test("remembers collapsed lists per board", async ({ page }) => {
 test("export then import keeps the collapsed list", async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Collapse Done" }).click();
 
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export" }).click();
+  await settings.getByRole("button", { name: "Export" }).click();
   const download = await downloadPromise;
   const path = testInfo.outputPath("board.json");
   await download.saveAs(path);
   expect(await readFile(path, "utf8")).toContain("collapsedLists");
+  await settings.getByRole("button", { name: "Close" }).click();
 
   await page.getByRole("button", { name: "Expand Done" }).click();
-  await page.getByLabel("Import board file").setInputFiles(path);
-  await page.getByRole("button", { name: "Replace" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await settings.getByLabel("Import board file").setInputFiles(path);
+  await settings.getByRole("button", { name: "Replace" }).click();
+  await settings.getByRole("button", { name: "Close" }).click();
   await expect(page.getByRole("button", { name: "Expand Done" })).toBeVisible();
 });

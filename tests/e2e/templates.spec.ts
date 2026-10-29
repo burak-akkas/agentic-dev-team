@@ -45,8 +45,8 @@ test("saves a card as a template, adds from it, manages templates and keeps them
   await page.getByRole("button", { name: "Templates" }).click();
   await expect(page.getByLabel('Name of template "Trip"')).toBeVisible();
 
-  page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: 'Delete template "Trip"' }).click();
+  await page.getByRole("dialog", { name: "Delete template" }).getByRole("button", { name: "Delete" }).click();
   await expect(page.getByText(/No templates yet/)).toBeVisible();
 });
 

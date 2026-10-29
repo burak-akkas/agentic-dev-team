@@ -87,13 +87,15 @@ describe("<Board /> custom lists", () => {
 
   it("deletes an empty list after confirmation", async () => {
     saveBoard(addList(emptyBoard(), "Review", { id: "r" }));
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     render(<Board />);
     const { user, dialog } = await openManager();
     await user.click(within(dialog).getByRole("button", { name: 'Delete list "Review"' }));
+    const confirm = screen.getByRole("dialog", { name: "Delete list" });
+    expect(within(confirm).getByText('Delete the empty list "Review"?')).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
     expect(headings()).toContain("Review");
     await user.click(within(dialog).getByRole("button", { name: 'Delete list "Review"' }));
-    expect(confirm).toHaveBeenCalledTimes(2);
+    await user.click(within(screen.getByRole("dialog", { name: "Delete list" })).getByRole("button", { name: "Delete" }));
     expect(headings()).not.toContain("Review");
   });
 

@@ -28,7 +28,7 @@ import { ActivityLog } from "./ActivityLog";
 import { CardComments } from "./CardComments";
 import { ChecklistSection } from "./ChecklistSection";
 import { LabelChip } from "./LabelChip";
-import { Button, Dialog, Input, Select, Textarea } from "@/components/ui";
+import { Button, ConfirmDialog, Dialog, Input, Select, Textarea } from "@/components/ui";
 
 const labelStyles = "text-xs font-medium text-subtle";
 
@@ -68,6 +68,7 @@ export function CardDialog({
   const [cover, setCover] = useState<CoverColor | undefined>(card.cover);
   const [labelInput, setLabelInput] = useState("");
   const [labelError, setLabelError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<"discard" | "delete" | null>(null);
   const [templateResult, setTemplateResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   function addLabel() {
@@ -96,7 +97,8 @@ export function CardDialog({
 
   // Closing with unsaved changes needs confirmation.
   function requestClose() {
-    if (hasChanges(card, column, edits) && !window.confirm("Discard your unsaved changes?")) {
+    if (hasChanges(card, column, edits)) {
+      setConfirming("discard");
       return;
     }
     onClose();
@@ -110,11 +112,6 @@ export function CardDialog({
     onSave(edits);
   }
 
-  function handleDelete() {
-    if (window.confirm(`Delete "${card.title}"?`)) {
-      onDelete();
-    }
-  }
 
   return (
     // Escape and backdrop clicks go through requestClose so unsaved changes can be confirmed first.
@@ -345,7 +342,7 @@ export function CardDialog({
               Save as template
             </Button>
           )}
-          <Button variant="danger" size="sm" className="ml-auto" onClick={handleDelete}>
+          <Button variant="danger" size="sm" className="ml-auto" onClick={() => setConfirming("delete")}>
             Delete card
           </Button>
         </div>
@@ -355,6 +352,24 @@ export function CardDialog({
           </p>
         )}
       </form>
+      {confirming === "discard" && (
+        <ConfirmDialog
+          title="Discard changes"
+          message="Discard your unsaved changes?"
+          confirmLabel="Discard"
+          onConfirm={onClose}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
+      {confirming === "delete" && (
+        <ConfirmDialog
+          title="Delete card"
+          message={`Delete "${card.title}"?`}
+          confirmLabel="Delete"
+          onConfirm={onDelete}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
     </Dialog>
   );
 }

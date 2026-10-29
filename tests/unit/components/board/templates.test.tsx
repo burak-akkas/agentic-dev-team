@@ -84,8 +84,12 @@ describe("<Board /> templates", () => {
     expect(within(dialog).getByLabelText('Name of template "Ship it"')).toBeInTheDocument();
     expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
 
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(within(dialog).getByRole("button", { name: 'Delete template "Ship it"' }));
+    const confirm = screen.getByRole("dialog", { name: "Delete template" });
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(within(dialog).getByLabelText('Name of template "Ship it"')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: 'Delete template "Ship it"' }));
+    await user.click(within(screen.getByRole("dialog", { name: "Delete template" })).getByRole("button", { name: "Delete" }));
     expect(within(dialog).getByText(/No templates yet/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Close" }));
     expect(screen.queryByLabelText("From template")).not.toBeInTheDocument();

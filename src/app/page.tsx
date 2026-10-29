@@ -1,9 +1,9 @@
-import { Board } from "@/components/Board";
-import { BoardSwitcher } from "@/components/BoardSwitcher";
-import { BoardTransfer } from "@/components/BoardTransfer";
-import { BoardUrlSync } from "@/components/BoardUrlSync";
-import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { BoardSwitcher } from "@/components/app/BoardSwitcher";
+import { BoardTransfer } from "@/components/app/BoardTransfer";
+import { BoardUrlSync } from "@/components/app/BoardUrlSync";
+import { KeyboardShortcuts } from "@/components/app/KeyboardShortcuts";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
+import { Board } from "@/components/board/Board";
 
 export default function Home() {
   return (

@@ -30,7 +30,7 @@ import {
   validateListName,
   type Board,
 } from "@/lib/board";
-import { describeActivity } from "@/components/ActivityLog";
+import { describeActivity } from "@/components/card/ActivityLog";
 import { overdueCards, cycleTimes } from "@/lib/insights";
 import { parseBoard, serializeBoard } from "@/lib/storage";
 

@@ -288,7 +288,7 @@ export function Board() {
               onDragOver={(event) => handleDragOver(event, id)}
               onDragLeave={(event) => handleDragLeave(event, id)}
               onDrop={(event) => handleDrop(event, id)}
-              className={`flex flex-col gap-3 rounded-xl p-3 md:min-w-64 md:flex-1 md:basis-64${
+              className={`flex flex-col gap-3 rounded-xl p-3 md:min-w-64 md:flex-1 md:basis-64 ${
                 dragOver === id
                   ? "bg-indigo-50 ring-2 ring-indigo-500 dark:bg-indigo-950/40"
                   : "bg-surface-muted dark:bg-surface/50"

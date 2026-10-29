@@ -21,6 +21,15 @@ test("board spans the full width on a wide screen without side scrolling", async
   expect(last!.x + last!.width - first!.x).toBeGreaterThan(1024);
 });
 
+test("columns keep their background", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const column = page
+    .locator('h2[id^="column-"]')
+    .first()
+    .locator('xpath=ancestor::*[contains(@class,"rounded-xl")][1]');
+  await expect(column).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+});
+
 test("extra lists wrap instead of scrolling sideways", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole("button", { name: "Manage lists" }).click();

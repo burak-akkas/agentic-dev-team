@@ -15,7 +15,6 @@ import {
   weeklyThroughput,
 } from "@/lib/insights";
 import { Button, Dialog } from "@/components/ui";
-import { ListChoice } from "./ListChoice";
 
 // Names of the lists insights use; a placeholder when none is chosen.
 function insightsNames(board: Board): { doing: string; done: string } {
@@ -246,23 +245,23 @@ export function InsightsPanel({
   now,
   onClose,
   onOpenCard,
-  onUpdateBoard,
 }: {
   board: Board;
   now?: Date;
   onClose: () => void;
   onOpenCard: (cardId: string) => void;
-  // Without it the list choice is not shown.
-  onUpdateBoard?: (change: (board: Board) => Board) => void;
 }) {
   const headingId = useId();
+  const { doing, done } = insightsListIds(board);
   return (
     <Dialog labelledBy={headingId} onRequestClose={onClose}>
       <div className="flex max-w-full min-w-0 flex-col gap-5 p-5">
         <h2 id={headingId} className="text-lg font-semibold">
           Board insights
         </h2>
-        {onUpdateBoard && <ListChoice board={board} onUpdateBoard={onUpdateBoard} />}
+        {doing === undefined && done === undefined && (
+          <p className="text-sm text-muted">Choose the in-progress and done lists in Settings.</p>
+        )}
         <CycleTimeSection board={board} now={now} />
         <ThroughputSection board={board} now={now} />
         <WipSection board={board} now={now} />

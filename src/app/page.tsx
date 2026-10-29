@@ -2,6 +2,7 @@ import { BoardSwitcher } from "@/components/app/BoardSwitcher";
 import { BoardUrlSync } from "@/components/app/BoardUrlSync";
 import { KeyboardShortcuts } from "@/components/app/KeyboardShortcuts";
 import { ThemeSync } from "@/components/app/ThemeSync";
+import { TitleSync } from "@/components/app/TitleSync";
 import { Board } from "@/components/board/Board";
 
 export default function Home() {
@@ -16,6 +17,7 @@ export default function Home() {
           <BoardSwitcher />
           <BoardUrlSync />
           <ThemeSync />
+          <TitleSync />
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
           <KeyboardShortcuts />

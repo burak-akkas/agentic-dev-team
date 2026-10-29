@@ -18,14 +18,18 @@ test("sets a WIP limit, warns at and over it, persists and clears", async ({ pag
   await addCard(page, "One");
   await addCard(page, "Two");
 
-  await page.getByRole("button", { name: "Set WIP limit for Doing" }).click();
-  const input = page.getByRole("textbox", { name: "WIP limit for Doing" });
+  await expect(doing.getByRole("button", { name: /limit/i })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  const input = dialog.getByLabel("WIP limit for Doing", { exact: true });
   await input.fill("0");
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(doing.getByRole("alert")).toContainText("Enter a whole number");
+  await dialog.getByRole("button", { name: "Save WIP limit for Doing" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Enter a whole number");
 
   await input.fill("1");
-  await page.getByRole("button", { name: "Save" }).click();
+  await dialog.getByRole("button", { name: "Save WIP limit for Doing" }).click();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: /^Doing\s*0 \/ 1$/ })).toBeVisible();
 
   await moveCardTo(page, "One", "Doing");
@@ -38,8 +42,9 @@ test("sets a WIP limit, warns at and over it, persists and clears", async ({ pag
   await expect(page.getByRole("heading", { name: /^Doing\s*2 \/ 1$/ })).toBeVisible();
   await expect(column(page, "Doing").getByText("Over limit by 1")).toBeVisible();
 
-  await page.getByRole("button", { name: "Edit WIP limit for Doing" }).click();
-  await page.getByRole("button", { name: "Clear WIP limit for Doing" }).click();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Clear WIP limit for Doing" }).click();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: /^Doing\s*2$/ })).toBeVisible();
   await expect(page.getByText(/Over limit by/)).toHaveCount(0);
 });

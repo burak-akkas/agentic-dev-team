@@ -26,7 +26,6 @@ import {
   renameCard,
   restoreCard,
   setView,
-  setWipLimit,
   toggleListCollapsed,
   undoArchive,
   updateCard,
@@ -49,7 +48,7 @@ import { TableView } from "@/components/views/TableView";
 import { TemplatesPanel } from "@/components/panels/TemplatesPanel";
 import { UndoToast } from "./UndoToast";
 import { ViewSwitch } from "@/components/views/ViewSwitch";
-import { Button } from "@/components/ui";
+import { ArchiveIcon, Button } from "@/components/ui";
 
 export function Board() {
   const [board, update] = useBoard();
@@ -263,7 +262,6 @@ export function Board() {
       {showInsights && (
         <InsightsPanel
           board={board}
-          onUpdateBoard={update}
           onClose={closeInsights}
           onOpenCard={(cardId) => {
             setShowInsights(false);
@@ -314,18 +312,19 @@ export function Board() {
                 title={title}
                 total={listCards(board, id).length}
                 limit={board.wipLimits?.[id]}
-                onSetLimit={(limit) => update((b) => setWipLimit(b, id, limit))}
                 collapsed={collapsed}
                 role={id === doneId ? "done" : id === doingId ? "doing" : undefined}
                 onToggleCollapsed={() => update((b) => toggleListCollapsed(b, id))}
               >
                 <Button
                   size="xs"
-                  aria-label={id === doneId ? undefined : `Archive all cards in ${title}`}
+                  variant="ghost"
+                  aria-label={`Archive ${id === doneId ? "done" : "all"} cards in ${title}`}
+                  title={`Archive ${id === doneId ? "done" : "all"} cards in ${title}`}
                   disabled={listCards(board, id).length === 0}
                   onClick={() => archiveListCards(id)}
                 >
-                  {id === doneId ? "Archive done" : "Archive all"}
+                  <ArchiveIcon />
                 </Button>
               </ColumnHeader>
               {collapsed ? null : cards.length === 0 ? (

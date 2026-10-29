@@ -11,14 +11,26 @@ interface ColumnHeaderProps {
   total: number;
   limit: number | undefined;
   onSetLimit: (limit: number | undefined) => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   children?: ReactNode;
 }
 
-export function ColumnHeader({ id, title, total, limit, onSetLimit, children }: ColumnHeaderProps) {
+export function ColumnHeader({
+  id,
+  title,
+  total,
+  limit,
+  onSetLimit,
+  collapsed,
+  onToggleCollapsed,
+  children,
+}: ColumnHeaderProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const editButton = useRef<HTMLButtonElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const status = wipStatus(total, limit);
 
   function open() {
@@ -63,9 +75,43 @@ export function ColumnHeader({ id, title, total, limit, onSetLimit, children }: 
         ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
         : "bg-line text-subtle";
 
+  // The header remounts as a different tree, so focus goes back to the button after the toggle.
+  function toggle() {
+    onToggleCollapsed();
+    requestAnimationFrame(() => toggleRef.current?.focus());
+  }
+
+  const toggleButton = (
+    <Button
+      ref={toggleRef}
+      size="xs"
+      variant="ghost"
+      aria-label={`${collapsed ? "Expand" : "Collapse"} ${title}`}
+      aria-expanded={!collapsed}
+      onClick={toggle}
+    >
+      {collapsed ? "Expand" : "Collapse"}
+    </Button>
+  );
+
+  // The narrow strip: name, real card count and the Expand button. No WIP controls.
+  if (collapsed) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h2 id={`column-${id}`} className="flex min-w-0 items-center gap-2 px-1 text-sm font-semibold">
+          <span className="break-words">{title}</span>
+          <span className={`rounded-full px-2 text-xs font-medium ${badgeTone}`}>
+            {limit === undefined ? total : `${total} / ${limit}`}
+          </span>
+        </h2>
+        {toggleButton}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h2 id={`column-${id}`} className="flex items-center gap-2 px-1 text-sm font-semibold">
             {title}
@@ -80,7 +126,8 @@ export function ColumnHeader({ id, title, total, limit, onSetLimit, children }: 
             <span className="text-xs font-medium text-red-700 dark:text-red-300">Over limit by {status.over}</span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
+          {toggleButton}
           <Button
             ref={editButton}
             size="xs"

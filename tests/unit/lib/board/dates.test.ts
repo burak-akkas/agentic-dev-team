@@ -1,14 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
   addCard,
+  addList,
+  cardDueStatus,
+  deleteList,
   emptyBoard,
   dueStatus,
   findCard,
   formatDueDate,
+  insightsListIds,
+  isCardOverdue,
   isOverdue,
   isValidDueDate,
   moveCard,
+  moveList,
+  renameList,
   setDueDate,
+  setInsightsList,
   todayString,
 } from "@/lib/board";
 
@@ -53,20 +61,47 @@ describe("due dates", () => {
   });
 
   it("flags overdue cards with an injectable today", () => {
-    expect(isOverdue(card(), "todo", "2026-10-29")).toBe(true);
-    expect(isOverdue(card(), "doing", "2026-10-29")).toBe(true);
-    expect(isOverdue(card(), "todo", "2026-10-28")).toBe(false);
-    expect(isOverdue(card(), "todo", "2026-10-27")).toBe(false);
-    expect(isOverdue(base.columns.todo[0], "todo", "2030-01-01")).toBe(false);
-    expect(isOverdue(card(), "done", "2026-10-29")).toBe(false);
+    expect(isOverdue(card(), "todo", "2026-10-29", "done")).toBe(true);
+    expect(isOverdue(card(), "doing", "2026-10-29", "done")).toBe(true);
+    expect(isOverdue(card(), "todo", "2026-10-28", "done")).toBe(false);
+    expect(isOverdue(card(), "todo", "2026-10-27", "done")).toBe(false);
+    expect(isOverdue(base.columns.todo[0], "todo", "2030-01-01", "done")).toBe(false);
+    expect(isOverdue(card(), "done", "2026-10-29", "done")).toBe(false);
+  });
+
+  it("has no done list when doneId is null, even for a list with the id done", () => {
+    expect(isOverdue(card(), "done", "2026-10-29", null)).toBe(true);
+    expect(isOverdue(card(), "done", "2026-10-29", "shipped")).toBe(true);
+    expect(isOverdue(card(), "shipped", "2026-10-29", "shipped")).toBe(false);
   });
 
   it("keeps the due date when moving into and out of Done", () => {
     const done = moveCard(withDate, "a", "done");
     expect(findCard(done, "a")!.card.dueDate).toBe("2026-10-28");
-    expect(isOverdue(findCard(done, "a")!.card, "done", "2030-01-01")).toBe(false);
+    expect(isCardOverdue(done, findCard(done, "a")!.card, "done", "2030-01-01")).toBe(false);
     const back = moveCard(done, "a", "doing");
-    expect(isOverdue(findCard(back, "a")!.card, "doing", "2030-01-01")).toBe(true);
+    expect(isCardOverdue(back, findCard(back, "a")!.card, "doing", "2030-01-01")).toBe(true);
+  });
+
+  it("follows the designated done list when it is renamed or reordered", () => {
+    const renamed = moveList(renameList(moveCard(withDate, "a", "done"), "done", "Shipped"), "done", -1);
+    const moved = findCard(renamed, "a")!;
+    expect(isCardOverdue(renamed, moved.card, "done", "2030-01-01")).toBe(false);
+    expect(cardDueStatus(renamed, moved.card, "done", "2030-01-01")).toBeNull();
+  });
+
+  it("treats a list with the id done as ordinary once another list is the done list", () => {
+    const board = setInsightsList(addList(withDate, "Shipped", { id: "shipped" }), "done", "shipped");
+    expect(isCardOverdue(board, card(), "done", "2030-01-01")).toBe(true);
+    expect(isCardOverdue(board, card(), "shipped", "2030-01-01")).toBe(false);
+    expect(cardDueStatus(board, card(), "shipped", "2030-01-01")).toBeNull();
+  });
+
+  it("has no done list after the done list is deleted", () => {
+    const board = deleteList(withDate, "done");
+    expect(insightsListIds(board).done).toBeUndefined();
+    expect(isCardOverdue(board, card(), "todo", "2030-01-01")).toBe(true);
+    expect(isCardOverdue(board, card(), "doing", "2030-01-01")).toBe(true);
   });
 
   it("formats the date without a timezone shift", () => {
@@ -79,21 +114,26 @@ describe("dueStatus", () => {
   const due = (dueDate?: string) => findCard(setDueDate(addCard(emptyBoard(), "T", { id: "a" }), "a", dueDate), "a")!.card;
 
   it("classifies overdue, today and tomorrow, and nothing for later dates", () => {
-    expect(dueStatus(due("2026-10-28"), "todo", "2026-10-29")).toBe("overdue");
-    expect(dueStatus(due("2026-10-29"), "todo", "2026-10-29")).toBe("today");
-    expect(dueStatus(due("2026-10-30"), "todo", "2026-10-29")).toBe("tomorrow");
-    expect(dueStatus(due("2026-10-31"), "todo", "2026-10-29")).toBeNull();
+    expect(dueStatus(due("2026-10-28"), "todo", "2026-10-29", "done")).toBe("overdue");
+    expect(dueStatus(due("2026-10-29"), "todo", "2026-10-29", "done")).toBe("today");
+    expect(dueStatus(due("2026-10-30"), "todo", "2026-10-29", "done")).toBe("tomorrow");
+    expect(dueStatus(due("2026-10-31"), "todo", "2026-10-29", "done")).toBeNull();
   });
 
   it("handles month and year ends", () => {
-    expect(dueStatus(due("2027-01-01"), "todo", "2026-12-31")).toBe("tomorrow");
-    expect(dueStatus(due("2026-03-01"), "todo", "2026-02-28")).toBe("tomorrow");
+    expect(dueStatus(due("2027-01-01"), "todo", "2026-12-31", "done")).toBe("tomorrow");
+    expect(dueStatus(due("2026-03-01"), "todo", "2026-02-28", "done")).toBe("tomorrow");
   });
 
   it("is null without a due date or in the done list", () => {
-    expect(dueStatus(due(), "todo", "2026-10-29")).toBeNull();
-    expect(dueStatus(due("2026-10-28"), "done", "2026-10-29")).toBeNull();
-    expect(dueStatus(due("2026-10-29"), "done", "2026-10-29")).toBeNull();
-    expect(dueStatus(due("2026-10-30"), "done", "2026-10-29")).toBeNull();
+    expect(dueStatus(due(), "todo", "2026-10-29", "done")).toBeNull();
+    expect(dueStatus(due("2026-10-28"), "done", "2026-10-29", "done")).toBeNull();
+    expect(dueStatus(due("2026-10-29"), "done", "2026-10-29", "done")).toBeNull();
+    expect(dueStatus(due("2026-10-30"), "done", "2026-10-29", "done")).toBeNull();
+  });
+
+  it("shows a status in a list named done when it is not the done list", () => {
+    expect(dueStatus(due("2026-10-28"), "done", "2026-10-29", null)).toBe("overdue");
+    expect(dueStatus(due("2026-10-28"), "done", "2026-10-29", "shipped")).toBe("overdue");
   });
 });

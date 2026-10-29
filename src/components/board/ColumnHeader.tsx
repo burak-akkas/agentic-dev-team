@@ -13,6 +13,8 @@ interface ColumnHeaderProps {
   onSetLimit: (limit: number | undefined) => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  // Set for the board's designated in-progress or done list (see the Insights panel).
+  role?: "doing" | "done";
   children?: ReactNode;
 }
 
@@ -24,6 +26,7 @@ export function ColumnHeader({
   onSetLimit,
   collapsed,
   onToggleCollapsed,
+  role,
   children,
 }: ColumnHeaderProps) {
   const [editing, setEditing] = useState(false);
@@ -87,6 +90,19 @@ export function ColumnHeader({
     requestAnimationFrame(() => toggleRef.current?.focus());
   }
 
+  const roleMarker = role && (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 text-xs font-medium ${
+        role === "done"
+          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+          : "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200"
+      }`}
+    >
+      {role === "done" && <span aria-hidden="true">✓</span>}
+      {role === "done" ? "Done list" : "In progress list"}
+    </span>
+  );
+
   const toggleButton = (
     <Button
       ref={toggleRef}
@@ -110,6 +126,7 @@ export function ColumnHeader({
             {limit === undefined ? total : `${total} / ${limit}`}
           </span>
         </h2>
+        {roleMarker}
         {toggleButton}
       </div>
     );
@@ -125,6 +142,7 @@ export function ColumnHeader({
               {limit === undefined ? total : `${total} / ${limit}`}
             </span>
           </h2>
+          {roleMarker}
           {status.state === "at" && (
             <span className="text-xs font-medium text-amber-800 dark:text-amber-300">At limit</span>
           )}

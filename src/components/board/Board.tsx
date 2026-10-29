@@ -81,7 +81,7 @@ export function Board() {
   const templates = boardTemplates(board);
   const lists = boardLists(board);
   const view = boardView(board);
-  const doneId = insightsListIds(board).done;
+  const { doing: doingId, done: doneId } = insightsListIds(board);
 
   function closeInsights() {
     setShowInsights(false);
@@ -307,6 +307,7 @@ export function Board() {
                 limit={board.wipLimits?.[id]}
                 onSetLimit={(limit) => update((b) => setWipLimit(b, id, limit))}
                 collapsed={collapsed}
+                role={id === doneId ? "done" : id === doingId ? "doing" : undefined}
                 onToggleCollapsed={() => update((b) => toggleListCollapsed(b, id))}
               >
                 <Button

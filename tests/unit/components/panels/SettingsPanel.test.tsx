@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { THEME_KEY } from "@/lib/theme";
+import { resetThemeStore } from "@/hooks/useTheme";
 import { emptyBoard, insightsListIds, MAX_WIP_LIMIT, setWipLimit } from "@/lib/board";
 import type { Board } from "@/lib/board";
 import { SettingsPanel } from "@/components/panels/SettingsPanel";
@@ -68,6 +70,41 @@ describe("<SettingsPanel />", () => {
     await userEvent.click(screen.getByRole("button", { name: "Clear WIP limit for Doing" }));
     expect(state().wip).toEqual({});
     expect(screen.getByLabelText("WIP limit for Doing")).toHaveValue("");
+  });
+
+  describe("theme", () => {
+    beforeEach(() => {
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn(() => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} })),
+      );
+      localStorage.clear();
+      delete document.documentElement.dataset.theme;
+      resetThemeStore();
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("offers System, Light and Dark with System selected by default", () => {
+      renderPanel();
+      const group = screen.getByRole("radiogroup", { name: "Theme" });
+      expect(within(group).getAllByRole("radio")).toHaveLength(3);
+      expect(screen.getByRole("radio", { name: "System" })).toBeChecked();
+    });
+
+    it("applies and persists the chosen theme", async () => {
+      renderPanel();
+      await userEvent.click(screen.getByRole("radio", { name: "Dark" }));
+      expect(screen.getByRole("radio", { name: "Dark" })).toBeChecked();
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      expect(localStorage.getItem(THEME_KEY)).toBe("dark");
+    });
+
+    it("shows a saved preference as selected", () => {
+      localStorage.setItem(THEME_KEY, "light");
+      resetThemeStore();
+      renderPanel();
+      expect(screen.getByRole("radio", { name: "Light" })).toBeChecked();
+    });
   });
 
   it.each(["0", "abc", String(MAX_WIP_LIMIT + 1)])("rejects the WIP limit %s", async (value) => {

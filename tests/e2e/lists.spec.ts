@@ -48,6 +48,25 @@ test("moves cards out of a list before deleting it", async ({ page }) => {
   await expect(page.getByRole("region", { name: /^Doing/ }).getByText("Write docs")).toBeVisible();
 });
 
+test("deleting an empty list asks for confirmation in the app", async ({ page }) => {
+  await page.getByRole("button", { name: "Manage lists" }).click();
+  const dialog = page.getByRole("dialog", { name: "Manage lists" });
+  const confirm = page.getByRole("dialog", { name: "Delete list" });
+
+  await dialog.getByRole("button", { name: 'Delete list "Done"' }).click();
+  await expect(confirm.getByText('Delete the empty list "Done"?')).toBeVisible();
+  await expect(confirm.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await expect(confirm).toBeHidden();
+  await expect(dialog.getByLabel('Name of list "Done"')).toBeVisible();
+
+  await dialog.getByRole("button", { name: 'Delete list "Done"' }).click();
+  await confirm.getByRole("button", { name: "Delete" }).click();
+  await expect(dialog.getByLabel('Name of list "Done"')).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(columnTitles(page)).toHaveText(["To do0", "Doing0"]);
+});
+
 test("a custom list works with moving, archive and insights", async ({ page }) => {
   await page.getByRole("button", { name: "Manage lists" }).click();
   const dialog = page.getByRole("dialog", { name: "Manage lists" });

@@ -3,10 +3,10 @@
 import { useCallback, useRef, useState, type DragEvent } from "react";
 import {
   addCard,
-  archiveDone,
+  archiveList,
   boardLabels,
+  boardLists,
   boardStats,
-  COLUMNS,
   deleteArchived,
   deleteCard,
   duplicateCard,
@@ -16,7 +16,10 @@ import {
   findCard,
   type Card,
   type ColumnId,
+  insightsListIds,
+  isCardOverdue,
   isFiltering,
+  listCards,
   moveCard,
   renameCard,
   restoreCard,
@@ -35,6 +38,7 @@ import { CARD_DRAG_TYPE, CardItem } from "./CardItem";
 import { ColumnHeader } from "./ColumnHeader";
 import { InsightsPanel } from "./InsightsPanel";
 import { LabelFilter } from "./LabelFilter";
+import { ListsManager } from "./ListsManager";
 import { SearchBox } from "./SearchBox";
 import { SummaryBar } from "./SummaryBar";
 import { UndoToast } from "./UndoToast";
@@ -61,27 +65,37 @@ export function Board() {
   const [showArchive, setShowArchive] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const insightsButtonRef = useRef<HTMLButtonElement>(null);
+  const [showLists, setShowLists] = useState(false);
+  const listsButtonRef = useRef<HTMLButtonElement>(null);
+  const lists = boardLists(board);
+  const doneId = insightsListIds(board).done;
 
   function closeInsights() {
     setShowInsights(false);
     requestAnimationFrame(() => insightsButtonRef.current?.focus());
   }
-  const [undo, setUndo] = useState<{ cards: Card[]; message: string } | null>(null);
+
+  function closeLists() {
+    setShowLists(false);
+    requestAnimationFrame(() => listsButtonRef.current?.focus());
+  }
+  const [undo, setUndo] = useState<{ cards: Card[]; listId: ColumnId; message: string } | null>(null);
   const dismissUndo = useCallback(() => setUndo(null), []);
 
-  function archiveDoneCards() {
-    const cards = board.columns.done;
+  function archiveListCards(listId: ColumnId) {
+    const cards = listCards(board, listId);
     if (cards.length === 0) {
       return;
     }
-    update(archiveDone);
-    setUndo({ cards, message: `Archived ${cards.length} done ${cards.length === 1 ? "card" : "cards"}` });
+    update((b) => archiveList(b, listId));
+    const what = listId === doneId ? "done " : "";
+    setUndo({ cards, listId, message: `Archived ${cards.length} ${what}${cards.length === 1 ? "card" : "cards"}` });
   }
 
   function undoLastArchive() {
     if (undo) {
-      const { cards } = undo;
-      update((b) => undoArchive(b, cards));
+      const { cards, listId } = undo;
+      update((b) => undoArchive(b, cards, { listId }));
     }
     setUndo(null);
   }
@@ -144,6 +158,7 @@ export function Board() {
           key={openCardId}
           card={open.card}
           column={open.column}
+          board={board}
           onChecklist={update}
           onSave={(edits) => {
             update((b) => updateCard(b, openCardId, edits));
@@ -182,10 +197,15 @@ export function Board() {
         <Button ref={insightsButtonRef} aria-haspopup="dialog" onClick={() => setShowInsights(true)} className="bg-surface">
           Board insights
         </Button>
+        <Button ref={listsButtonRef} aria-haspopup="dialog" onClick={() => setShowLists(true)} className="bg-surface">
+          Manage lists
+        </Button>
       </div>
+      {showLists && <ListsManager board={board} onUpdateBoard={update} onClose={closeLists} />}
       {showInsights && (
         <InsightsPanel
           board={board}
+          onUpdateBoard={update}
           onClose={closeInsights}
           onOpenCard={(cardId) => {
             setShowInsights(false);
@@ -205,9 +225,9 @@ export function Board() {
 
       {undo && <UndoToast message={undo.message} onUndo={undoLastArchive} onDismiss={dismissUndo} />}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {COLUMNS.map(({ id, title }) => {
-          const cards = visible.columns[id];
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:overflow-x-auto">
+        {lists.map(({ id, name: title }) => {
+          const cards = listCards(visible, id);
           return (
             <section
               key={id}
@@ -216,7 +236,7 @@ export function Board() {
               onDragOver={(event) => handleDragOver(event, id)}
               onDragLeave={(event) => handleDragLeave(event, id)}
               onDrop={(event) => handleDrop(event, id)}
-              className={`flex flex-col gap-3 rounded-xl p-3 ${
+              className={`flex flex-col gap-3 rounded-xl p-3 md:min-w-64 md:flex-1 md:basis-0 ${
                 dragOver === id
                   ? "bg-indigo-50 ring-2 ring-indigo-500 dark:bg-indigo-950/40"
                   : "bg-surface-muted dark:bg-surface/50"
@@ -225,15 +245,18 @@ export function Board() {
               <ColumnHeader
                 id={id}
                 title={title}
-                total={board.columns[id].length}
+                total={listCards(board, id).length}
                 limit={board.wipLimits?.[id]}
                 onSetLimit={(limit) => update((b) => setWipLimit(b, id, limit))}
               >
-                {id === "done" && (
-                  <Button size="xs" disabled={board.columns.done.length === 0} onClick={archiveDoneCards}>
-                    Archive done
-                  </Button>
-                )}
+                <Button
+                  size="xs"
+                  aria-label={id === doneId ? undefined : `Archive all cards in ${title}`}
+                  disabled={listCards(board, id).length === 0}
+                  onClick={() => archiveListCards(id)}
+                >
+                  {id === doneId ? "Archive done" : "Archive all"}
+                </Button>
               </ColumnHeader>
               {cards.length === 0 ? (
                 <p className="px-1 py-4 text-center text-xs text-muted">
@@ -246,6 +269,8 @@ export function Board() {
                       key={card.id}
                       card={card}
                       column={id}
+                      lists={lists}
+                      overdue={isCardOverdue(board, card, id)}
                       onMove={(to) => update((b) => moveCard(b, card.id, to))}
                       onDelete={() => update((b) => deleteCard(b, card.id))}
                       onRename={(title) => update((b) => renameCard(b, card.id, title))}

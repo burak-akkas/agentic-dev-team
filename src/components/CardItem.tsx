@@ -4,10 +4,8 @@ import { useEffect, useId, useRef, useState, type ChangeEvent, type DragEvent, t
 import {
   adjacentColumn,
   checklistProgress,
-  COLUMNS,
   COVER_COLORS,
   formatDueDate,
-  isOverdue,
   isValidDueDate,
   MAX_NOTES_LENGTH,
   MAX_TITLE_LENGTH,
@@ -15,6 +13,7 @@ import {
   type Card,
   type ColumnId,
   type CoverColor,
+  type List,
   type Priority,
 } from "@/lib/board";
 import { coverStyles } from "./coverColors";
@@ -23,7 +22,6 @@ import { Button, Input, Select, Textarea } from "./ui";
 
 export const CARD_DRAG_TYPE = "application/x-kanban-card";
 
-const columnTitle =(id: ColumnId) => COLUMNS.find((c) => c.id === id)?.title ?? id;
 const priorityLabel = (id: Priority) => PRIORITIES.find((p) => p.id === id)?.label ?? id;
 
 const coverLabel = (id: CoverColor) => COVER_COLORS.find((c) => c.id === id)?.label ?? id;
@@ -39,6 +37,8 @@ const cardSurface = "group rounded-lg border border-line bg-surface p-3 shadow-s
 export function CardItem({
   card,
   column,
+  lists,
+  overdue,
   onMove,
   onDelete,
   onRename,
@@ -52,6 +52,8 @@ export function CardItem({
 }: {
   card: Card;
   column: ColumnId;
+  lists: readonly List[];
+  overdue: boolean;
   onMove: (to: ColumnId) => void;
   onDelete: () => void;
   onRename: (title: string) => void;
@@ -63,15 +65,15 @@ export function CardItem({
   onDragStart?: () => void;
   onDragEnd?: () => void;
 }) {
-  const previous = adjacentColumn(column, -1);
-  const next = adjacentColumn(column, 1);
+  const columnTitle = (id: ColumnId) => lists.find((l) => l.id === id)?.name ?? id;
+  const previous = adjacentColumn(column, -1, lists);
+  const next = adjacentColumn(column, 1, lists);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(card.title);
   const inputRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLButtonElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const restoreFocus = useRef(false);
-  const overdue = isOverdue(card, column);
   const progress = checklistProgress(card);
   const commentCount = card.comments?.length ?? 0;
   const [editingNotes, setEditingNotes] = useState(false);

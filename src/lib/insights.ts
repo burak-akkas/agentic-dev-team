@@ -5,7 +5,7 @@
 // Limitation: a card's `activity` log is capped at MAX_ACTIVITY_ENTRIES, so very old history may
 // be truncated. Such cards are left out of cycle times and WIP replays are approximate.
 
-import { COLUMNS, formatDueDate, isOverdue, todayString } from "@/lib/board";
+import { boardLists, formatDueDate, insightsListIds, isOverdue, listCards, todayString } from "@/lib/board";
 import type { Board, Card, ColumnId } from "@/lib/board";
 
 export interface InsightsOptions {
@@ -28,16 +28,16 @@ interface Located {
   archived: boolean;
 }
 
-// Columns' cards plus the archive (archived cards are in Done).
+// Lists' cards plus the archive (archived cards count as finished, in the done list when there is one).
 function allCards(board: Board): Located[] {
   const located: Located[] = [];
-  for (const { id: column } of COLUMNS) {
-    for (const card of board.columns[column]) {
+  for (const { id: column } of boardLists(board)) {
+    for (const card of listCards(board, column)) {
       located.push({ card, column, archived: false });
     }
   }
   for (const card of board.archive) {
-    located.push({ card, column: "done", archived: true });
+    located.push({ card, column: insightsListIds(board).done ?? "", archived: true });
   }
   return located;
 }
@@ -68,13 +68,15 @@ export interface CycleTimes {
 export function cycleTimes(board: Board, _opts: InsightsOptions = {}): CycleTimes {
   const durationsMs: number[] = [];
   let excluded = 0;
-  for (const { card, column } of allCards(board)) {
-    if (column !== "done") {
+  const { doing, done } = insightsListIds(board);
+  for (const { card, column, archived } of allCards(board)) {
+    if (!archived && (done === undefined || column !== done)) {
       continue;
     }
     const moves = movedEntries(card);
-    const start = moves.find((m) => m.to === "doing")?.at;
-    const end = start === undefined ? undefined : moves.findLast((m) => m.to === "done" && m.at >= start)?.at;
+    const start = doing === undefined ? undefined : moves.find((m) => m.to === doing)?.at;
+    const end =
+      start === undefined || done === undefined ? undefined : moves.findLast((m) => m.to === done && m.at >= start)?.at;
     if (start === undefined || end === undefined) {
       excluded += 1;
     } else {
@@ -138,10 +140,11 @@ export function weeklyThroughput(board: Board, { now = new Date() }: InsightsOpt
   const starts = Array.from({ length: THROUGHPUT_WEEKS }, (_, i) => mondayStart(now, THROUGHPUT_WEEKS - 1 - i));
   const counts = starts.map(() => 0);
   const nowMs = now.getTime();
-  for (const { card } of allCards(board)) {
+  const { done } = insightsListIds(board);
+  for (const { card } of done === undefined ? [] : allCards(board)) {
     const weeks = new Set<number>();
     for (const move of movedEntries(card)) {
-      if (move.to !== "done" || move.at > nowMs) {
+      if (move.to !== done || move.at > nowMs) {
         continue;
       }
       const week = starts.findLastIndex((start) => start.getTime() <= move.at);
@@ -185,22 +188,27 @@ function columnAt(located: Located, moves: Move[], cutoff: number, isToday: bool
 // Cards in Doing at the end of each of the last 14 local days (today up to `now`), oldest first,
 // found by replaying each card's moves.
 export function dailyWip(board: Board, { now = new Date() }: InsightsOptions = {}): DayWip[] {
+  const { doing } = insightsListIds(board);
   const cards = allCards(board).map((located) => ({ located, moves: movedEntries(located.card) }));
   return Array.from({ length: WIP_DAYS }, (_, i) => {
     const daysAgo = WIP_DAYS - 1 - i;
     const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo);
     const isToday = daysAgo === 0;
     const cutoff = isToday ? now.getTime() : new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999).getTime();
-    const count = cards.filter(({ located, moves }) => columnAt(located, moves, cutoff, isToday) === "doing").length;
+    const count =
+      doing === undefined
+        ? 0
+        : cards.filter(({ located, moves }) => columnAt(located, moves, cutoff, isToday) === doing).length;
     return { day: todayString(date), count };
   });
 }
 
-// Open (not Done) cards past their due date, soonest due first. Ties keep board order.
+// Open (not in the done list) cards past their due date, soonest due first. Ties keep board order.
 export function overdueCards(board: Board, { now = new Date() }: InsightsOptions = {}): Card[] {
   const today = todayString(now);
+  const done = insightsListIds(board).done ?? null;
   return allCards(board)
-    .filter(({ card, column, archived }) => !archived && isOverdue(card, column, today))
+    .filter(({ card, column, archived }) => !archived && isOverdue(card, column, today, done))
     .map(({ card }) => card)
     .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
 }

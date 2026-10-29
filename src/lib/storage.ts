@@ -2,13 +2,14 @@ import { DEFAULT_BOARD_NAME, initialBoardList, type BoardEntry, type BoardList }
 import {
   ACTIVITY_TYPES,
   addLabelToList,
-  COLUMNS,
+  DEFAULT_LISTS,
   DEFAULT_PRIORITY,
   isCoverColor,
   isValidDueDate,
   isValidWipLimit,
   MAX_ACTIVITY_ENTRIES,
   MAX_COMMENT_LENGTH,
+  MAX_LIST_NAME_LENGTH,
   MAX_NOTES_LENGTH,
   normalizeChecklistText,
   PRIORITIES,
@@ -20,6 +21,8 @@ import {
   type CardComment,
   type ChecklistItem,
   type ColumnId,
+  type InsightsLists,
+  type List,
 } from "./board";
 
 export const STORAGE_KEY = "kanban-boards-v2";
@@ -39,13 +42,37 @@ function isCard(value: unknown): value is Omit<Card, "priority"> & { priority?: 
   );
 }
 
+// The stored `lists` when well-formed (non-empty, string ids and names, unique ids, names trimmed and capped);
+// otherwise `undefined`, so the board is read in the old format with the default three lists.
+function readLists(value: unknown): List[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+  const ids = new Set<string>();
+  const lists: List[] = [];
+  for (const entry of value) {
+    const l = entry as Partial<List> | null;
+    if (typeof l !== "object" || l === null || typeof l.id !== "string" || !l.id || typeof l.name !== "string" || ids.has(l.id)) {
+      return undefined;
+    }
+    const name = l.name.trim().slice(0, MAX_LIST_NAME_LENGTH).trim();
+    if (!name) {
+      return undefined;
+    }
+    ids.add(l.id);
+    lists.push({ id: l.id, name });
+  }
+  return lists;
+}
+
 export function isBoard(value: unknown): value is Board {
-  const columns = (value as Board | null)?.columns;
-  return (
-    typeof columns === "object" &&
-    columns !== null &&
-    COLUMNS.every(({ id }) => Array.isArray(columns[id]) && columns[id].every(isCard))
-  );
+  const board = value as Board | null;
+  const columns = board?.columns;
+  if (typeof columns !== "object" || columns === null) {
+    return false;
+  }
+  const lists = readLists(board?.lists) ?? DEFAULT_LISTS;
+  return lists.every(({ id }) => Array.isArray(columns[id]) && columns[id].every(isCard));
 }
 
 // Invalid priorities become the default; invalid or blank notes are dropped (never truncated).
@@ -196,22 +223,60 @@ function normalizeBoard(board: Board): Board {
   const archive: unknown = (board as { archive?: unknown }).archive;
   // Invalid WIP limits are dropped; the key is only present when at least one limit is valid.
   const limits: unknown = (board as { wipLimits?: unknown }).wipLimits;
+  // Old boards (no valid `lists`) become the default three lists with the same ids, so nothing else is rewritten.
+  const lists = readLists(board.lists) ?? DEFAULT_LISTS.map((l) => ({ ...l }));
   const wipLimits: Partial<Record<ColumnId, number>> = {};
   if (typeof limits === "object" && limits !== null) {
-    for (const { id } of COLUMNS) {
+    for (const { id } of lists) {
       const limit = (limits as Record<string, unknown>)[id];
       if (isValidWipLimit(limit)) {
         wipLimits[id] = limit;
       }
     }
   }
+  const columns: Record<ColumnId, Card[]> = {};
+  for (const { id } of lists) {
+    columns[id] = board.columns[id].map(normalizeCard);
+  }
+  const has = (id: unknown): id is string => typeof id === "string" && lists.some((l) => l.id === id);
+  // Names of deleted lists (ids no longer in `lists`).
+  const former: unknown = (board as { formerLists?: unknown }).formerLists;
+  const formerLists: Record<ColumnId, string> = {};
+  if (typeof former === "object" && former !== null) {
+    for (const [id, name] of Object.entries(former)) {
+      if (typeof name === "string" && name.trim() && !has(id)) {
+        formerLists[id] = name.trim().slice(0, MAX_LIST_NAME_LENGTH);
+      }
+    }
+  }
+  // A stored choice keeps its valid ids; without one the lists named Doing / Done are chosen.
+  const chosen: unknown = (board as { insightsLists?: unknown }).insightsLists;
+  const insightsLists: InsightsLists = {};
+  if (typeof chosen === "object" && chosen !== null) {
+    const { doing, done } = chosen as Record<string, unknown>;
+    if (has(doing)) {
+      insightsLists.doing = doing;
+    }
+    if (has(done)) {
+      insightsLists.done = done;
+    }
+  } else {
+    const named = (name: string) => lists.find((l) => l.name.toLowerCase() === name)?.id;
+    const doing = named("doing");
+    const done = named("done");
+    if (doing !== undefined) {
+      insightsLists.doing = doing;
+    }
+    if (done !== undefined) {
+      insightsLists.done = done;
+    }
+  }
   return {
+    lists,
     ...(Object.keys(wipLimits).length > 0 && { wipLimits }),
-    columns: {
-      todo: board.columns.todo.map(normalizeCard),
-      doing: board.columns.doing.map(normalizeCard),
-      done: board.columns.done.map(normalizeCard),
-    },
+    ...(Object.keys(formerLists).length > 0 && { formerLists }),
+    insightsLists,
+    columns,
     archive: Array.isArray(archive) ? (archive.filter(isCard) as Card[]).map(normalizeCard) : [],
   };
 }

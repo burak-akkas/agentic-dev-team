@@ -4,8 +4,9 @@ import { useId, useState, type FormEvent } from "react";
 import {
   addComment,
   addLabelToList,
-  COLUMNS,
+  boardLists,
   COVER_COLORS,
+  DEFAULT_LISTS,
   deleteComment,
   editComment,
   hasChanges,
@@ -40,9 +41,12 @@ export function CardDialog({
   onClose,
   onChecklist,
   onUpdateBoard,
+  board,
 }: {
   card: Card;
   column: ColumnId;
+  // The board the card is on, for its lists. Without it the default three lists are offered.
+  board?: Board;
   onChecklist?: (change: (board: Board) => Board) => void;
   onSave: (edits: CardEdits) => void;
   onDelete: () => void;
@@ -164,7 +168,7 @@ export function CardDialog({
               onChange={(event) => setStatus(event.target.value as ColumnId)}
               className="w-full"
             >
-              {COLUMNS.map(({ id, title: name }) => (
+              {(board ? boardLists(board) : DEFAULT_LISTS).map(({ id, name }) => (
                 <option key={id} value={id}>
                   {name}
                 </option>
@@ -312,7 +316,7 @@ export function CardDialog({
 
         <div className="flex flex-col gap-1">
           <h3 className={labelStyles}>Activity</h3>
-          <ActivityLog activity={card.activity} />
+          <ActivityLog activity={card.activity} board={board} />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

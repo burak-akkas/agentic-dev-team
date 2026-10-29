@@ -1,14 +1,14 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
-import { COLUMNS, type Board } from "@/lib/board";
+import { boardLists, listCards, type Board } from "@/lib/board";
 import { exportFilename, parseBoard, serializeBoard } from "@/lib/storage";
 import { useBoard } from "@/lib/useBoard";
 
 import { Button } from "./ui";
 
 function countCards(board: Board): number {
-  return COLUMNS.reduce((total, { id }) => total + board.columns[id].length, 0);
+  return boardLists(board).reduce((total, { id }) => total + listCards(board, id).length, 0);
 }
 
 function readFile(file: File): Promise<string> {

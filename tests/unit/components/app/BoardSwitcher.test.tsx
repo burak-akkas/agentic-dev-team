@@ -169,6 +169,47 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  describe("collapse and expand all lists", () => {
+    const item = (name: string) => screen.getByRole("menuitem", { name });
+
+    it("disables Expand all when nothing is collapsed and Collapse all when everything is", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(item("Expand all lists")).toHaveAttribute("aria-disabled", "true");
+      expect(item("Collapse all lists")).not.toHaveAttribute("aria-disabled", "true");
+      await user.click(item("Collapse all lists"));
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(item("Collapse all lists")).toHaveAttribute("aria-disabled", "true");
+      expect(item("Expand all lists")).not.toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("collapses and expands every list", async () => {
+      const { user } = setup();
+      await choose(user, "Collapse all lists");
+      for (const name of ["To do", "Doing", "Done"]) {
+        expect(screen.getByRole("button", { name: `Expand ${name}` })).toBeInTheDocument();
+      }
+      await choose(user, "Expand all lists");
+      for (const name of ["To do", "Doing", "Done"]) {
+        expect(screen.getByRole("button", { name: `Collapse ${name}` })).toBeInTheDocument();
+      }
+    });
+
+    it("works by keyboard and only affects the current board", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      item("Collapse all lists").focus();
+      await user.keyboard("{Enter}");
+      expect(screen.getByRole("button", { name: "Expand Done" })).toBeInTheDocument();
+
+      await create(user, "Work");
+      expect(screen.getByRole("button", { name: "Collapse Done" })).toBeInTheDocument();
+      await user.selectOptions(select(), "My board");
+      expect(screen.getByRole("button", { name: "Expand Done" })).toBeInTheDocument();
+    });
+  });
+
   it("shows a single Board actions button instead of separate board buttons", () => {
     setup();
     const trigger = screen.getByRole("button", { name: "Board actions" });

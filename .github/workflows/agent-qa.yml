@@ -6,7 +6,7 @@ name: "Agent · QA"
 #   2. Runs the project's Playwright e2e suite against the preview
 #   3. The QA agent tests the acceptance criteria in a real browser (Playwright MCP), compares the changed
 #      screens with the baseline site (the base branch, before this PR) and takes screenshots
-#   4. Screenshots go to the PR as a gallery. pass -> merge gate, fail -> Implementor fixes, unsure -> Lead
+#   4. Screenshots go to the PR as a gallery. pass -> merge gate and queue, fail -> Implementor fixes, unsure -> Lead
 # Preview URL template: AGENT_PREVIEW_URL (default https://{owner}.github.io/{repo}/pr-{pr}/).
 # Baseline URL template: AGENT_BASELINE_URL (default https://{owner}.github.io/{repo}/, the production deploy
 # of the base branch; `none` turns the visual comparison off). It should serve version.txt too.
@@ -104,7 +104,7 @@ jobs:
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # QA is the most expensive agent run, and the merge gate requires these checks anyway: don't
+      # QA is the most expensive agent run, and the merge queue requires these checks anyway: don't
       # spend a QA round on a commit that can never merge. Red checks go straight back to the Implementor.
       - name: Wait for required checks
         id: ci
@@ -114,7 +114,7 @@ jobs:
           REQUIRED: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
         run: |
           # Same rules as the merge gate: only workflows listed in REQUIRED count. Up to 25 minutes;
-          # on timeout QA runs anyway (the merge gate still waits for the checks).
+          # on timeout QA runs anyway (the merge queue still waits for the checks).
           filter='[.[] | select(.workflow as $w | ($req | split(",") | map(gsub("^ +| +$"; ""))) | index($w))]'
           for _ in $(seq 1 50); do
             json=$(gh pr checks "$PR" -R "$GITHUB_REPOSITORY" --json workflow,name,bucket,link 2>/dev/null || true)

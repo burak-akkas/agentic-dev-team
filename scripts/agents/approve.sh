@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Approves a PR for the merge gate. Records the exact commit that was approved as a hidden marker
-# in the approving agent's latest comment, then applies agent:approved. The merge gate only merges
-# that commit, so commits pushed after the approval (by anyone) go through review again.
+# in the approving agent's latest comment, then applies agent:approved. The merge gate only queues
+# that commit, and the Integrator only merges it (or its own clean merge of the base on top of it), so
+# commits pushed after the approval (by anyone) go through review again.
 #
 # Usage: approve.sh <pr> <approved-sha> <role>   # role: the marker of the approving comment (qa, reviewer, lead)
 # Needs GH_TOKEN, GITHUB_REPOSITORY and AGENT_BOT_ID.

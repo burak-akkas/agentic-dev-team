@@ -112,9 +112,10 @@ def checks_that_never_finish_send_the_pr_to_the_back_once_per_run():
 
 
 @test
-def required_check_that_never_reports_is_a_timeout_not_a_hang():
+def required_check_that_never_reports_goes_straight_to_a_human():
+    # Found by the matrix: retrying a misconfigured AGENT_REQUIRED_CHECKS cost ~38 reviews and 60 Lead runs per PR.
     st = run(make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]}}, checks={sha(0xa1): "none"}))
-    assert labels(st, 101) == ["agent:queued"] and "didn't finish" in bodies(st, 101)[-1]
+    assert labels(st, 101) == ["agent:needs-human"] and "AGENT_REQUIRED_CHECKS" in bodies(st, 101)[-1]
 
 
 @test

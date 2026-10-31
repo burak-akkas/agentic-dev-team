@@ -194,6 +194,20 @@ def base_that_keeps_moving_requeues_instead_of_looping():
 
 
 @test
+def pr_turned_into_a_draft_while_merging_leaves_the_queue():
+    # Found by the matrix: the merge must not happen, and it's not a failed attempt.
+    st = make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]}})
+    st["hooks"] = [{"match": "pr checks 101", "pr": 101, "draft": True}]
+    st = run(st)
+    assert not st.get("merged") and labels(st, 101) == [], (labels(st, 101), st["_stderr"][-800:])
+    assert not any("integration-failed" in b for b in bodies(st, 101)) and "draft" in bodies(st, 101)[-1]
+    st = make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]}})
+    st["hooks"] = [{"match": "pr merge 101", "pr": 101, "draft": True}]   # right before the merge call
+    st = run(st)
+    assert not st.get("merged") and labels(st, 101) == [] and not st.get("violations")
+
+
+@test
 def a_human_merge_right_before_the_merge_is_the_documented_race():
     # GitHub's merge API doesn't check freshness without a branch rule, so a human merging by hand
     # between the Integrator's last check and its merge lands an untested combination. Documented

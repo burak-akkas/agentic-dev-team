@@ -419,6 +419,7 @@ class Team:
     def run(self, max_jobs=2500, max_seconds=1200):
         t0 = time.time()
         outcome = "settled"
+        quiet = 0   # watchdog runs in a row that ran cleanly and changed nothing
         while True:
             with locked(self.f) as st:
                 events, st["events"] = st["events"], []
@@ -446,6 +447,8 @@ class Team:
                 self.step = self.p["pause_window"][1]
             if self.p["automerge_off_window"] and self.step < self.p["automerge_off_window"][1]:
                 self.step = self.p["automerge_off_window"][1]
+            # The real watchdog runs again (after every agent run, and every 10 minutes): a run that
+            # failed (e.g. an API error) doesn't count, and it takes two quiet runs in a row to settle.
             before = json.dumps(read(self.f)["items"], sort_keys=True)
             job = Job("watchdog", None, lambda j: self.watchdog(j))
             self.start({"running": None}, job)
@@ -454,8 +457,14 @@ class Team:
                 self.stats["failed_jobs"] += 1
                 if not self.p["api_flake"]:
                     self.failures.append(job.error[-600:])
+                quiet = 0
+                continue
             if not read(self.f)["events"] and json.dumps(read(self.f)["items"], sort_keys=True) == before:
-                break
+                quiet += 1
+                if quiet >= 2:
+                    break
+            else:
+                quiet = 0
         for g in self.groups.values():
             for j in (g["running"], g["pending"]):
                 if j:

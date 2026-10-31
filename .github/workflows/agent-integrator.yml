@@ -75,6 +75,8 @@ jobs:
           start=$(date +%s)
           seen=" "
           echo "### 🚦 Merge queue" >> "$GITHUB_STEP_SUMMARY"
+          # Queue labels left on PRs that are no longer open (e.g. a run killed right after a merge).
+          "$BIN/queue-tidy.sh" >> "$GITHUB_STEP_SUMMARY"
           while :; do
             queue=$("$BIN/queue.sh")
             # Each PR once per run: a PR sent to the back of the queue is picked up by the next run.

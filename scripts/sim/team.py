@@ -381,6 +381,8 @@ class Team:
             human = lambda: self.stats.__setitem__("human_actions", self.stats["human_actions"] + 1)
             if r.random() < p["human_base"] or r.random() < p["workflow_change"]:
                 st["base_version"] += 1   # a human merges something by hand
+                st.setdefault("human_merges", []).append(st.get("calls", 0))
+                st["log"] = st.get("log", []) + ["world: a human merged into the base (version %d)" % st["base_version"]]
                 if r.random() < p["workflow_change"] / max(p["workflow_change"] + p["human_base"], 1e-9):
                     st["workflow_version"] = st["base_version"]
                 for n in prs:

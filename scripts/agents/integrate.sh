@@ -52,10 +52,27 @@ failures() {
     | [$c | to_entries[] | select(.key > $last and (.value.body | contains("<!-- agent:integration-failed -->")))] | length'
 }
 
+# Before treating anything as a failure: the PR may have been merged after all (e.g. an API error
+# right after the merge) or closed. Then it is done, not failed. Returns if the PR is still open.
+settle_if_closed() {
+  local s
+  s=$(pr_json state | jq -r .state) || return 0
+  case "$s" in
+    MERGED)
+      "$here/transition.sh" "$pr" agent:done >/dev/null || true
+      if [ -n "${issue:-}" ]; then "$here/transition.sh" "$issue" agent:done >/dev/null || true; fi
+      finish merged ;;
+    CLOSED)
+      "$here/transition.sh" "$pr" >/dev/null || true
+      finish left ;;
+  esac
+}
+
 # A failed attempt. fail bounce "<what failed>" "<instructions for the Implementor>"
 #                   fail requeue "<what failed>"
 fail() {
   local kind="$1" reason="$2" todo="${3:-}" used
+  settle_if_closed
   used=$(( $(failures || echo 0) + 1 ))
   if [ "$used" -ge "$max_attempts" ]; then
     "$here/transition.sh" "$pr" agent:needs-decision >/dev/null

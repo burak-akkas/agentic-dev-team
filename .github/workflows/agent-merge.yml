@@ -65,6 +65,13 @@ jobs:
           SENDER: ${{ github.event.sender.login }}
           PROTECTED: ${{ vars.AGENT_PROTECTED_PATHS || '.github/,scripts/,templates/' }}
         run: |
+          # The approval may arrive late (a redelivered event, a human label): only open, non-draft PRs join the queue.
+          now=$(gh pr view "$PR" -R "$GITHUB_REPOSITORY" --json state,isDraft --jq '.state + (if .isDraft then " draft" else "" end)')
+          if [ "$now" != "OPEN" ]; then
+            echo "PR is $now now: nothing to queue" >> "$GITHUB_STEP_SUMMARY"
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # An agent approval names the exact commit it approved (scripts/agents/approve.sh). Anything
           # pushed after it, by anyone, goes through review again. A human applying the label is trusted.
           if [ "$SENDER_TYPE" = "Bot" ]; then

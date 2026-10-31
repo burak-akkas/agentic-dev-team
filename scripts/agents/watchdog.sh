@@ -96,6 +96,7 @@ echo "Stalled items: $stalled"
 # (each run drains the whole queue). Without one, e.g. after a cancelled run, re-applying agent:queued
 # to the front PR starts one; the PR keeps its place (queue.sh orders by the admission comment).
 if [ "${AGENT_AUTO_MERGE:-}" = "true" ]; then
+  [ "$dry" = "--dry-run" ] || "$here/queue-tidy.sh"
   queue=$("$here/queue.sh")
   if [ -n "$queue" ]; then
     busy=$(for s in queued in_progress waiting pending requested; do

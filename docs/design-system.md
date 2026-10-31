@@ -50,7 +50,7 @@ Props: native props, plus `fieldSize` (`md` default | `sm` for compact fields on
 ```
 
 ### `Dialog`
-Props: `labelledBy` (id of the heading that names it), `onRequestClose`, `children`. A modal native `<dialog>`, opened on mount. Escape and backdrop clicks call `onRequestClose`; the parent decides whether (and when) to unmount it. Put padding on the content inside, not on the dialog, so backdrop clicks stay detectable.
+Props: `labelledBy` (id of the heading that names it), `onRequestClose`, `size` (`md` default, max 32rem | `lg`, max 48rem), `children`. A modal native `<dialog>`, opened on mount. Escape and backdrop clicks call `onRequestClose`; the parent decides whether (and when) to unmount it. Put padding on the content inside, not on the dialog, so backdrop clicks stay detectable.
 
 ```tsx
 <Dialog labelledBy={headingId} onRequestClose={requestClose}>
@@ -60,6 +60,43 @@ Props: `labelledBy` (id of the heading that names it), `onRequestClose`, `childr
 </Dialog>
 ```
 
+### `ConfirmDialog`
+Props: `title`, `message` (any `ReactNode`), `confirmLabel`, `onConfirm`, `onCancel`. An in-app replacement for `window.confirm`, built on `Dialog`. Cancel is focused first; Escape and a backdrop click call `onCancel`. The parent renders it only while a confirmation is pending and unmounts it in both callbacks.
+
+```tsx
+{pending && (
+  <ConfirmDialog
+    title="Delete card?"
+    message="This cannot be undone."
+    confirmLabel="Delete"
+    onConfirm={() => { remove(pending); setPending(null); }}
+    onCancel={() => setPending(null)}
+  />
+)}
+```
+
+### `Menu`
+Props: `label` (accessible name and tooltip of the trigger button), `icon` (content of the trigger button), `items: MenuItem[]`. Each `MenuItem` is `{ label: string; onSelect: () => void; disabled?: boolean }`; labels must be unique (they are the React keys). The trigger opens a popup `role="menu"`. Keyboard: Arrow Down/Up on the trigger open it, arrows/Home/End move between enabled items, Escape closes and returns focus to the trigger, Tab closes. Selecting an item closes the menu, then calls `onSelect`. Disabled items are skipped by the keyboard and ignore clicks. It takes no `className`.
+
+```tsx
+<Menu
+  label="Board actions"
+  icon={<MoreIcon />}
+  items={[
+    { label: "Archive done", onSelect: archiveDone },
+    { label: "Clear board", onSelect: askClear, disabled: board.cards.length === 0 },
+  ]}
+/>
+```
+
+### Icons
+Small inline SVGs (16×16, `currentColor`, `aria-hidden`, not focusable), exported from `@/components/ui`: `ArchiveIcon`, `ChevronIcon`, `GearIcon`, `KeyboardIcon`, `MoreIcon`. They accept native SVG props (e.g. `className`). `ChevronIcon` also requires `open: boolean` (points down when open, right when closed). Icons are decorative: give the surrounding button an accessible name (`Menu` does this through `label`).
+
+```tsx
+<Button aria-label="Settings"><GearIcon /></Button>
+<ChevronIcon open={expanded} />
+```
+
 ### `Toast`
 Props: `children`. A fixed, bottom-centered `role="status"` shell on the inverse colors. Timers and actions belong to the caller (see `UndoToast`).
 
@@ -67,4 +104,4 @@ Props: `children`. A fixed, bottom-centered `role="status"` shell on the inverse
 Props: native section props. A bordered container on the surface color with padding; give it an `aria-label` so the region is named.
 
 ## Possible future components (not built)
-Text only, to be added when a feature needs them: select menu with custom styling, badge, tooltip, tabs, empty-state block, confirm dialog, notice/alert.
+Text only, to be added when a feature needs them: custom-styled select, badge, tooltip, tabs, empty-state block, notice/alert. (Action menus and confirm dialogs already exist: see `Menu` and `ConfirmDialog`.)

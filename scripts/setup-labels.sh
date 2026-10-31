@@ -23,7 +23,9 @@ label "agent:blocked"         "e4e669" "Sub-issue waiting for the sub-issues it 
 label "agent:review"            "c2e0c6" "Ask the Reviewer agent to review this PR"
 label "agent:changes-requested" "e99695" "Reviewer requested changes, Implementor agent fixes them"
 label "agent:qa"                "bfd4f2" "QA agent tests the PR preview in a browser"
-label "agent:approved"          "0e8a16" "Approved; the merge gate merges once CI is green"
+label "agent:approved"          "0e8a16" "Approved; the merge gate admits it to the merge queue"
+label "agent:queued"            "fef2c0" "In the merge queue; the Integrator merges queued PRs one at a time"
+label "agent:integrating"       "1d76db" "The Integrator is updating, testing and merging this PR now"
 
 # Both
 label "agent:needs-decision"  "f9d0c4" "Team is stuck; the Lead agent decides"

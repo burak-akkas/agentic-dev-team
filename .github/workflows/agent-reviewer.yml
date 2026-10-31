@@ -5,7 +5,10 @@ name: "Agent · Reviewer"
 #   - a human applies `agent:review` to any same-repo PR
 # Loop guard: after AGENT_MAX_REVIEW_ROUNDS reviewer summaries since the last Lead decision (default 3) the PR goes to the Lead (`agent:needs-decision`).
 # GitHub's clean update-branch merge on top of an approved commit skips review and QA (CI still runs,
-# and the merge gate waits for it). AGENT_QA_ON_BASE_UPDATE == 'true' sends it to QA instead.
+# and the Integrator waits for it). AGENT_QA_ON_BASE_UPDATE == 'true' sends it to QA instead.
+# A push that keeps the PR's own added/removed lines exactly as approved (a conflict resolution that
+# kept both sides, see same-own-changes.sh) is treated the same with AGENT_SKIP_REVIEW_ON_SAME_CHANGES == 'true'.
+# Otherwise a re-review of an approved PR gets the interdiff of its own edits since the approval.
 # PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
 # conflicts (GitHub creates no merge commit for those), and it always runs this workflow
 # file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
@@ -67,6 +70,7 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           QA: ${{ vars.AGENT_QA }}
           QA_ON_BASE_UPDATE: ${{ vars.AGENT_QA_ON_BASE_UPDATE }}
+          SKIP_SAME: ${{ vars.AGENT_SKIP_REVIEW_ON_SAME_CHANGES }}
         run: |
           mkdir -p .agent-out
           # A queued run may be stale by now (new commits, merge-gate verdict, conflict): don't spend a round on it.
@@ -76,9 +80,10 @@ jobs:
             echo "stop=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # The merge gate merged the base into an approved PR (update-branch): the PR's own changes are
-          # exactly what was approved and tested, so skip re-review, and QA unless asked for. CI tests the
-          # combined code, and the merge gate waits for it.
+          # The Integrator (merge queue) merged the base into an approved PR (update-branch): the PR's own
+          # changes are exactly what was approved and tested, so skip re-review, and QA unless asked for.
+          # CI tests the combined code, and the Integrator waits for it. Queued PRs never get here
+          # (pr-still-current.sh skips them): this covers updates of PRs that are not in the queue.
           if [ "${{ github.event.action }}" = "synchronize" ] \
              && approved=$("$BIN/clean-base-update.sh" "$PR" "${{ github.event.pull_request.head.sha }}"); then
             echo "Skipped review: only a clean merge of the base on top of approved ${approved:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"
@@ -92,6 +97,39 @@ jobs:
             "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer**: only the base branch was merged in since the approved commit, $skipped"
             echo "stop=true" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          # The PR was approved before and someone (usually the Implementor resolving a conflict with the
+          # base) pushed since. If the PR's own edits are still exactly the approved ones, only code from
+          # the base changed around them: with AGENT_SKIP_REVIEW_ON_SAME_CHANGES, treat it like a clean
+          # update. Otherwise tell the Reviewer how the PR's own edits changed since the approval.
+          if [ "${{ github.event.action }}" = "synchronize" ]; then
+            if approved=$("$BIN/same-own-changes.sh" "$PR" "${{ github.event.pull_request.head.sha }}" .agent-out/interdiff.diff); then
+              if [ "$SKIP_SAME" = "true" ]; then
+                echo "Skipped review: the PR's own edits are unchanged since approved ${approved:0:7}" | tee -a "$GITHUB_STEP_SUMMARY"
+                qa_next=false
+                if [ "$QA" = "true" ] && [ "$QA_ON_BASE_UPDATE" = "true" ]; then qa_next=true; fi
+                # The comment comes first: approve.sh records the approved commit in the latest Reviewer comment.
+                gh pr comment "$PR" --body "<!-- agent:reviewer -->
+          ## 🧐 Reviewer
+
+          **Verdict:** approve
+
+          Since the approved \`${approved:0:7}\`, only the base branch was merged in: this PR's own added and removed lines are exactly the ones that were approved, so they aren't reviewed again (\`AGENT_SKIP_REVIEW_ON_SAME_CHANGES\`). $([ "$qa_next" = true ] && echo "QA tests the combined code next." || echo "CI tests the combined code before it merges.")"
+                if [ "$qa_next" = true ]; then
+                  "$BIN/transition.sh" "$PR" agent:qa
+                  skipped="re-review skipped, sent to QA"
+                else
+                  "$BIN/approve.sh" "$PR" "${{ github.event.pull_request.head.sha }}" reviewer
+                  skipped="re-review$([ "$QA" = "true" ] && echo " and QA") skipped, CI decides"
+                fi
+                "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer**: own edits unchanged since the approval, $skipped"
+                echo "stop=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            elif [ -s .agent-out/interdiff.diff ]; then
+              echo "interdiff=.agent-out/interdiff.diff" >> "$GITHUB_OUTPUT"
+              echo "approved=$("$BIN/approved-sha.sh" "$PR")" >> "$GITHUB_OUTPUT"
+            fi
           fi
           # Rounds are counted since the latest Lead decision, so a Lead ruling gives the loop a fresh budget.
           # Only rejected rounds count toward the budget: re-reviews after base updates are not a loop.
@@ -128,6 +166,7 @@ jobs:
             Repository: ${{ github.repository }}
             Pull request: #${{ github.event.pull_request.number }}
             Review round: ${{ steps.guard.outputs.round }} of ${{ env.MAX_ROUNDS }}
+            ${{ steps.guard.outputs.interdiff && format('Re-review: this PR was approved at {0} and has changed since, usually because the Implementor merged the default branch and resolved conflicts. {1} shows how the PR''s own added/removed lines changed since that approval. Follow "Re-review after an approval" in reviewer.md.', steps.guard.outputs.approved, steps.guard.outputs.interdiff) || '' }}
 
             Tool rules: create files only with the Write tool (bodies go in .agent-out/, then use --body-file).
             Run every shell command on its own: no &&, ||, ;, pipes, redirects, heredocs or subshells.

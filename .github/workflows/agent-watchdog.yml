@@ -4,7 +4,8 @@ name: "Agent · Watchdog"
 # no agent run is queued or running for them, e.g. after a cancelled or crashed run, or a pending run
 # GitHub dropped from the concurrency queue. Re-triggers them up to AGENT_WATCHDOG_RETRIES times
 # (default 2) since the last Lead decision, then hands them to the Lead (or a human, if the Lead is
-# what stalls). See scripts/agents/watchdog.sh. Manual runs can override the threshold and do a dry run.
+# what stalls). It also restarts the merge queue when PRs wait in it but no Integrator run is active.
+# See scripts/agents/watchdog.sh. Manual runs can override the threshold and do a dry run.
 #
 # When it runs:
 #   - AGENT_WATCHDOG_MINUTES after an agent run finished. One check waits at a time and later runs queue
@@ -14,7 +15,8 @@ name: "Agent · Watchdog"
 on:
   workflow_run:
     workflows: ["Agent · Analyst", "Agent · Architect", "Agent · Implementor", "Agent · Reviewer",
-                "Agent · QA", "Agent · Lead", "Agent · Merge", "Agent · Sub-issues", "Agent · Chat (@claude)"]
+                "Agent · QA", "Agent · Lead", "Agent · Merge", "Agent · Integrator", "Agent · Sub-issues",
+                "Agent · Chat (@claude)"]
     types: [completed]
   schedule:
     - cron: "*/10 * * * *"
@@ -73,6 +75,7 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           AGENT_WATCHDOG_MINUTES: ${{ inputs.minutes || vars.AGENT_WATCHDOG_MINUTES || '10' }}
           AGENT_WATCHDOG_RETRIES: ${{ vars.AGENT_WATCHDOG_RETRIES || '2' }}
+          AGENT_AUTO_MERGE: ${{ vars.AGENT_AUTO_MERGE }}   # restarts the merge queue only while merging is on
         run: scripts/agents/watchdog.sh ${{ inputs.dry_run && '--dry-run' || '' }} | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Advance split issues

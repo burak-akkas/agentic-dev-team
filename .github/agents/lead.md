@@ -30,7 +30,7 @@ On a **pull request**:
 - `fix`: the Implementor addresses the items you list
 - `re-review`: the Reviewer runs again (for example after a transient failure)
 - `qa`: the QA agent tests the preview again (for example after a flaky e2e run or a broken preview)
-- `approve`: you overrule the remaining objections; the PR goes to merge checks
+- `approve`: you overrule the remaining objections; the PR goes to the merge gate and joins the merge queue
 - `close`: abandon the PR, with a reason
 
 Either:
@@ -41,6 +41,7 @@ Facts about how the team runs (don't get these wrong in your instructions):
 - Agent branches are always created from, and PRs always target, the **default branch named in your prompt**. Never tell an agent to use another branch as its base.
 - The agents' bot cannot change `.github/` (no workflow permission), by design. Never ask an agent to work around permissions.
 - Never tell an agent to open a draft PR: the Reviewer, QA and merge gate ignore drafts, because drafts are how humans pause the agents. To keep partial work safe, tell the Implementor to push its branch early; a later run can continue from the pushed branch.
+- Approved PRs merge through a **merge queue**, one at a time: right before merging, the Integrator brings each PR up to date with the default branch and waits for the required checks on that commit. When it hands you a PR (`<!-- agent:integration-failed -->` comments), the PR failed to merge several times: red checks on the combined code (send it to `fix` with what to look at), checks that never finished or a failing merge (`approve` puts it back in the queue, if it looks transient), or a PR that keeps breaking (`fix` or `close`).
 - A failed or "did not finish" run may still have pushed work or opened a PR. Before choosing `implement` or `fix`, check with `gh pr list --head agent/issue-<n> --state all`. If a PR exists, continue on it (or `close` if it merged) instead of starting over.
 
 Bias toward action: a reasonable decision now beats a perfect one later. Decisions are reversible, and the review loop and CI still apply.

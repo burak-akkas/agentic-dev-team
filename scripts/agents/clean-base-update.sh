@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tells whether a PR's head commit is only GitHub's clean merge of the base branch on top of the
-# commit the agents last approved, i.e. what the merge gate's update-branch creates. Then the PR's
+# commit the agents last approved, i.e. what the Integrator's update-branch creates. Then the PR's
 # own changes are exactly what was reviewed and re-reviewing them adds nothing (QA still tests the
 # combined code).
 #
@@ -17,9 +17,7 @@ head="$2"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 bot="${AGENT_BOT_ID:?AGENT_BOT_ID must be set}"
 
-approved=$(gh api --paginate --slurp "repos/$repo/issues/$pr/comments" \
-  | jq -r --argjson bot "$bot" '[.[][] | select(.user.id == $bot) | .body
-      | capture("<!-- agent:approved-sha (?<s>[0-9a-f]{40}) -->").s] | last // empty')
+approved=$("$(dirname "$0")/approved-sha.sh" "$pr")
 [ -n "$approved" ] || exit 1
 
 commit=$(gh api "repos/$repo/commits/$head")

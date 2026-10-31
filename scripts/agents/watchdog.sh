@@ -5,6 +5,8 @@
 #   - re-applies the state label, so the workflow for that state runs again
 #     (an issue stuck in agent:in-progress restarts from agent:ready, or moves to
 #     agent:pr-open if the Implementor already opened its PR)
+#   - restarts the merge queue when PRs wait in agent:queued/agent:integrating but no Integrator run
+#     is queued or running (only with AGENT_AUTO_MERGE == 'true')
 #   - after AGENT_WATCHDOG_RETRIES retries (default 2) since the last Lead decision it hands the
 #     item to the Lead; if the Lead itself is what stalls, to a human
 #
@@ -89,3 +91,24 @@ done < <(gh api --paginate --slurp "repos/$repo/issues?state=open&per_page=100" 
   [.number, (if .pull_request then "pr" else "issue" end), .updated_at, .title, ([.labels[].name] | join(",") | if . == "" then "-" else . end)] | @tsv')
 
 echo "Stalled items: $stalled"
+
+# The merge queue: queued PRs wait on purpose, but only while an Integrator run is queued or running
+# (each run drains the whole queue). Without one, e.g. after a cancelled run, re-applying agent:queued
+# to the front PR starts one; the PR keeps its place (queue.sh orders by the admission comment).
+if [ "${AGENT_AUTO_MERGE:-}" = "true" ]; then
+  queue=$("$here/queue.sh")
+  if [ -n "$queue" ]; then
+    busy=$(for s in queued in_progress waiting pending requested; do
+      gh run list -R "$repo" --workflow agent-integrator.yml --status "$s" --limit 5 --json databaseId --jq length
+    done | awk '{ n += $1 } END { print n + 0 }')
+    size=$(printf '%s\n' "$queue" | wc -l | tr -d ' ')
+    if [ "$busy" -gt 0 ]; then
+      echo "Merge queue: $size PR(s), an Integrator run is active"
+    else
+      front=$(printf '%s\n' "$queue" | head -1 | cut -d' ' -f1)
+      echo "Merge queue: $size PR(s) but no Integrator run, restarting it at #$front"
+      act "$here/transition.sh" "$front" agent:queued
+      act "$here/progress.sh" --pr "$front" "⏰ **Watchdog**: the merge queue had no Integrator run, restarted it"
+    fi
+  fi
+fi

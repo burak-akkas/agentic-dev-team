@@ -2,7 +2,8 @@
 
 import { useId, useState, type FormEvent } from "react";
 import { MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
-import { useBoards } from "@/hooks/useBoard";
+import { boardLists, collapseAllLists, expandAllLists, isListCollapsed } from "@/lib/board";
+import { useBoard, useBoards } from "@/hooks/useBoard";
 
 import { Button, ConfirmDialog, Dialog, Input, Menu, MoreIcon, Select } from "@/components/ui";
 
@@ -74,6 +75,8 @@ function BoardNameDialog({
 
 export function BoardSwitcher() {
   const { boards, currentId, createBoard, renameBoard, deleteBoard, selectBoard } = useBoards();
+  const [board, update] = useBoard();
+  const lists = boardLists(board);
   const [dialog, setDialog] = useState<Dialogs>(null);
   const current = boards.find((b) => b.id === currentId) ?? boards[0];
   const close = () => setDialog(null);
@@ -99,6 +102,16 @@ export function BoardSwitcher() {
           { label: "New board", onSelect: () => setDialog("create") },
           { label: "Rename board", onSelect: () => setDialog("rename") },
           { label: "Delete board", disabled: boards.length <= 1, onSelect: () => setDialog("delete") },
+          {
+            label: "Collapse all lists",
+            disabled: lists.length === 0 || lists.every((l) => isListCollapsed(board, l.id)),
+            onSelect: () => update(collapseAllLists),
+          },
+          {
+            label: "Expand all lists",
+            disabled: !board.collapsedLists?.length,
+            onSelect: () => update(expandAllLists),
+          },
         ]}
       />
       {dialog === "create" && (

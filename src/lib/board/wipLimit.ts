@@ -54,6 +54,25 @@ export function toggleListCollapsed(board: Board, id: ColumnId): Board {
   return { ...rest, collapsedLists: [...(collapsedLists ?? []), id] };
 }
 
+// Collapses every list, in list order. Returns the same board when all are already collapsed or there are none.
+export function collapseAllLists(board: Board): Board {
+  const lists = boardLists(board);
+  if (lists.length === 0 || lists.every((l) => isListCollapsed(board, l.id))) {
+    return board;
+  }
+  return { ...board, collapsedLists: lists.map((l) => l.id) };
+}
+
+// Expands every list by removing the key. Returns the same board when nothing is collapsed.
+export function expandAllLists(board: Board): Board {
+  if (!board.collapsedLists?.length) {
+    return board;
+  }
+  const { collapsedLists, ...rest } = board;
+  void collapsedLists;
+  return rest;
+}
+
 // How a column's real card count compares to its limit. `over` is how many cards exceed it.
 export function wipStatus(count: number, limit: number | undefined): { state: WipState; over: number } {
   if (limit === undefined) {

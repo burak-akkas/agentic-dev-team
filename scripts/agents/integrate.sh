@@ -91,8 +91,11 @@ conflict() {
   finish bounced
 }
 
-# Any unexpected error: don't leave the PR stuck in agent:integrating.
+# Any unexpected error: don't leave the PR stuck in agent:integrating. set -E makes command
+# substitutions inherit this trap: there it only fails the substitution, so the error reaches the
+# main shell, which handles it once (instead of carrying on with the handler's output as a value).
 on_error() {
+  if [ "$BASHPID" != "$$" ]; then exit 1; fi
   trap - ERR
   set +e
   log "unexpected error at line $1"
@@ -214,6 +217,7 @@ fi
 
 # --- 2.-4. Update, test, merge. Repeats only if the base moves outside the queue. ---
 for _ in 1 2 3; do
+  if ! still_ours "$head" agent:integrating; then log "the PR changed or left the queue"; finish left; fi
   if [ "$(mergeable)" = CONFLICTING ]; then
     conflict "#$pr conflicts with \`$base\`"
   fi
@@ -255,7 +259,10 @@ for _ in 1 2 3; do
   # Merge only if nothing landed on the base since the checks started: then the tested code is
   # exactly what lands. Inside the queue nothing else merges; this catches merges by humans.
   if [ "$(behind "$head")" -gt 0 ]; then log "$base moved while the checks ran, updating again"; continue; fi
-  if err=$(gh pr merge "$pr" -R "$repo" --squash --delete-branch --match-head-commit "$head" 2>&1); then
+  # gh can report an error after the merge itself succeeded (e.g. deleting the branch failed), so
+  # the PR's state decides, not the exit code.
+  err=$(gh pr merge "$pr" -R "$repo" --squash --delete-branch --match-head-commit "$head" 2>&1) || true
+  if [ "$(pr_json state | jq -r .state)" = MERGED ]; then
     "$here/transition.sh" "$pr" agent:done >/dev/null
     if [ -n "$issue" ]; then
       "$here/transition.sh" "$issue" agent:done >/dev/null

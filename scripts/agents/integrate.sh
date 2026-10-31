@@ -112,12 +112,21 @@ $2
 <!-- agent:approved-sha $1 -->"
 }
 
-# True while the PR is open, at <sha> and still carries <label>: nobody else changed it.
+# True while the PR is open, not a draft, at <sha> and still carries <label>: nobody else changed it.
 still_ours() {   # <sha> <label>
   local v
-  v=$(pr_json state,headRefOid,labels) || return 1
-  [ "$(jq -r .state <<<"$v")" = OPEN ] && [ "$(jq -r .headRefOid <<<"$v")" = "$1" ] \
+  v=$(pr_json state,isDraft,headRefOid,labels) || return 1
+  [ "$(jq -r .state <<<"$v")" = OPEN ] && [ "$(jq -r .isDraft <<<"$v")" != true ] && [ "$(jq -r .headRefOid <<<"$v")" = "$1" ] \
     && jq -e --arg l "$2" 'any(.labels[]; .name == $l)' <<<"$v" >/dev/null
+}
+
+# Drafts are how humans pause the agents: a PR that became one leaves the queue (not a failure).
+# Finishes if the PR is an open draft, returns otherwise.
+leave_if_draft() {
+  [ "$(pr_json state,isDraft | jq -r '.state + " " + (.isDraft | tostring)')" = "OPEN true" ] || return 0
+  "$here/transition.sh" "$pr" >/dev/null
+  say "⏸️ **Merge queue:** #$pr is a draft now, so it leaves the queue. Mark it ready for review to send it through review and back into the queue."
+  finish left
 }
 
 # GitHub computes mergeability lazily; UNKNOWN means "not yet".
@@ -192,12 +201,7 @@ if [ "$state" = MERGED ]; then
 fi
 [ "$state" = OPEN ] || finish left
 case "$labels" in *",agent:queued,"*|*",agent:integrating,"*) ;; *) log "no longer queued"; finish left ;; esac
-if [ "$(jq -r .isDraft <<<"$v")" = true ]; then
-  # Drafts are how humans pause the agents.
-  "$here/transition.sh" "$pr" >/dev/null
-  say "⏸️ **Merge queue:** #$pr is a draft now, so it leaves the queue. Mark it ready for review to send it through review and back into the queue."
-  finish left
-fi
+leave_if_draft
 
 "$here/transition.sh" "$pr" agent:integrating >/dev/null
 log "integrating ${head:0:7} into $base"
@@ -217,7 +221,7 @@ fi
 
 # --- 2.-4. Update, test, merge. Repeats only if the base moves outside the queue. ---
 for _ in 1 2 3; do
-  if ! still_ours "$head" agent:integrating; then log "the PR changed or left the queue"; finish left; fi
+  if ! still_ours "$head" agent:integrating; then leave_if_draft; log "the PR changed or left the queue"; finish left; fi
   if [ "$(mergeable)" = CONFLICTING ]; then
     conflict "#$pr conflicts with \`$base\`"
   fi
@@ -250,7 +254,7 @@ for _ in 1 2 3; do
 
   wait_checks "$head"
   case "$CHECKS" in
-    moved)   log "the PR changed while its checks ran"; finish left ;;
+    moved)   leave_if_draft; log "the PR changed while its checks ran"; finish left ;;
     fail)    fail bounce "required checks failed on \`${head:0:7}\`$updated: $FAILED" \
                "open the failing check and reproduce it locally. If it only fails together with the latest \`$base\`, run \`git fetch origin $base\` and \`git merge origin/$base\` first. Fix it, run all checks, and push." ;;
     timeout) fail requeue "the required checks ($required) didn't finish within $checks_minutes minutes" ;;
@@ -275,7 +279,7 @@ for _ in 1 2 3; do
   log "merge failed: $err"
   # New commits (merge refused by --match-head-commit) or a closed PR: not a failed attempt. The push
   # takes the PR out of the queue and through review (pr-still-current.sh).
-  if ! still_ours "$head" agent:integrating; then log "the PR changed while merging"; finish left; fi
+  if ! still_ours "$head" agent:integrating; then leave_if_draft; log "the PR changed while merging"; finish left; fi
   if [ "$(behind "$head")" -gt 0 ]; then continue; fi
   fail requeue "the merge failed: $(printf '%s' "$err" | tail -1)"
 done

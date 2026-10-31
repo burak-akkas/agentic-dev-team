@@ -167,6 +167,7 @@ for hook in list(st.get("hooks", [])):
     if hook["match"] in " ".join(args) and (not hook.get("if_label") or (it and hook["if_label"] in it.get("labels", []))):
         st["hooks"].remove(hook)
         if "labels" in hook: it["labels"] = list(hook["labels"])
+        if hook.get("draft"): it["draft"] = True   # a human converts the PR to a draft, right now
         if hook.get("human_merge"):   # a human merges into the base by hand, right now
             st["base_version"] += 1
             st.setdefault("human_merges", []).append(st["calls"])
@@ -285,6 +286,7 @@ if cmd == "pr":
         it = item(n)
         if opt("--match-head-commit") != it["head"]: fail("GraphQL: Head branch was modified")
         if it.get("state", "OPEN") != "OPEN": fail("GraphQL: Pull request is not open")
+        if it.get("draft"): fail("GraphQL: Pull Request is still a draft (mergePullRequest)")
         if it.get("merge_fails", 0) > 0:
             it["merge_fails"] -= 1
             fail("GraphQL: Base branch was modified. Review and try the merge again.")

@@ -158,9 +158,10 @@ mergeable() {
 }
 
 # Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names) on <sha>, the same rules as QA.
-# Sets CHECKS to pass, fail (FAILED lists them), timeout, or moved (the PR changed meanwhile).
+# Sets CHECKS to pass, fail (FAILED lists them), timeout, missing (none of the required checks ever
+# appeared: a configuration problem), or moved (the PR changed meanwhile).
 wait_checks() {   # <sha>
-  local sha="$1" json checks pending deadline
+  local sha="$1" json checks pending deadline seen=0
   local filter='[.[] | select(.workflow as $w | ($req | split(",") | map(gsub("^ +| +$"; ""))) | index($w))]'
   deadline=$(( $(date +%s) + checks_minutes * 60 ))
   CHECKS=timeout
@@ -171,10 +172,12 @@ wait_checks() {   # <sha>
     checks=$(jq --arg req "$required" "$filter" <<<"${json:-[]}")
     FAILED=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | "[\(.name)](\(.link))"] | join(", ")' <<<"$checks")
     pending=$(jq '[.[] | select(.bucket == "pending")] | length' <<<"$checks")
+    if [ "$(jq length <<<"$checks")" -gt 0 ]; then seen=1; fi
     if [ -n "$FAILED" ]; then CHECKS=fail; return 0; fi
     if [ "$(jq length <<<"$checks")" -gt 0 ] && [ "$pending" -eq 0 ]; then CHECKS=pass; return 0; fi
     sleep 30
   done
+  if [ "$seen" = 0 ]; then CHECKS=missing; fi
 }
 
 # AGENT_QA_ON_BASE_UPDATE: QA tests the updated branch while the queue waits. QA's pass goes through
@@ -275,6 +278,12 @@ for _ in 1 2 3; do
     fail)    fail bounce "required checks failed on \`${head:0:7}\`$updated: $FAILED" \
                "open the failing check and reproduce it locally. If it only fails together with the latest \`$base\`, run \`git fetch origin $base\` and \`git merge origin/$base\` first. Fix it, run all checks, and push." ;;
     timeout) fail requeue "the required checks ($required) didn't finish within $checks_minutes minutes" ;;
+    missing)
+      # No agent can fix this, and retrying every PR would only burn reviews and Lead decisions.
+      "$here/transition.sh" "$pr" agent:needs-human >/dev/null
+      say "🛑 **Merge queue:** none of the required checks (\`AGENT_REQUIRED_CHECKS\` = \`$required\`) reported on \`${head:0:7}\` within $checks_minutes minutes. Check that variable against the workflow names in the PR's checks, then apply \`agent:approved\` again."
+      progress "🚦 **Merge queue**: no required check reported on #$pr, a human must check \`AGENT_REQUIRED_CHECKS\`"
+      finish left ;;
   esac
 
   # Merge only if nothing landed on the base since the checks started: then the tested code is

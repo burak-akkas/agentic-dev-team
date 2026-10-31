@@ -194,6 +194,18 @@ def base_that_keeps_moving_requeues_instead_of_looping():
 
 
 @test
+def a_human_merge_right_before_the_merge_is_the_documented_race():
+    # GitHub's merge API doesn't check freshness without a branch rule, so a human merging by hand
+    # between the Integrator's last check and its merge lands an untested combination. Documented
+    # limitation (README: make the queue a hard rule with a ruleset); the audit names it.
+    st = make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]}})
+    st["hooks"] = [{"match": "pr merge 101", "pr": 101, "human_merge": True}]
+    st = run(st)
+    assert st.get("merged") == [101]
+    assert [v["kind"] for v in st["violations"]] == ["human-merge-race"]
+
+
+@test
 def base_with_workflow_changes_cant_be_merged_in_and_goes_to_the_implementor():
     st = run(make_state({101: {"head": sha(0xa1), "bv": 0, "comments": [approval(sha(0xa1)), queued()]}},
                         base_version=1, workflow_version=1))

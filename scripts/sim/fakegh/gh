@@ -167,6 +167,9 @@ for hook in list(st.get("hooks", [])):
     if hook["match"] in " ".join(args) and (not hook.get("if_label") or (it and hook["if_label"] in it.get("labels", []))):
         st["hooks"].remove(hook)
         if "labels" in hook: it["labels"] = list(hook["labels"])
+        if hook.get("human_merge"):   # a human merges into the base by hand, right now
+            st["base_version"] += 1
+            st.setdefault("human_merges", []).append(st["calls"])
         if hook.get("approve_head"): add_comment(hook["pr"], "<!-- agent:qa -->\n<!-- agent:approved-sha %s -->" % it["head"])
         if hook.get("push"):
             st["shas"][hook["push"]] = dict(st["shas"][it["head"]]); it["head"] = hook["push"]
@@ -228,6 +231,7 @@ if cmd == "api":
     if parts[0] == "compare":
         a, b = parts[1].split("...")
         if b == st["base"]:   # <sha>...<base>: base commits missing from <sha>
+            st.setdefault("last_fresh_check", {})[a] = st["calls"]
             if a not in st["shas"]:
                 emit({"ahead_by": 0, "status": "ahead"})   # a commit on the base itself
             emit({"ahead_by": st["base_version"] - st["shas"][a]["base_version"], "status": "ahead"})
@@ -295,7 +299,10 @@ if cmd == "pr":
         required = ("up_to_date", "green", "approved") + (() if st.get("legacy") else ("by_integrator",))
         bad = [k for k in required if not audit[k]] + (["draft"] if audit["draft"] else [])
         if bad:
-            violation("unsafe-merge", pr=int(n), problems=bad)
+            # A human merging by hand right after the Integrator's last freshness check: GitHub doesn't
+            # stop that without a branch rule. Reported apart from the queue's own mistakes.
+            race = bad == ["up_to_date"] and any(c > st.get("last_fresh_check", {}).get(h, 0) for c in st.get("human_merges", []))
+            violation("human-merge-race" if race else "unsafe-merge", pr=int(n), problems=bad)
         it["state"] = "MERGED"
         st["base_version"] += 1
         st.setdefault("merged", []).append(int(n))

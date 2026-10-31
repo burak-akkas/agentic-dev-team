@@ -269,9 +269,10 @@ if cmd == "pr":
     if sub == "view":
         emit(pr_view(args[2], opt("--json").split(",")))
     if sub == "list":
-        label, keys = opt("--label"), opt("--json").split(",")
+        label, keys, want = opt("--label"), opt("--json").split(","), opt("--state", "open")
+        states = {"open": ("OPEN",), "closed": ("CLOSED", "MERGED"), "merged": ("MERGED",), "all": ("OPEN", "CLOSED", "MERGED")}[want]
         out = [pr_view(n, keys) for n, it in st["items"].items()
-               if it.get("kind", "pr") == "pr" and it.get("state", "OPEN") == "OPEN" and (not label or label in it.get("labels", []))]
+               if it.get("kind", "pr") == "pr" and it.get("state", "OPEN") in states and (not label or label in it.get("labels", []))]
         emit(out)
     if sub == "comment":
         add_comment(args[2], opt("--body") if "--body" in args else open(opt("--body-file")).read())

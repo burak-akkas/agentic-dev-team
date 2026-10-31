@@ -208,6 +208,37 @@ def pr_turned_into_a_draft_while_merging_leaves_the_queue():
 
 
 @test
+def an_api_error_right_after_the_merge_still_ends_done():
+    # Found by the matrix: the error handler requeued the merged PR (or handed it to the Lead).
+    st = make_state({101: {"head": sha(0xa1), "issue": 11, "comments": [approval(sha(0xa1)), queued()]}})
+    st["fail_cmds"] = ["issues/101/labels -f labels[]=agent:done"]
+    st = run(st)
+    assert st.get("merged") == [101] and labels(st, 101) == ["agent:done"], labels(st, 101)
+    assert not any("integration-failed" in b for b in bodies(st, 101))
+
+
+@test
+def queue_labels_on_closed_prs_are_tidied():
+    # Found by the matrix: an Integrator run killed right after a merge, or a late approval.
+    st = make_state({
+        101: {"head": sha(0xa1), "state": "MERGED", "labels": ["agent:integrating"]},
+        102: {"head": sha(0xb1), "state": "MERGED", "labels": ["agent:queued"]},
+        103: {"head": sha(0xc1), "state": "CLOSED", "labels": ["agent:approved"]},
+        104: {"head": sha(0xd1), "labels": ["agent:queued"]},
+    })
+    st = run(st, script="queue-tidy.sh")
+    assert labels(st, 101) == labels(st, 102) == ["agent:done"] and labels(st, 103) == [] and labels(st, 104) == ["agent:queued"]
+
+
+@test
+def merge_gate_ignores_a_late_approval_of_a_merged_pr():
+    risk = steps("agent-merge.yml", "merge")["Risk gate"]["run"]
+    st0 = make_state({101: {"head": sha(0xa1), "state": "MERGED", "labels": ["agent:done", "agent:approved"]}})
+    st = run(st0, shell=risk, PR=101, HEAD_SHA=sha(0xa1), SENDER_TYPE="User", SENDER="human", PROTECTED=".github/")
+    assert st["_outputs"].get("stop") == "true" and "agent:queued" not in labels(st, 101)
+
+
+@test
 def a_human_merge_right_before_the_merge_is_the_documented_race():
     # GitHub's merge API doesn't check freshness without a branch rule, so a human merging by hand
     # between the Integrator's last check and its merge lands an untested combination. Documented

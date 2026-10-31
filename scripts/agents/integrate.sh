@@ -273,6 +273,9 @@ for _ in 1 2 3; do
     finish merged
   fi
   log "merge failed: $err"
+  # New commits (merge refused by --match-head-commit) or a closed PR: not a failed attempt. The push
+  # takes the PR out of the queue and through review (pr-still-current.sh).
+  if ! still_ours "$head" agent:integrating; then log "the PR changed while merging"; finish left; fi
   if [ "$(behind "$head")" -gt 0 ]; then continue; fi
   fail requeue "the merge failed: $(printf '%s' "$err" | tail -1)"
 done

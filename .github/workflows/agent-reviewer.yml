@@ -80,6 +80,14 @@ jobs:
             echo "stop=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The Integrator records its own updates as approved. A push event for an approved commit
+          # (e.g. after the Integrator moved on to holding the PR for QA) needs no review.
+          if [ "${{ github.event.action }}" = "synchronize" ] \
+             && [ "${{ github.event.pull_request.head.sha }}" = "$("$BIN/approved-sha.sh" "$PR")" ]; then
+            echo "Skipped review: this commit is already approved (the merge queue's update)" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "stop=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # The Integrator (merge queue) merged the base into an approved PR (update-branch): the PR's own
           # changes are exactly what was approved and tested, so skip re-review, and QA unless asked for.
           # CI tests the combined code, and the Integrator waits for it. Queued PRs never get here

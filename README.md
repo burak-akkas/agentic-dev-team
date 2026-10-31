@@ -108,7 +108,7 @@ You don't need to do anything in autonomous mode. These are overrides:
 | Ask the Lead to step in | Add `agent:needs-decision` |
 | See the merge queue | Filter PRs by `agent:integrating` (being merged now) and `agent:queued`. Each queued PR has a "Queued for merge" comment, and the Integrator's job summary lists the queue |
 | Merge a PR through the queue | Add `agent:approved` (you approve its current head). It joins the back of the queue |
-| Take a PR out of the queue | Mark it as draft, or remove `agent:queued`. Pushing to it also takes it out (it goes through review again) |
+| Take a PR out of the queue | Mark it as draft (agents ignore drafts; mark it ready to send it through review and back into the queue). Removing `agent:queued` only takes it out for a moment: the watchdog sends unlabeled agent PRs back to review. Pushing to it also takes it out (it goes through review again) |
 | Restart the merge queue | `gh workflow run agent-integrator.yml` (the watchdog also does this when PRs wait without an Integrator run) |
 | Get a review of your own PR | Add `agent:review` |
 | Ask for something ad hoc | Comment `@claude …` |

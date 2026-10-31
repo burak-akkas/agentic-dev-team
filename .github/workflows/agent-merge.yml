@@ -1,13 +1,15 @@
 name: "Agent · Merge"
 
-# Merge gate. When a PR gets `agent:approved` (from the Reviewer or the Lead):
+# Merge gate: admits approved PRs to the merge queue. When a PR gets `agent:approved` (from the
+# Reviewer, QA or the Lead, or a human):
 #   1. Kill switch: does nothing unless AGENT_AUTO_MERGE == 'true'
-#   2. Risk: if the linked issue is `risk:high`, a human merges (unless AGENT_AUTO_MERGE_HIGH_RISK == 'true').
+#   2. Approval: an agent approval must name the PR's head commit (approve.sh), else back to review.
+#      A human applying the label approves the head as it is
+#   3. Risk: if the linked issue is `risk:high`, a human merges (unless AGENT_AUTO_MERGE_HIGH_RISK == 'true').
 #      So does any PR touching AGENT_PROTECTED_PATHS (default .github/, scripts/, templates/)
-#   3. Up to date: if the default branch moved on, updates the PR branch (re-runs CI; review and QA
-#      are skipped for that clean merge unless AGENT_QA_ON_BASE_UPDATE, see agent-reviewer.yml)
-#   4. Waits for the required checks (AGENT_REQUIRED_CHECKS, workflow names, default "CI")
-#   5. Green: squash-merges exactly the approved commit (agent approvals name it, see approve.sh). Red: sends the PR back to the Implementor.
+#   4. Queue: labels the PR `agent:queued` and posts its place in the queue. The Integrator
+#      (agent-integrator.yml) merges queued PRs one at a time: it brings each one up to date with the
+#      base right before merging, waits for the required checks on exactly that commit, and merges it.
 # PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
 # conflicts (GitHub creates no merge commit for those), and it always runs this workflow
 # file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
@@ -30,7 +32,7 @@ jobs:
       group: agent-${{ github.event.pull_request.number }}-merge
       cancel-in-progress: true
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 10
     permissions:
       contents: read
     env:
@@ -38,7 +40,6 @@ jobs:
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       TRUSTED: .agent-trusted/.github/agents
       BIN: .agent-trusted/scripts/agents
-      REQUIRED: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
     steps:
       - uses: actions/create-github-app-token@v2
         id: app
@@ -67,9 +68,7 @@ jobs:
           # An agent approval names the exact commit it approved (scripts/agents/approve.sh). Anything
           # pushed after it, by anyone, goes through review again. A human applying the label is trusted.
           if [ "$SENDER_TYPE" = "Bot" ]; then
-            approved=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
-              | jq -r --argjson bot "${AGENT_BOT_ID:?AGENT_BOT_ID must be set}" '[.[][] | select(.user.id == $bot) | .body
-                  | capture("<!-- agent:approved-sha (?<s>[0-9a-f]{40}) -->").s] | last // empty')
+            approved=$("$BIN/approved-sha.sh" "$PR")
             if [ "$approved" != "$HEAD_SHA" ]; then
               echo "Approval was for ${approved:-nothing}, head is $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
               "$BIN/transition.sh" "$PR" agent:review
@@ -104,108 +103,30 @@ jobs:
             echo "stop=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Without branch protection nothing forces a PR to include the latest default branch.
-      # If the base moved on, update the branch: the push re-runs CI on the combined code, the
-      # Reviewer re-approves the clean merge without a review, and that approval brings the PR back here.
-      - name: Up-to-date gate
-        id: fresh
+      - name: Join the merge queue
         if: steps.risk.outputs.stop != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          SENDER_TYPE: ${{ github.event.sender.type }}
+          SENDER: ${{ github.event.sender.login }}
           BASE: ${{ github.event.pull_request.base.ref }}
-          RETEST: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_ON_BASE_UPDATE == 'true' && 'CI and QA now run' || 'CI now runs' }}
         run: |
-          behind=$(gh api "repos/$GITHUB_REPOSITORY/compare/$HEAD_SHA...$BASE" --jq .ahead_by)
-          echo "Behind $BASE by $behind commit(s)" >> "$GITHUB_STEP_SUMMARY"
-          [ "$behind" -eq 0 ] && exit 0
-          echo "stop=true" >> "$GITHUB_OUTPUT"
-          "$BIN/progress.sh" --pr "$PR" "🚦 **Merge gate**: \`$BASE\` moved on, updating #$PR and re-testing"
-          if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR/update-branch" -f expected_head_sha="$HEAD_SHA" >/dev/null 2>&1; then
-            "$BIN/transition.sh" "$PR"
-            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "🔄 \`$BASE\` moved on by $behind commit(s) since this was approved. I merged it into this branch. $RETEST again on the combined code (re-review is skipped: this PR's own changes are unchanged)."
-          else
-            "$BIN/transition.sh" "$PR" agent:changes-requested
-            gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
-          ⚠️ This PR is behind \`$BASE\` and can't be updated automatically (merge conflicts, or the base changed workflow files). Implementor: run \`git fetch origin $BASE\` and \`git merge origin/$BASE\`, resolve the conflicts keeping the intent of both sides, run all checks, and push."
+          # With AGENT_QA_ON_BASE_UPDATE the Integrator holds the queue while QA tests a PR it just
+          # updated. QA's pass lands here: hand the PR straight back to the Integrator, keeping its place.
+          hold=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            | jq -r --argjson bot "$AGENT_BOT_ID" '[.[][] | select(.user.id == $bot) | .body
+                | capture("<!-- agent:integrator-hold (?<s>[0-9a-f]{40}) -->").s] | last // empty')
+          if [ "$hold" = "$HEAD_SHA" ]; then
+            "$BIN/transition.sh" "$PR" agent:integrating
+            "$BIN/progress.sh" --pr "$PR" "🚦 **Merge gate**: QA passed on the updated #$PR, back to the Integrator"
+            echo "QA passed on the commit the Integrator is holding for: back to the Integrator" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-
-      - name: Wait for required checks
-        id: checks
-        if: steps.risk.outputs.stop != 'true' && steps.fresh.outputs.stop != 'true'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          # Poll for up to 30 minutes. Only workflows listed in REQUIRED count,
-          # so the agent workflows themselves (including this one) never block the merge.
-          filter='[.[] | select(.workflow as $w | ($req | split(",") | map(gsub("^ +| +$"; ""))) | index($w))]'
-          for _ in $(seq 1 60); do
-            json=$(gh pr checks "$PR" -R "$GITHUB_REPOSITORY" --json workflow,name,bucket 2>/dev/null || true)
-            checks=$(echo "${json:-[]}" | jq --arg req "$REQUIRED" "$filter")
-            total=$(echo "$checks" | jq 'length')
-            failed=$(echo "$checks" | jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")')
-            pending=$(echo "$checks" | jq '[.[] | select(.bucket == "pending")] | length')
-            if [ -n "$failed" ]; then echo "result=fail" >> "$GITHUB_OUTPUT"; echo "failed=$failed" >> "$GITHUB_OUTPUT"; exit 0; fi
-            if [ "$total" -gt 0 ] && [ "$pending" -eq 0 ]; then echo "result=pass" >> "$GITHUB_OUTPUT"; exit 0; fi
-            sleep 30
-          done
-          echo "result=timeout" >> "$GITHUB_OUTPUT"
-
-      - name: Merge or send back
-        id: final
-        if: ${{ !cancelled() && steps.risk.outputs.stop != 'true' && steps.fresh.outputs.stop != 'true' }}
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          RESULT: ${{ steps.checks.outputs.result }}
-          FAILED: ${{ steps.checks.outputs.failed }}
-          ISSUE: ${{ steps.risk.outputs.issue }}
-        run: |
-          case "$RESULT" in
-            pass)
-              # --match-head-commit: never merge commits pushed after the approval.
-              if gh pr merge "$PR" -R "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$HEAD_SHA"; then
-                "$BIN/transition.sh" "$PR" agent:done
-                if [ -n "$ISSUE" ]; then "$BIN/transition.sh" "$ISSUE" agent:done; fi
-                prod="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
-                [ -n "$ISSUE" ] && "$BIN/progress.sh" "$ISSUE" "✅ **Merged** #$PR, deploying to [production]($prod)"
-                echo "Merged PR #$PR" >> "$GITHUB_STEP_SUMMARY"
-                echo "merged=true" >> "$GITHUB_OUTPUT"
-              else
-                "$BIN/transition.sh" "$PR" agent:needs-decision
-                gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⚠️ Auto-merge failed (conflict or new commits). Lead, please decide."
-              fi ;;
-            fail)
-              [ -n "$ISSUE" ] && "$BIN/progress.sh" "$ISSUE" "🚦 **Merge gate**: required checks failed on #$PR, back to the Implementor"
-              "$BIN/transition.sh" "$PR" agent:changes-requested
-              gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
-          ❌ Required checks failed: **$FAILED**. Implementor, please fix ([checks](https://github.com/$GITHUB_REPOSITORY/pull/$PR/checks))." ;;
-            *)
-              "$BIN/transition.sh" "$PR" agent:needs-decision
-              gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "⏱️ Required checks ($REQUIRED) did not finish in time. Lead, please decide." ;;
-          esac
-
-      # A merge can make other open agent PRs conflict. GitHub runs no pull_request workflows
-      # for conflicting PRs, so flag them now: the Implementor merges the base and resolves.
-      - name: Send PRs that now conflict back to the Implementor
-        if: ${{ !cancelled() && steps.final.outputs.merged == 'true' }}
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          BASE: ${{ github.event.pull_request.base.ref }}
-        run: |
-          sleep 20   # give GitHub time to recompute mergeability after the merge
-          for n in $(gh pr list -R "$GITHUB_REPOSITORY" --state open --base "$BASE" --json number,headRefName \
-                       --jq '.[] | select(.headRefName | startswith("agent/")) | .number'); do
-            state=UNKNOWN
-            for _ in 1 2 3 4 5; do
-              state=$(gh pr view "$n" -R "$GITHUB_REPOSITORY" --json mergeable --jq .mergeable)
-              [ "$state" != "UNKNOWN" ] && break
-              sleep 10
-            done
-            echo "PR #$n: $state" >> "$GITHUB_STEP_SUMMARY"
-            [ "$state" = "CONFLICTING" ] || continue
-            labels=$(gh pr view "$n" -R "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | join(",")')
-            case ",$labels," in *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*) continue ;; esac
-            "$BIN/transition.sh" "$n" agent:changes-requested
-            gh pr comment "$n" -R "$GITHUB_REPOSITORY" --body "<!-- agent:merge -->
-          ⚠️ #$PR was just merged into \`$BASE\`, and this PR now **conflicts** with it. Implementor: run \`git fetch origin $BASE\` and \`git merge origin/$BASE\`, resolve the conflicts keeping the intent of both changes, run all checks, and push."
-            "$BIN/progress.sh" --pr "$n" "🚦 **Merge gate**: #$n conflicts with the just-merged #$PR, back to the Implementor"
-          done
+          ahead=$("$BIN/queue.sh" | awk -v n="$PR" '$1 != n' | wc -l | tr -d ' ')
+          # The admission comment fixes the PR's place in the queue (queue.sh orders by it). A human
+          # approval also records the commit it approved, like approve.sh does for the agents.
+          gh pr comment "$PR" -R "$GITHUB_REPOSITORY" --body "<!-- agent:queued -->
+          🚦 **Queued for merge** at position $((ahead + 1))$([ "$ahead" -gt 0 ] && echo " ($ahead PR(s) ahead)"). The Integrator merges queued PRs one at a time: right before merging, it brings this PR up to date with \`$BASE\` and waits for the required checks on exactly that commit, so CI tests what lands. This PR's own changes are not reviewed again unless they change.$([ "$SENDER_TYPE" != "Bot" ] && printf '\n\n<!-- agent:approved-sha %s -->' "$HEAD_SHA")"
+          "$BIN/transition.sh" "$PR" agent:queued
+          "$BIN/progress.sh" --pr "$PR" "🚦 **Merge gate**: #$PR queued for merge (position $((ahead + 1)))"
+          echo "Queued at position $((ahead + 1))" >> "$GITHUB_STEP_SUMMARY"

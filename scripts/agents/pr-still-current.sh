@@ -42,6 +42,18 @@ case ",$labels," in
     echo "skip=PR is waiting in $current, re-queued its handler"; exit 0 ;;
   *",agent:needs-human,"*)
     echo "skip=PR is waiting for a human"; exit 0 ;;
+  *",agent:queued,"*|*",agent:integrating,"*)
+    # In the merge queue. The approved commit, and the Integrator's own clean merges of the base on
+    # top of it, are the Integrator's business.
+    if [ "$head" = "$("$here/approved-sha.sh" "$pr")" ] || "$here/clean-base-update.sh" "$pr" "$head" >/dev/null 2>&1; then
+      echo "skip=PR is in the merge queue"; exit 0
+    fi
+    # Anyone else's push takes it out of the queue (the Integrator notices and lets go of it), and
+    # this run reviews the new commits.
+    "$here/transition.sh" "$pr" >/dev/null
+    gh pr comment "$pr" -R "$repo" --body "🔁 #$pr got new commits while it was in the merge queue, so it leaves the queue and goes through review again." >/dev/null
+    "$here/progress.sh" --pr "$pr" "🚦 **Merge queue**: #$pr got new commits, left the queue for review" >/dev/null
+    labels=$(gh pr view "$pr" -R "$repo" --json labels --jq '[.labels[].name] | join(",")') ;;
 esac
 if [ -n "$required" ] && [[ ",$labels," != *",$required,"* ]]; then
   echo "skip=PR no longer has $required (labels: ${labels:-none})"; exit 0

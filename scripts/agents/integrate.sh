@@ -10,7 +10,7 @@
 #   4. With AGENT_QA_IN_QUEUE (the default when QA is on): unless QA already passed these own changes
 #      (qa-passed.sh), the queue waits while QA tests exactly that commit. Nothing else merges
 #      meanwhile, so QA runs once per PR, on the code that lands.
-#   5. If the base moved meanwhile (a human merged something), goes back to 2. Otherwise squash-merges
+#   5. If the base moved meanwhile (a human merged something), goes back to 2. Otherwise merges
 #      exactly that commit, so what lands on the base is what CI (and QA) tested.
 # Conflicts and red checks go to the Implementor, timeouts and failed merges to the back of the queue.
 # Red checks, timeouts and failed merges count as failed attempts: after AGENT_INTEGRATOR_MAX_ATTEMPTS
@@ -29,7 +29,8 @@
 # AGENT_QA_IN_QUEUE (true: QA once, at the front of the queue), AGENT_QA_ON_BASE_UPDATE (true: QA
 # after each update), AGENT_AUTO_MERGE_HIGH_RISK, AGENT_PROTECTED_PATHS
 # (default .github/,scripts/,templates/), AGENT_INTEGRATOR_MAX_ATTEMPTS (3),
-# AGENT_INTEGRATOR_CHECKS_MINUTES (30), AGENT_INTEGRATOR_QA_MINUTES (60).
+# AGENT_INTEGRATOR_CHECKS_MINUTES (30), AGENT_INTEGRATOR_QA_MINUTES (60), AGENT_MERGE_METHOD (squash,
+# merge or rebase; default squash), AGENT_PRODUCTION_URL (the link in the issue's progress note, url.sh).
 set -Eeuo pipefail
 
 pr="$1"
@@ -42,6 +43,8 @@ qa_in_queue="${AGENT_QA_IN_QUEUE:-}"
 max_attempts="${AGENT_INTEGRATOR_MAX_ATTEMPTS:-3}"
 checks_minutes="${AGENT_INTEGRATOR_CHECKS_MINUTES:-30}"
 qa_minutes="${AGENT_INTEGRATOR_QA_MINUTES:-60}"
+method="${AGENT_MERGE_METHOD:-squash}"
+case "$method" in squash|merge|rebase) ;; *) echo "::warning::AGENT_MERGE_METHOD must be squash, merge or rebase, not '$method': squash-merging" >&2; method=squash ;; esac
 run_url="${GITHUB_SERVER_URL:-https://github.com}/$repo/actions/runs/${GITHUB_RUN_ID:-}"
 base=""
 
@@ -216,7 +219,7 @@ hold_for_qa() {   # <sha> <why>
         # label is left over (e.g. a failed label change): only a recorded pass counts.
         if "$here/qa-passed.sh" "$pr" "$sha" >/dev/null; then return 0; fi
         log "agent:integrating, but no QA pass for ${sha:0:7} yet" ;;
-      *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:review,"*)
+      *",agent:changes-requested,"*|*",agent:fixing,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:review,"*)
         log "QA did not pass (labels: $labels)"; finish left ;;
     esac                                     # agent:qa, agent:approved or between labels: still going
   done
@@ -346,13 +349,13 @@ for _ in 1 2 3; do
   refresh_token
   # gh can report an error after the merge itself succeeded (e.g. deleting the branch failed), so
   # the PR's state decides, not the exit code.
-  err=$(gh pr merge "$pr" -R "$repo" --squash --delete-branch --match-head-commit "$head" 2>&1) || true
+  err=$(gh pr merge "$pr" -R "$repo" "--$method" --delete-branch --match-head-commit "$head" 2>&1) || true
   if [ "$(pr_json state | jq -r .state)" = MERGED ]; then
     "$here/transition.sh" "$pr" agent:done >/dev/null
     if [ -n "$issue" ]; then
       "$here/transition.sh" "$issue" agent:done >/dev/null
-      prod="https://${GITHUB_REPOSITORY_OWNER:-${repo%%/*}}.github.io/${repo#*/}/"
-      "$here/progress.sh" "$issue" "✅ **Merged** #$pr, deploying to [production]($prod)"
+      prod=$("$here/url.sh" production)
+      "$here/progress.sh" "$issue" "✅ **Merged** #$pr$([ -n "$prod" ] && echo ", deploying to [production]($prod)" || true)"
     fi
     "$here/sweep-conflicts.sh" "$pr" "$base" >&2
     finish merged

@@ -36,7 +36,7 @@ stalled=0
 while IFS=$'\t' read -r n kind updated title labels; do
   [ -z "$n" ] && continue
   state=$(echo "$labels" | tr ',' '\n' | grep -m1 -xE "$( [ "$kind" = pr ] \
-    && echo 'agent:(review|qa|approved|changes-requested|needs-decision)' \
+    && echo 'agent:(review|qa|approved|changes-requested|fixing|needs-decision)' \
     || echo 'agent:(start|analyzed|ready|in-progress|needs-decision)')" || true)
   if [ -z "$state" ]; then
     # An agent PR without any agent:* label is waiting for the Reviewer (it fires on every push).
@@ -77,6 +77,7 @@ while IFS=$'\t' read -r n kind updated title labels; do
   note="Re-triggering it"; short="re-triggered"
   case "$state" in
     none) next=agent:review; note="Asking the Reviewer"; short="asked the Reviewer" ;;
+    agent:fixing) next=agent:changes-requested; note="Restarting the Implementor"; short="restarted the Implementor" ;;
     agent:in-progress)
       pr=$(gh pr list -R "$repo" --head "agent/issue-$n" --state open --json number --jq '.[0].number // empty')
       if [ -n "$pr" ]; then next=agent:pr-open; note="The Implementor had already opened #$pr, so continuing with it"; short="continuing with #$pr"

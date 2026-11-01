@@ -18,6 +18,8 @@ on:
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
   AGENT_BOT_ID: ${{ vars.AGENT_BOT_ID }}   # the App's bot user id: unlike its login, it survives renames
+  AGENT_PREVIEW_URL: ${{ vars.AGENT_PREVIEW_URL }}         # link templates (scripts/agents/url.sh)
+  AGENT_PRODUCTION_URL: ${{ vars.AGENT_PRODUCTION_URL }}
 
 jobs:
   implement:
@@ -51,9 +53,18 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.app.outputs.token }}
 
+      # The project's toolchain: AGENT_NODE_VERSION (`none` skips Node), then AGENT_SETUP_COMMAND (e.g.
+      # installing Python or Go tools). Runs before the agent, without the App token.
       - uses: actions/setup-node@v4
+        if: vars.AGENT_NODE_VERSION != 'none'
         with:
           node-version: ${{ vars.AGENT_NODE_VERSION || '22' }}
+
+      - name: Project setup
+        if: vars.AGENT_SETUP_COMMAND != ''
+        env:
+          SETUP: ${{ vars.AGENT_SETUP_COMMAND }}
+        run: bash -eo pipefail -c "$SETUP"
 
       - name: Prepare
         env:
@@ -127,8 +138,8 @@ jobs:
                 gh pr ready "$pr"
               fi
               stats=$(gh pr view "$pr" --json additions,deletions,changedFiles --jq '"+\(.additions)/−\(.deletions), \(.changedFiles) files"')
-              url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/pr-$pr/"
-              scripts/agents/progress.sh "$N" "🛠 **Implementor**: opened #$pr ($stats) · [preview]($url)"
+              url=$(scripts/agents/url.sh preview "$pr")
+              scripts/agents/progress.sh "$N" "🛠 **Implementor**: opened #$pr ($stats)$([ -n "$url" ] && echo " · [preview]($url)" || true)"
             fi
           else
             reason=$(echo "${OUT:-null}" | jq -r '.reason // "agent did not finish"')
@@ -179,9 +190,18 @@ jobs:
             scripts/agents
           token: ${{ steps.app.outputs.token }}
 
+      # The project's toolchain: AGENT_NODE_VERSION (`none` skips Node), then AGENT_SETUP_COMMAND (e.g.
+      # installing Python or Go tools). Runs before the agent, without the App token.
       - uses: actions/setup-node@v4
+        if: vars.AGENT_NODE_VERSION != 'none'
         with:
           node-version: ${{ vars.AGENT_NODE_VERSION || '22' }}
+
+      - name: Project setup
+        if: vars.AGENT_SETUP_COMMAND != ''
+        env:
+          SETUP: ${{ vars.AGENT_SETUP_COMMAND }}
+        run: bash -eo pipefail -c "$SETUP"
 
       - name: Prepare
         env:
@@ -192,7 +212,9 @@ jobs:
           printf '.agent-out/\n.agent-trusted/\n' >> .git/info/exclude
           git config user.name "$BOT"
           git config user.email "${{ vars.AGENT_BOT_ID }}+$BOT@users.noreply.github.com"
-          "$BIN/transition.sh" "$PR"   # clear agent:changes-requested
+          # agent:fixing shows the Implementor is on it; the conflict sweep leaves such PRs alone, and the
+          # watchdog restarts the Implementor if this run dies without a verdict.
+          "$BIN/transition.sh" "$PR" agent:fixing
 
       - uses: anthropics/claude-code-action@v1
         id: agent
@@ -238,7 +260,11 @@ jobs:
           OUT: ${{ steps.agent.outputs.structured_output }}
         run: |
           status=$(echo "${OUT:-null}" | jq -r '.status // "error"')
-          # On "pushed" there is nothing to do: the push fires `synchronize` and the Reviewer runs again.
+          # On "pushed" the push fires `synchronize` and the Reviewer runs again (after this job: same
+          # concurrency group). Only agent:fixing is cleared, never a state someone set meanwhile.
+          if [ "$status" = "pushed" ] && gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx agent:fixing; then
+            "$BIN/transition.sh" "$PR"
+          fi
           if [ "$status" = "pushed" ]; then
             "$BIN/progress.sh" --pr "$PR" "🛠 **Implementor**: pushed fixes to #$PR"
           else

@@ -177,6 +177,18 @@ def the_sweep_leaves_a_pr_alone_while_the_implementor_works_on_it():
     st["active_runs"] = [{"workflow": "agent-implementor.yml", "status": "in_progress", "name": "Agent · Implementor", "displayTitle": "T103"}]
     st = run(st)
     assert st.get("merged") == [101] and labels(st, 103) == [] and not bodies(st, 103), (labels(st, 103), bodies(st, 103))
+    # The run can also start while the sweep is busy with other PRs (found by the matrix): it is
+    # checked right before flagging, not once up front.
+    st2 = make_state({
+        101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]},
+        102: {"head": sha(0xb1), "labels": [], "branch": "agent/issue-2"},
+        103: {"head": sha(0xc1), "labels": [], "branch": "agent/issue-3"},
+    })
+    st2["conflict_after_merge"] = {"101": [102, 103]}
+    st2["hooks"] = [{"match": "pr view 102 -R o/r --json mergeable", "pr": 103, "labels": []}]
+    st2["run_hooks"] = {"pr view 102 -R o/r --json mergeable": [{"workflow": "agent-implementor.yml", "status": "in_progress", "name": "Agent · Implementor", "displayTitle": "T103"}]}
+    st2 = run(st2)
+    assert labels(st2, 102) == ["agent:changes-requested"] and labels(st2, 103) == [], (labels(st2, 102), labels(st2, 103))
     st["active_runs"] = []   # without a run working on it, it is flagged as before
     st["items"]["103"]["conflict"] = True
     st = run(st, script="sweep-conflicts.sh", args=["101", "sandbox"])
@@ -271,10 +283,16 @@ def a_human_merge_right_before_the_merge_is_the_documented_race():
 
 
 @test
-def base_with_workflow_changes_cant_be_merged_in_and_goes_to_the_implementor():
+def base_with_workflow_changes_goes_straight_to_a_human():
+    # Found by the matrix: the Implementor can't push workflow changes either, so sending it there cost
+    # ~4 Lead runs per PR before a human was asked anyway.
     st = run(make_state({101: {"head": sha(0xa1), "bv": 0, "comments": [approval(sha(0xa1)), queued()]}},
                         base_version=1, workflow_version=1))
-    assert labels(st, 101) == ["agent:changes-requested"] and "workflow files" in bodies(st, 101)[-1]
+    assert labels(st, 101) == ["agent:needs-human"] and "workflow files" in bodies(st, 101)[-1], (labels(st, 101), bodies(st, 101)[-1])
+    assert "refusing to allow a GitHub App" in bodies(st, 101)[-1]   # the exact error is passed on
+    # a real conflict still goes to the Implementor
+    st = run(make_state({101: {"head": sha(0xa1), "bv": 0, "conflict": True, "comments": [approval(sha(0xa1)), queued()]}}, base_version=1))
+    assert labels(st, 101) == ["agent:changes-requested"]
 
 
 @test

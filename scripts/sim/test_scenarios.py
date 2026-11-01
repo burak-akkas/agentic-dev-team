@@ -165,6 +165,25 @@ def merging_makes_a_queued_pr_conflict_and_the_sweep_sends_it_back():
 
 
 @test
+def the_sweep_leaves_a_pr_alone_while_the_implementor_works_on_it():
+    # Found in the live test (#134): a second merge flagged the PR again while the Implementor was
+    # already resolving the first conflict (its first step removes agent:changes-requested). The
+    # second run found nothing to do and went to the Lead.
+    st = make_state({
+        101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]},
+        103: {"head": sha(0xc1), "labels": [], "branch": "agent/issue-3"},
+    })
+    st["conflict_after_merge"] = {"101": [103]}
+    st["active_runs"] = [{"workflow": "agent-implementor.yml", "status": "in_progress", "name": "Agent · Implementor", "displayTitle": "T103"}]
+    st = run(st)
+    assert st.get("merged") == [101] and labels(st, 103) == [] and not bodies(st, 103), (labels(st, 103), bodies(st, 103))
+    st["active_runs"] = []   # without a run working on it, it is flagged as before
+    st["items"]["103"]["conflict"] = True
+    st = run(st, script="sweep-conflicts.sh", args=["101", "sandbox"])
+    assert labels(st, 103) == ["agent:changes-requested"]
+
+
+@test
 def draft_leaves_the_queue():
     st = run(make_state({101: {"head": sha(0xa1), "draft": True, "comments": [approval(sha(0xa1)), queued()]}}),
              script="integrate.sh", args=["101"])

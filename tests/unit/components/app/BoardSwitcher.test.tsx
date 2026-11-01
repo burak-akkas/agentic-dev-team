@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen, waitForElementToBeRemoved, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Board } from "@/components/board/Board";
@@ -259,6 +259,49 @@ describe("<BoardSwitcher />", () => {
       expect(screen.getByRole("button", { name: "Collapse Done" })).toBeInTheDocument();
       await user.selectOptions(select(), "My board");
       expect(screen.getByRole("button", { name: "Expand Done" })).toBeInTheDocument();
+    });
+  });
+
+  describe("sort lists by due date", () => {
+    async function addDated(user: ReturnType<typeof userEvent.setup>, title: string, due?: string) {
+      await user.type(screen.getByLabelText("New card title"), title);
+      await user.click(screen.getByRole("button", { name: "Add card" }));
+      const card = await screen.findByRole("button", { name: title });
+      if (!due) return;
+      await user.click(card);
+      const dialog = await screen.findByRole("dialog");
+      await user.type(within(dialog).getByLabelText("Due date"), due);
+      await user.click(within(dialog).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    }
+    const todoTitles = () =>
+      within(screen.getByRole("region", { name: /^To do/ }))
+        .getAllByRole("button", { name: /^(Late|Early|None)$/ })
+        .map((b) => b.textContent);
+
+    it("is disabled while no card has a due date", async () => {
+      const { user } = setup();
+      await addDated(user, "None");
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(screen.getByRole("menuitem", { name: "Sort lists by due date" })).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("sorts by click and by keyboard", async () => {
+      const { user } = setup();
+      await addDated(user, "Late", "2031-01-01");
+      await addDated(user, "None");
+      await addDated(user, "Early", "2030-01-01");
+      expect(todoTitles()).toEqual(["Late", "None", "Early"]);
+
+      await choose(user, "Sort lists by due date");
+      expect(todoTitles()).toEqual(["Early", "Late", "None"]);
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      const item = screen.getByRole("menuitem", { name: "Sort lists by due date" });
+      expect(item).not.toHaveAttribute("aria-disabled", "true");
+      item.focus();
+      await user.keyboard("{Enter}");
+      expect(todoTitles()).toEqual(["Early", "Late", "None"]);
     });
   });
 

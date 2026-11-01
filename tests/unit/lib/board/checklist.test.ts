@@ -11,6 +11,7 @@ import {
   MAX_CHECKLIST_ITEM_LENGTH,
   moveCard,
   moveChecklistItem,
+  moveCompletedChecklistItemsToBottom,
   restoreCard,
   toggleChecklistItem,
   uncheckAllChecklistItems,
@@ -52,6 +53,34 @@ describe("checklist", () => {
     expect(uncheckAllChecklistItems(board, "c")).toBe(board);
     const empty = withItems([]);
     expect(uncheckAllChecklistItems(empty, "c")).toBe(empty);
+  });
+
+  it("moves completed items below open ones, stable within each group, without mutating", () => {
+    let board = withItems(["a", "b", "c", "d"]);
+    board = toggleChecklistItem(board, "c", "i0");
+    board = toggleChecklistItem(board, "c", "i2");
+    const before = findCard(board, "c")!.card.checklist;
+    const snapshot = JSON.parse(JSON.stringify(before));
+    const next = moveCompletedChecklistItemsToBottom(board, "c");
+    expect(texts(next)).toEqual(["b", "d", "a", "c"]);
+    expect(ids(next)).toEqual(["i1", "i3", "i0", "i2"]);
+    expect(findCard(next, "c")?.card.checklist?.map((i) => i.done)).toEqual([false, false, true, true]);
+    expect(before).toEqual(snapshot);
+  });
+
+  it("move completed to bottom returns the same board when sorted, all done, none done or empty", () => {
+    const none = withItems(["a", "b"]);
+    expect(moveCompletedChecklistItemsToBottom(none, "c")).toBe(none);
+    const sorted = toggleChecklistItem(none, "c", "i1");
+    expect(moveCompletedChecklistItemsToBottom(sorted, "c")).toBe(sorted);
+    const all = toggleChecklistItem(sorted, "c", "i0");
+    expect(moveCompletedChecklistItemsToBottom(all, "c")).toBe(all);
+    const empty = withItems([]);
+    expect(moveCompletedChecklistItemsToBottom(empty, "c")).toBe(empty);
+  });
+
+  it("move completed to bottom throws for an unknown card", () => {
+    expect(() => moveCompletedChecklistItemsToBottom(withItems([]), "nope")).toThrow();
   });
 
   it("uncheck all throws for an unknown card", () => {

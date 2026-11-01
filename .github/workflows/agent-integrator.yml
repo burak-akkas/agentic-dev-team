@@ -43,7 +43,8 @@ jobs:
       group: agent-integrator
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # The drain budget (100) plus one PR at worst: checks (30) and QA at the front (60), more if the base moves.
+    timeout-minutes: 240
     permissions:
       contents: read
     env:

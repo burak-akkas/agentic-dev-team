@@ -169,6 +169,8 @@ for hook in list(st.get("hooks", [])):
         st["hooks"].remove(hook)
         if "labels" in hook: it["labels"] = list(hook["labels"])
         if hook.get("draft"): it["draft"] = True   # a human converts the PR to a draft, right now
+        for r in st.get("run_hooks", {}).pop(hook["match"], []):   # another workflow run starts, right now
+            st.setdefault("active_runs", []).append(r)
         if hook.get("human_merge"):   # a human merges into the base by hand, right now
             st["base_version"] += 1
             st.setdefault("human_merges", []).append(st["calls"])

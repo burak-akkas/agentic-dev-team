@@ -413,8 +413,8 @@ describe("<BoardSwitcher />", () => {
       for (const title of titles) {
         await user.type(screen.getByLabelText("New card title"), title);
         await user.click(screen.getByRole("button", { name: "Add card" }));
-        await user.click(screen.getByRole("button", { name: title }));
-        const dialog = screen.getByRole("dialog");
+        await user.click(await screen.findByRole("button", { name: title }));
+        const dialog = await screen.findByRole("dialog");
         await user.selectOptions(within(dialog).getByLabelText("Status"), "Done");
         await user.click(within(dialog).getByRole("button", { name: "Save" }));
       }

@@ -15,10 +15,10 @@ test("sets a due date in the dialog, shows it overdue, persists it and clears it
 
   await editCard(page, "Pay rent", { dueDate: "2000-01-01" });
   await expect(column(page, "To do").getByText("Jan 1")).toBeVisible();
-  await expect(column(page, "To do").getByText("Overdue")).toBeVisible();
+  await expect(column(page, "To do").getByText(/Overdue/)).toBeVisible();
 
   await page.reload();
-  await expect(column(page, "To do").getByText("Overdue")).toBeVisible();
+  await expect(column(page, "To do").getByText(/Overdue/)).toBeVisible();
 
   await moveCardTo(page, "Pay rent", "Doing");
   await moveCardTo(page, "Pay rent", "Done");

@@ -81,6 +81,57 @@ describe("<CardComments />", () => {
     expect(items[2]).toHaveTextContent("just now");
   });
 
+  it("shows a Ctrl+Enter hint", () => {
+    render(<Harness />);
+    expect(screen.getByText("Ctrl+Enter to post")).toBeVisible();
+  });
+
+  it.each([
+    ["Ctrl+Enter", "{Control>}{Enter}{/Control}"],
+    ["Cmd+Enter", "{Meta>}{Enter}{/Meta}"],
+  ])("posts the draft with %s without inserting a newline", async (_name, keys) => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const field = screen.getByLabelText("New comment");
+    await user.type(field, "Quick");
+    await user.keyboard(keys);
+    expect(field).toHaveValue("");
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(items[2]).toHaveTextContent("Quick");
+  });
+
+  it("does not post on plain Enter or Shift+Enter", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const field = screen.getByLabelText("New comment");
+    await user.type(field, "a{Enter}b{Shift>}{Enter}{/Shift}c");
+    expect(field).toHaveValue("a\nb\nc");
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("does not post a whitespace-only draft with Ctrl+Enter", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const field = screen.getByLabelText("New comment");
+    await user.type(field, "   ");
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    expect(field).toHaveValue("   ");
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("does not post or save from the edit textarea with Ctrl+Enter", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(screen.getByLabelText("New comment"), "Draft");
+    await user.click(screen.getByRole("button", { name: "Edit comment 1" }));
+    await user.type(screen.getByRole("textbox", { name: "Edit comment 1" }), " more");
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    expect(screen.getByRole("textbox", { name: "Edit comment 1" })).toBeInTheDocument();
+    expect(screen.getByLabelText("New comment")).toHaveValue("Draft");
+    expect(screen.queryByText("edited")).not.toBeInTheDocument();
+  });
+
   it("edits a comment and marks it edited", async () => {
     const user = userEvent.setup();
     render(<Harness />);

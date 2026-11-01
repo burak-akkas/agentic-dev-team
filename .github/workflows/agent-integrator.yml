@@ -54,6 +54,7 @@ jobs:
       AGENT_REQUIRED_CHECKS: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
       # QA once, at the front of the queue (default), or before the queue (AGENT_QA_STAGE == 'review').
       AGENT_QA_IN_QUEUE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE != 'review' && 'true' || '' }}
+      AGENT_QA_PATHS: ${{ vars.AGENT_QA_PATHS }}
       AGENT_QA_ON_BASE_UPDATE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE == 'review' && vars.AGENT_QA_ON_BASE_UPDATE == 'true' && 'true' || '' }}
       AGENT_INTEGRATOR_MAX_ATTEMPTS: ${{ vars.AGENT_INTEGRATOR_MAX_ATTEMPTS || '3' }}
       AGENT_INTEGRATOR_CHECKS_MINUTES: ${{ vars.AGENT_INTEGRATOR_CHECKS_MINUTES || '30' }}

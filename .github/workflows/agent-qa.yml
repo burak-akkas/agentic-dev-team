@@ -10,7 +10,9 @@ name: "Agent · QA"
 #      screens with the baseline site (the base branch, before this PR) and takes screenshots
 #   4. Screenshots go to the PR as a gallery. pass -> merge gate, which hands a held PR back to the Integrator
 #      (or queues it), fail -> Implementor fixes (and the queue moves on), unsure -> Lead
-# Preview URL template: AGENT_PREVIEW_URL (default https://{owner}.github.io/{repo}/pr-{pr}/). `none`: no
+# Preview URL template: AGENT_PREVIEW_URL (default https://{owner}.github.io/{repo}/pr-{pr}/), serving
+# version.txt with the commit it was built from. `deployment`: the URL of a successful GitHub deployment of
+# the PR's head commit (Vercel, Netlify, Render…; AGENT_PREVIEW_ENVIRONMENT narrows it). `none`: no
 # preview deploy; QA starts the app itself with AGENT_QA_START_COMMAND and tests AGENT_QA_LOCAL_URL
 # (default http://localhost:3000/) on the runner.
 # The e2e suite: AGENT_E2E_SETUP (default `npm ci`) then AGENT_E2E_COMMAND (default `npx playwright test`),
@@ -55,7 +57,8 @@ jobs:
       BIN: .agent-trusted/scripts/agents
       MAX_ROUNDS: ${{ vars.AGENT_MAX_QA_ROUNDS || '3' }}
       URL_TEMPLATE: ${{ vars.AGENT_PREVIEW_URL || 'https://{owner}.github.io/{repo}/pr-{pr}/' }}
-      BASELINE_TEMPLATE: ${{ vars.AGENT_BASELINE_URL || (vars.AGENT_PREVIEW_URL == 'none' && 'none') || 'https://{owner}.github.io/{repo}/' }}
+      # The baseline defaults to the production site; without GitHub Pages previews, to AGENT_PRODUCTION_URL or none.
+      BASELINE_TEMPLATE: ${{ vars.AGENT_BASELINE_URL || ((vars.AGENT_PREVIEW_URL == 'none' || vars.AGENT_PREVIEW_URL == 'deployment') && (vars.AGENT_PRODUCTION_URL || 'none')) || vars.AGENT_PRODUCTION_URL || 'https://{owner}.github.io/{repo}/' }}
       LOCAL: ${{ vars.AGENT_PREVIEW_URL == 'none' && 'true' || '' }}
       LOCAL_URL: ${{ vars.AGENT_QA_LOCAL_URL || 'http://localhost:3000/' }}
       SCREENSHOTS: ${{ vars.AGENT_QA_SCREENSHOTS || (github.event.repository.private && 'artifact') || 'pages' }}
@@ -130,10 +133,13 @@ jobs:
         if: steps.guard.outputs.stop != 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          REQUIRED: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
+          AGENT_REQUIRED_CHECKS: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
         run: |
-          # Same rules as the merge gate: only workflows listed in REQUIRED count. Up to 25 minutes;
-          # on timeout QA runs anyway (the merge queue still waits for the checks).
+          # Same rules as the merge queue: only the required workflows that apply to the files this PR
+          # changes count (pr-paths.sh). Up to 25 minutes; on timeout QA runs anyway (the merge queue
+          # still waits for the checks).
+          REQUIRED=$("$BIN/pr-paths.sh" required "$PR" | paste -sd, -)
+          if [ -z "$REQUIRED" ]; then echo "result=pass" >> "$GITHUB_OUTPUT"; exit 0; fi
           filter='[.[] | select(.workflow as $w | ($req | split(",") | map(gsub("^ +| +$"; ""))) | index($w))]'
           for _ in $(seq 1 50); do
             json=$(gh pr checks "$PR" -R "$GITHUB_REPOSITORY" --json workflow,name,bucket,link 2>/dev/null || true)
@@ -151,10 +157,32 @@ jobs:
         if: steps.guard.outputs.stop != 'true' && steps.ci.outputs.result != 'fail' && env.LOCAL != 'true'
         env:
           URL: ${{ steps.guard.outputs.url }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ENVIRONMENT: ${{ vars.AGENT_PREVIEW_ENVIRONMENT }}
         run: |
+          # AGENT_PREVIEW_URL=deployment: the preview is whatever deployment of this exact commit reports
+          # success to GitHub (Vercel, Netlify, Render and most hosts do), optionally only in
+          # AGENT_PREVIEW_ENVIRONMENT. Its environment_url is the URL QA tests. Needs the App's
+          # Deployments: Read permission.
+          if [ "$URL" = deployment ]; then
+            for _ in $(seq 1 80); do
+              found=$(gh api "repos/$GITHUB_REPOSITORY/deployments?sha=$HEAD_SHA&per_page=30" 2>/dev/null \
+                | jq -r --arg env "$ENVIRONMENT" '.[] | select($env == "" or .environment == $env) | .statuses_url' \
+                | while read -r statuses; do
+                    gh api "$statuses?per_page=1" --jq '.[0] | select(.state == "success") | .environment_url // empty' 2>/dev/null
+                  done | grep -m1 . || true)
+              if [ -n "$found" ]; then
+                echo "url=${found%/}/" >> "$GITHUB_OUTPUT"; echo "ready=true" >> "$GITHUB_OUTPUT"; exit 0
+              fi
+              sleep 15
+            done
+            echo "::warning::No successful deployment of $HEAD_SHA${ENVIRONMENT:+ in $ENVIRONMENT} reported a URL"
+            exit 0
+          fi
+          # Otherwise the preview serves version.txt with the commit it was built from.
           for _ in $(seq 1 60); do
             live=$(curl -fsSL "${URL}version.txt?t=$(date +%s)" 2>/dev/null | tr -d '[:space:]' || true)
-            if [ "$live" = "$HEAD_SHA" ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+            if [ "$live" = "$HEAD_SHA" ]; then echo "url=$URL" >> "$GITHUB_OUTPUT"; echo "ready=true" >> "$GITHUB_OUTPUT"; exit 0; fi
             sleep 15
           done
           echo "::warning::Preview at $URL never served $HEAD_SHA (last seen: ${live:-nothing})"
@@ -223,7 +251,7 @@ jobs:
         id: e2e
         if: steps.preview.outputs.ready == 'true' || steps.local.outputs.ready == 'true'
         env:
-          E2E_BASE_URL: ${{ steps.guard.outputs.url }}
+          E2E_BASE_URL: ${{ steps.preview.outputs.url || steps.guard.outputs.url }}
           CI: "true"
           E2E_SETUP: ${{ vars.AGENT_E2E_SETUP || 'npm ci' }}
           E2E_COMMAND: ${{ vars.AGENT_E2E_COMMAND || 'npx playwright test' }}
@@ -258,7 +286,7 @@ jobs:
             Repository: ${{ github.repository }}
             Pull request: #${{ github.event.pull_request.number }}
             QA round: ${{ steps.guard.outputs.round }} of ${{ env.MAX_ROUNDS }}
-            Preview URL (serving commit ${{ github.event.pull_request.head.sha }}): ${{ steps.guard.outputs.url }}
+            Preview URL (serving commit ${{ github.event.pull_request.head.sha }}): ${{ steps.preview.outputs.url || steps.guard.outputs.url }}
             Baseline URL (the base branch without this PR): ${{ steps.baseline.outputs.info }}
             ${{ env.LOCAL == 'true' && 'The URL is the app running on this machine (no preview deploy): test it the same way.' || '' }}
             Automated e2e results: .agent-out/e2e-results.txt (exit code ${{ steps.e2e.outputs.exit }}; 0 = all passed, none = the project has no e2e suite)
@@ -355,7 +383,7 @@ jobs:
           READY: ${{ steps.preview.outputs.ready || steps.local.outputs.ready }}
           CI_RESULT: ${{ steps.ci.outputs.result }}
           CI_FAILED: ${{ steps.ci.outputs.failed }}
-          URL: ${{ steps.guard.outputs.url }}
+          URL: ${{ steps.preview.outputs.url || steps.guard.outputs.url }}
         run: |
           if [ "$CI_RESULT" = "fail" ]; then
             stale=$("$BIN/pr-still-current.sh" "$PR" "$HEAD_SHA" agent:qa)

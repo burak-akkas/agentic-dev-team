@@ -75,8 +75,9 @@ required=$(var AGENT_REQUIRED_CHECKS); required="${required:-CI}"
 IFS=',' read -ra checks <<<"$required"
 [ -n "$workflows" ] || { warn "can't list the workflows: check AGENT_REQUIRED_CHECKS ($required) against the workflow names yourself"; checks=(); }
 for c in "${checks[@]}"; do
-  c="$(echo "$c" | sed 's/^ *//; s/ *$//')"
-  if printf '%s\n' "$workflows" | grep -qxF -- "$c"; then ok "required check \`$c\` is a workflow"
+  scope=""; [[ "$c" == *@* ]] && scope=" (when a PR changes ${c#*@})"
+  c="$(echo "${c%%@*}" | sed 's/^ *//; s/ *$//')"
+  if printf '%s\n' "$workflows" | grep -qxF -- "$c"; then ok "required check \`$c\` is a workflow$scope"
   else bad "required check \`$c\` (AGENT_REQUIRED_CHECKS) matches no workflow name, so the merge queue would never see it pass. Workflows: $(printf '%s' "$workflows" | tr '\n' ',' )"; fi
 done
 
@@ -97,7 +98,12 @@ if [ "$can_vars" = false ]; then
   warn "skipped the QA, merge and pause settings checks (variables unreadable)"
 elif [ "$(var AGENT_QA)" = true ]; then
   preview=$(var AGENT_PREVIEW_URL)
-  if [ "$preview" = none ]; then
+  if [ -n "$(var AGENT_QA_PATHS)" ]; then ok "QA only for PRs that change $(var AGENT_QA_PATHS) (AGENT_QA_PATHS)"; fi
+  if [ "$preview" = deployment ]; then
+    ok "QA tests the URL of each PR's successful GitHub deployment$( [ -n "$(var AGENT_PREVIEW_ENVIRONMENT)" ] && echo " in $(var AGENT_PREVIEW_ENVIRONMENT)"); the App needs Deployments: Read"
+    recent=$(gh api "repos/$repo/deployments?per_page=5" --jq 'length' 2>/dev/null || echo 0)
+    [ "$recent" -gt 0 ] || warn "no GitHub deployments in $repo yet: does your host report preview deployments to GitHub?"
+  elif [ "$preview" = none ]; then
     if [ -n "$(var AGENT_QA_START_COMMAND)" ]; then ok "QA starts the app itself (AGENT_PREVIEW_URL=none)"
     else bad "AGENT_PREVIEW_URL=none needs AGENT_QA_START_COMMAND, or QA can't test anything"; fi
   else

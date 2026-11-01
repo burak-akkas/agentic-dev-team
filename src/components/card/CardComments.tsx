@@ -51,6 +51,14 @@ export function CardComments({
     setDraft("");
   }
 
+  function handleNewKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      post();
+    }
+  }
+
   function saveEdit(id: string) {
     if (!editDraft.trim()) {
       return;
@@ -195,12 +203,15 @@ export function CardComments({
           maxLength={MAX_COMMENT_LENGTH}
           rows={3}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleNewKeyDown}
+          aria-keyshortcuts="Control+Enter Meta+Enter"
           className="w-full"
         />
         <div className="flex items-center gap-2">
           <Button size="sm" disabled={!draft.trim()} onClick={post}>
             Add comment
           </Button>
+          <span className="text-xs text-muted">Ctrl+Enter to post</span>
           <span className="ml-auto text-xs text-muted" aria-hidden="true">
             {draft.length}/{MAX_COMMENT_LENGTH}
           </span>

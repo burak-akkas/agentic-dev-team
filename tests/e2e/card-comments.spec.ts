@@ -5,6 +5,21 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole("heading", { level: 1, name: "Kanban" })).toBeVisible();
 });
 
+test("posts a comment with Ctrl+Enter", async ({ page }) => {
+  await page.getByLabel("New card title").fill("Keyboard card");
+  await page.getByRole("button", { name: "Add card" }).click();
+  await page.getByRole("button", { name: "Keyboard card", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Keyboard card" });
+  await expect(dialog.getByText("Ctrl+Enter to post")).toBeVisible();
+  const field = dialog.getByLabel("New comment");
+  await field.fill("Posted by keyboard");
+  await field.press("Control+Enter");
+  await expect(dialog.getByRole("list", { name: "Comments" }).getByRole("listitem")).toHaveCount(1);
+  await expect(dialog.getByRole("list", { name: "Comments" })).toContainText("Posted by keyboard");
+  await expect(field).toHaveValue("");
+  await expect(dialog).toBeVisible();
+});
+
 test("adds, edits and deletes comments, with a count badge that persists and survives archiving", async ({ page }) => {
   await page.getByLabel("New card title").fill("Plan trip");
   await page.getByRole("button", { name: "Add card" }).click();

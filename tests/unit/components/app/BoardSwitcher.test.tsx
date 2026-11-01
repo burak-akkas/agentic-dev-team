@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from "@testing-library/react";
+import { act, createEvent, fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Board } from "@/components/board/Board";
@@ -404,15 +404,22 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  // Adds a card, moves it to Done and saves. Board.closeDialog moves focus in a requestAnimationFrame after
+  // Save; if that frame fires during the next user.type() it steals focus and the typed title is lost.
+  // So wait for the dialog to close and flush that frame before returning.
+  async function addCardAsDone(user: ReturnType<typeof userEvent.setup>, title: string) {
+    await user.type(screen.getByLabelText("New card title"), title);
+    await user.click(screen.getByRole("button", { name: "Add card" }));
+    await user.click(await screen.findByRole("button", { name: title }));
+    const dialog = await screen.findByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Status"), "Done");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  }
+
   describe("archive done cards", () => {
-    async function addDone(user: ReturnType<typeof userEvent.setup>, title: string) {
-      await user.type(screen.getByLabelText("New card title"), title);
-      await user.click(screen.getByRole("button", { name: "Add card" }));
-      await user.click(screen.getByRole("button", { name: title }));
-      const dialog = screen.getByRole("dialog");
-      await user.selectOptions(within(dialog).getByLabelText("Status"), "Done");
-      await user.click(within(dialog).getByRole("button", { name: "Save" }));
-    }
+    const addDone = addCardAsDone;
 
     it("is disabled while the done list is empty", async () => {
       const { user } = setup();
@@ -454,12 +461,7 @@ describe("<BoardSwitcher />", () => {
   describe("empty archive", () => {
     async function archiveCards(user: ReturnType<typeof userEvent.setup>, titles: string[]) {
       for (const title of titles) {
-        await user.type(screen.getByLabelText("New card title"), title);
-        await user.click(screen.getByRole("button", { name: "Add card" }));
-        await user.click(await screen.findByRole("button", { name: title }));
-        const dialog = await screen.findByRole("dialog");
-        await user.selectOptions(within(dialog).getByLabelText("Status"), "Done");
-        await user.click(within(dialog).getByRole("button", { name: "Save" }));
+        await addCardAsDone(user, title);
       }
       await choose(user, "Archive done cards");
       await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Archive" }));

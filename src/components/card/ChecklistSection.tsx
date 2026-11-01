@@ -72,8 +72,8 @@ export function ChecklistSection({
         <h3 className="flex items-baseline gap-2 text-xs font-medium text-subtle">
           Checklist
           {progress && (
-            <span className="text-muted" aria-hidden="true">
-              {progress.done}/{progress.total}
+            <span className="text-muted">
+              {progress.done}/{progress.total} done
             </span>
           )}
         </h3>

@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
   addCard,
+  archiveCard,
   archiveList,
   backgroundImageCss,
   boardLabels,
@@ -216,6 +217,10 @@ export function Board() {
             } catch {
               return { text };
             }
+          }}
+          onArchive={() => {
+            update((b) => archiveCard(b, openCardId));
+            closeDialog();
           }}
           onSaveTemplate={() => {
             try {

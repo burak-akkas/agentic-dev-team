@@ -13,7 +13,7 @@ const card: Card = {
   dueDate: "2030-02-03",
 };
 
-function setup(overrides: Partial<Card> = {}, onDuplicate?: () => void) {
+function setup(overrides: Partial<Card> = {}, onDuplicate?: () => void, onArchive?: () => void) {
   const onSave = vi.fn();
   const onDelete = vi.fn();
   const onClose = vi.fn();
@@ -25,6 +25,7 @@ function setup(overrides: Partial<Card> = {}, onDuplicate?: () => void) {
       onSave={onSave}
       onDelete={onDelete}
       onDuplicate={onDuplicate}
+      onArchive={onArchive}
       onClose={onClose}
       onUpdateBoard={onUpdateBoard}
     />,
@@ -270,5 +271,22 @@ describe("<CardDialog />", () => {
   it("has no Copy as text button without the callback", () => {
     setup();
     expect(screen.queryByRole("button", { name: "Copy as text" })).not.toBeInTheDocument();
+  });
+
+  it("archives with the mouse and the keyboard, and explains that unsaved edits are not saved", async () => {
+    const onArchive = vi.fn();
+    const { user } = setup({}, undefined, onArchive);
+    const button = screen.getByRole("button", { name: "Archive" });
+    expect(button).toHaveAttribute("title", "Archives the saved card (unsaved edits are not saved)");
+    await user.click(button);
+    button.focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard(" ");
+    expect(onArchive).toHaveBeenCalledTimes(3);
+  });
+
+  it("has no Archive button without onArchive", () => {
+    setup();
+    expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
   });
 });

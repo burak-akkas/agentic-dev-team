@@ -40,6 +40,7 @@ export function CardDialog({
   onDelete,
   onDuplicate,
   onCopyText,
+  onArchive,
   onSaveTemplate,
   onClose,
   onChecklist,
@@ -58,6 +59,8 @@ export function CardDialog({
   // Copies the saved card as plain text (unsaved edits in this dialog are not copied).
   // Resolves to "copied", or to the text when the clipboard is unavailable.
   onCopyText?: () => Promise<CopyResult>;
+  // Archives the saved card (unsaved edits in this dialog are not saved).
+  onArchive?: () => void;
   // Saves the saved card as a template of the board and reports the outcome (shown in the dialog).
   onSaveTemplate?: () => { ok: boolean; message: string };
   onClose: () => void;
@@ -342,6 +345,11 @@ export function CardDialog({
           {onCopyText && (
             <Button variant="ghost" size="sm" title="Copies the saved card as plain text (unsaved edits are not copied)" onClick={async () => setCopyResult(await onCopyText())}>
               Copy as text
+            </Button>
+          )}
+          {onArchive && (
+            <Button variant="ghost" size="sm" title="Archives the saved card (unsaved edits are not saved)" onClick={onArchive}>
+              Archive
             </Button>
           )}
           {onSaveTemplate && (

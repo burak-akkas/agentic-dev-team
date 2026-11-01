@@ -214,8 +214,8 @@ class Team:
 
     def implementor(self, job, n):
         self.stats["impl"] += 1
-        self.sh(job, "transition.sh", [n])   # Prepare: clears agent:changes-requested
-        self.work()   # the label is already cleared while the Implementor works (the window the sweep must respect)
+        self.sh(job, "transition.sh", [n, "agent:fixing"])   # Prepare: agent:changes-requested -> agent:fixing
+        self.work()   # agent:fixing while the Implementor works (the window the sweep must respect)
         blocked = self.rng.random() < self.p["impl_blocked"]
         nothing_to_do = False
         with locked(self.f) as st:
@@ -244,6 +244,8 @@ class Team:
             self.count("impl_nochange")
         if blocked or nothing_to_do:
             self.sh(job, "transition.sh", [n, "agent:needs-decision"])
+        elif "agent:fixing" in read(self.f)["items"][n]["labels"]:   # Apply: pushed, clear agent:fixing only
+            self.sh(job, "transition.sh", [n])
 
     def lead(self, job, n):
         self.stats["lead"] += 1

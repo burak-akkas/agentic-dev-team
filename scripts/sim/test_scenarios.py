@@ -592,6 +592,37 @@ def watchdog_restarts_an_idle_queue_and_leaves_a_busy_one_alone():
     assert not st["events"]   # merging switched off: queued PRs wait quietly
 
 
+@test
+def merge_method_and_production_link_are_configurable():
+    one = lambda: make_state({101: {"head": sha(0xa1), "issue": 11, "comments": [approval(sha(0xa1)), queued()]}})
+    st = run(one())
+    assert any(l.startswith("pr merge 101") and "--squash" in l for l in st["log"])   # the default
+    assert "https://o.github.io/r/" in "\n".join(bodies(st, 11))
+    st = run(one(), AGENT_MERGE_METHOD="rebase", AGENT_PRODUCTION_URL="https://app.example/{repo}/")
+    assert st.get("merged") == [101] and any(l.startswith("pr merge 101") and "--rebase" in l for l in st["log"])
+    assert "[production](https://app.example/r/)" in "\n".join(bodies(st, 11))
+    st = run(one(), AGENT_MERGE_METHOD="fast", AGENT_PRODUCTION_URL="none")   # a typo falls back to squash
+    assert st.get("merged") == [101] and any(l.startswith("pr merge 101") and "--squash" in l for l in st["log"])
+    assert "production" not in "\n".join(bodies(st, 11)) and "AGENT_MERGE_METHOD" in st["_stderr"]
+
+
+@test
+def a_pr_the_implementor_is_fixing_is_left_alone_and_restarted_if_its_run_died():
+    # agent:fixing: the sweep doesn't flag the PR again (no second Implementor run).
+    st = make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]},
+                     103: {"head": sha(0xc1), "labels": ["agent:fixing"], "branch": "agent/issue-3"}})
+    st["conflict_after_merge"] = {"101": [103]}
+    st = run(st)
+    assert st.get("merged") == [101] and labels(st, 103) == ["agent:fixing"] and not bodies(st, 103)
+    # The run died (no agent run active, the label is old): the watchdog restarts the Implementor.
+    st0 = make_state({103: {"head": sha(0xc1), "labels": ["agent:fixing"], "branch": "agent/issue-3",
+                            "label_at": {"agent:fixing": "2020-01-01T00:00:00Z"}}})
+    st = run(st0, script="watchdog.sh", AGENT_WATCHDOG_MINUTES=10)
+    assert labels(st, 103) == ["agent:changes-requested"] and "Restarting the Implementor" in bodies(st, 103)[-1], st["_stdout"]
+    st0["active_runs"] = [{"workflow": "agent-implementor.yml", "status": "in_progress", "name": "Agent · Implementor", "displayTitle": "T103"}]
+    assert labels(run(st0, script="watchdog.sh", AGENT_WATCHDOG_MINUTES=10), 103) == ["agent:fixing"]   # still working
+
+
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else ""
     failed = 0

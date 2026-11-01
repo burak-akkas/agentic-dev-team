@@ -25,6 +25,7 @@ export * from "./archive";
 export * from "./wipLimit";
 export * from "./background";
 export * from "./dates";
+export * from "./sortByDueDate";
 export * from "./notes";
 export * from "./comments";
 export * from "./labels";

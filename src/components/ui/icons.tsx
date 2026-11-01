@@ -52,6 +52,15 @@ export function ArchiveIcon(props: IconProps) {
   );
 }
 
+export function SortIcon(props: IconProps) {
+  return (
+    <svg {...common} {...props}>
+      <path d="M11 5h10M11 9h7M11 13h4" />
+      <path d="m3 17 3 3 3-3M6 4v16" />
+    </svg>
+  );
+}
+
 export function MoreIcon(props: IconProps) {
   return (
     <svg {...common} {...props}>

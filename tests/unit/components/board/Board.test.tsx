@@ -177,6 +177,35 @@ describe("<Board />", () => {
     });
   });
 
+  describe("sort by title", () => {
+    const titles = (name: string) =>
+      within(column(name))
+        .getAllByRole("listitem")
+        .map((li) => li.textContent ?? "");
+
+    it("sorts only that list, disables with fewer than 2 cards and hides when collapsed", async () => {
+      const user = userEvent.setup();
+      let board = addCard(emptyBoard(), "Charlie", { id: "a" });
+      board = addCard(board, "alpha", { id: "b" });
+      board = addCard(board, "Zed", { id: "c", listId: "doing" });
+      board = addCard(board, "Yak", { id: "d", listId: "doing" });
+      board = addCard(board, "Solo", { id: "e", listId: "done" });
+      saveBoard(board);
+      render(<Board />);
+
+      expect(screen.getByRole("button", { name: "Sort Done by title" })).toBeDisabled();
+      await user.click(screen.getByRole("button", { name: "Sort To do by title" }));
+
+      expect(titles("To do")[0]).toContain("alpha");
+      expect(titles("To do")[1]).toContain("Charlie");
+      expect(titles("Doing")[0]).toContain("Zed");
+      expect(titles("Doing")[1]).toContain("Yak");
+
+      await user.click(screen.getByRole("button", { name: "Collapse To do" }));
+      expect(screen.queryByRole("button", { name: "Sort To do by title" })).not.toBeInTheDocument();
+    });
+  });
+
   it("persists cards across reloads", async () => {
     const user = userEvent.setup();
     const { unmount } = render(<Board />);

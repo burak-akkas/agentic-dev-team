@@ -88,6 +88,30 @@ export function cardDueStatus(board: Board, card: Card, column: ColumnId, today:
   return dueStatus(card, column, today, insightsListIds(board).done ?? null);
 }
 
+function dayNumber(date: string): number {
+  const [year, month, day] = date.split("-").map(Number);
+  return Date.UTC(year, month - 1, day) / 86_400_000;
+}
+
+// Hint relative to `today`: "Due today", "Due tomorrow", "Due in 5 days", "Overdue by 1 day".
+// Empty string for a missing or invalid date.
+export function relativeDueHint(date: string, today: string = todayString()): string {
+  if (!isValidDueDate(date)) {
+    return "";
+  }
+  const diff = dayNumber(date) - dayNumber(today);
+  if (diff === 0) {
+    return "Due today";
+  }
+  if (diff === 1) {
+    return "Due tomorrow";
+  }
+  if (diff > 1) {
+    return `Due in ${diff} days`;
+  }
+  return diff === -1 ? "Overdue by 1 day" : `Overdue by ${-diff} days`;
+}
+
 // Short readable date (e.g. "Oct 28"). Parsed as a local date so the day never shifts by timezone.
 export function formatDueDate(date: string): string {
   const [year, month, day] = date.split("-").map(Number);

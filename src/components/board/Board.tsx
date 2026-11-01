@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
   addCard,
+  archiveCard,
   archiveList,
   backgroundImageCss,
   boardLabels,
@@ -206,6 +207,10 @@ export function Board() {
             const id = crypto.randomUUID();
             update((b) => duplicateCard(b, openCardId, { id }));
             setOpenCardId(id);
+          }}
+          onArchive={() => {
+            update((b) => archiveCard(b, openCardId));
+            closeDialog();
           }}
           onSaveTemplate={() => {
             try {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addCard,
+  archiveCard,
   archiveDone,
   deleteArchived,
   emptyArchive,
@@ -24,6 +25,25 @@ describe("archive", () => {
     board = moveCard(board, "b", "done");
     return moveCard(board, "c", "doing");
   };
+
+  it("archiveCard moves one card to the end of the archive with an archived activity", () => {
+    const board = seed();
+    const next = archiveCard(board, "c", { now: new Date("2030-01-01T10:00:00.000Z") });
+    expect(ids(next.columns.doing)).toEqual([]);
+    expect(ids(next.columns.todo)).toEqual(["d"]);
+    expect(ids(next.columns.done)).toEqual(["a", "b"]);
+    expect(ids(next.archive)).toEqual(["c"]);
+    expect(next.archive[0].activity?.[0]?.type).toBe("archived");
+    expect(ids(board.columns.doing)).toEqual(["c"]);
+    expect(board.archive).toEqual([]);
+    expect(ids(archiveCard(next, "d").archive)).toEqual(["c", "d"]);
+  });
+
+  it("archiveCard can be restored and throws for an unknown card", () => {
+    const next = archiveCard(seed(), "d");
+    expect(ids(restoreCard(next, "d").columns.done)).toEqual(["a", "b", "d"]);
+    expect(() => archiveCard(seed(), "zzz")).toThrow();
+  });
 
   it("archiveDone moves only Done cards, in order, and leaves other columns alone", () => {
     const next = archiveDone(seed());

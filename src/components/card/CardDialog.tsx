@@ -38,6 +38,7 @@ export function CardDialog({
   onSave,
   onDelete,
   onDuplicate,
+  onArchive,
   onSaveTemplate,
   onClose,
   onChecklist,
@@ -53,6 +54,8 @@ export function CardDialog({
   onDelete: () => void;
   // Duplicates the saved card (unsaved edits in this dialog are not copied).
   onDuplicate?: () => void;
+  // Archives the saved card (unsaved edits in this dialog are not saved).
+  onArchive?: () => void;
   // Saves the saved card as a template of the board and reports the outcome (shown in the dialog).
   onSaveTemplate?: () => { ok: boolean; message: string };
   onClose: () => void;
@@ -330,6 +333,11 @@ export function CardDialog({
           {onDuplicate && (
             <Button variant="ghost" size="sm" title="Duplicates the saved card (unsaved edits are not copied)" onClick={onDuplicate}>
               Duplicate
+            </Button>
+          )}
+          {onArchive && (
+            <Button variant="ghost" size="sm" title="Archives the saved card (unsaved edits are not saved)" onClick={onArchive}>
+              Archive
             </Button>
           )}
           {onSaveTemplate && (

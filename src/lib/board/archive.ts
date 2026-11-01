@@ -22,6 +22,21 @@ export function archiveList(board: Board, listId: ColumnId, { now = new Date() }
   };
 }
 
+// Moves one card from its list to the end of the archive. Throws when the card is not on the board.
+export function archiveCard(board: Board, cardId: string, { now = new Date() }: { now?: Date } = {}): Board {
+  const list = boardLists(board).find((l) => listCards(board, l.id).some((c) => c.id === cardId));
+  if (!list) {
+    throw new Error(`Card ${cardId} not found`);
+  }
+  const cards = listCards(board, list.id);
+  const card = cards.find((c) => c.id === cardId) as Card;
+  return {
+    ...board,
+    columns: { ...board.columns, [list.id]: cards.filter((c) => c.id !== cardId) },
+    archive: [...board.archive, withActivity(card, { type: "archived" }, { now })],
+  };
+}
+
 // Archives the done list (see `insightsListIds`). Returns the same board when there is none or it is empty.
 export function archiveDone(board: Board, opts: { now?: Date } = {}): Board {
   const done = insightsListIds(board).done;

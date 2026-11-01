@@ -5,10 +5,22 @@ import { Toast } from "@/components/ui";
 
 export const COPY_TOAST_MS = 3000;
 
-// "copied" confirms a successful copy and disappears on its own. A link string means the clipboard
-// was unavailable: show the link so it can be copied by hand.
-export function CopyLinkToast({ result, onDismiss }: { result: "copied" | { url: string }; onDismiss: () => void }) {
+export type CopyResult = "copied" | { text: string };
+
+// "copied" confirms a successful copy and disappears on its own. A text result means the clipboard
+// was unavailable: show the text so it can be copied by hand. "link" is a single line, "markdown"
+// can span many lines.
+export function CopyLinkToast({
+  result,
+  kind = "link",
+  onDismiss,
+}: {
+  result: CopyResult;
+  kind?: "link" | "markdown";
+  onDismiss: () => void;
+}) {
   const copied = result === "copied";
+  const markdown = kind === "markdown";
 
   useEffect(() => {
     if (!copied) {
@@ -21,17 +33,23 @@ export function CopyLinkToast({ result, onDismiss }: { result: "copied" | { url:
   if (copied) {
     return (
       <Toast>
-        <span>Link copied</span>
+        <span>{markdown ? "Copied as Markdown" : "Link copied"}</span>
       </Toast>
     );
   }
 
   return (
     <Toast>
-      <span>Could not copy. Copy the link by hand:</span>
-      <code className="max-w-[50vw] overflow-x-auto rounded bg-black/20 px-2 py-1 select-all dark:bg-white/20">
-        {result.url}
-      </code>
+      <span>{markdown ? "Could not copy. Copy the Markdown by hand:" : "Could not copy. Copy the link by hand:"}</span>
+      {markdown ? (
+        <pre className="max-h-[40vh] max-w-[50vw] overflow-auto rounded bg-black/20 px-2 py-1 text-left whitespace-pre select-all dark:bg-white/20">
+          {result.text}
+        </pre>
+      ) : (
+        <code className="max-w-[50vw] overflow-x-auto rounded bg-black/20 px-2 py-1 select-all dark:bg-white/20">
+          {result.text}
+        </code>
+      )}
       <button
         type="button"
         onClick={onDismiss}

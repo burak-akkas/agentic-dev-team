@@ -358,6 +358,50 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  describe("copy as Markdown", () => {
+    function stubClipboard(clipboard: { writeText: (text: string) => Promise<void> } | undefined) {
+      Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
+    }
+    const expected = "# My board\n\n## To do\n- Pay rent\n\n## Doing\n_No cards_\n\n## Done\n_No cards_\n";
+
+    async function addCard(user: ReturnType<typeof userEvent.setup>, title: string) {
+      await user.type(screen.getByLabelText("New card title"), title);
+      await user.click(screen.getByRole("button", { name: "Add card" }));
+    }
+
+    it("copies the board by keyboard, confirms, and the confirmation goes away on its own", async () => {
+      const { user } = setup();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard({ writeText });
+      await addCard(user, "Pay rent");
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      screen.getByRole("menuitem", { name: "Copy as Markdown" }).focus();
+      await user.keyboard("{Enter}");
+      expect(writeText).toHaveBeenCalledWith(expected);
+      expect(await screen.findByRole("status")).toHaveTextContent("Copied as Markdown");
+      await waitForElementToBeRemoved(() => screen.queryByRole("status"), { timeout: 4500 });
+    }, 10000);
+
+    it("shows the Markdown when the clipboard rejects, and it can be dismissed", async () => {
+      const { user } = setup();
+      stubClipboard({ writeText: vi.fn().mockRejectedValue(new Error("denied")) });
+      await addCard(user, "Pay rent");
+      await choose(user, "Copy as Markdown");
+      const status = await screen.findByRole("status");
+      expect(status).not.toHaveTextContent("Copied as Markdown");
+      expect(status.querySelector("pre")?.textContent).toBe(expected);
+      await user.click(within(status).getByRole("button", { name: "Dismiss" }));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("shows the Markdown when the clipboard API is missing", async () => {
+      const { user } = setup();
+      stubClipboard(undefined);
+      await choose(user, "Copy as Markdown");
+      expect(await screen.findByRole("status")).toHaveTextContent("# My board");
+    });
+  });
+
   describe("archive done cards", () => {
     async function addDone(user: ReturnType<typeof userEvent.setup>, title: string) {
       await user.type(screen.getByLabelText("New card title"), title);

@@ -31,6 +31,7 @@ import {
   undoArchive,
   updateCard,
 } from "@/lib/board";
+import { cardToText } from "@/lib/cardText";
 import { addCardFromTemplate, boardTemplates, saveAsTemplate } from "@/lib/templates";
 import { useBackgroundImageOk } from "@/hooks/useBackgroundImageOk";
 import { useBoard } from "@/hooks/useBoard";
@@ -206,6 +207,15 @@ export function Board() {
             const id = crypto.randomUUID();
             update((b) => duplicateCard(b, openCardId, { id }));
             setOpenCardId(id);
+          }}
+          onCopyText={async () => {
+            const text = cardToText(open.card);
+            try {
+              await navigator.clipboard.writeText(text);
+              return "copied";
+            } catch {
+              return { text };
+            }
           }}
           onSaveTemplate={() => {
             try {

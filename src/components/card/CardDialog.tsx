@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent } from "react";
+import { CopyLinkToast, type CopyResult } from "@/components/app/CopyLinkToast";
 import {
   addComment,
   addLabelToList,
@@ -38,6 +39,7 @@ export function CardDialog({
   onSave,
   onDelete,
   onDuplicate,
+  onCopyText,
   onSaveTemplate,
   onClose,
   onChecklist,
@@ -53,6 +55,9 @@ export function CardDialog({
   onDelete: () => void;
   // Duplicates the saved card (unsaved edits in this dialog are not copied).
   onDuplicate?: () => void;
+  // Copies the saved card as plain text (unsaved edits in this dialog are not copied).
+  // Resolves to "copied", or to the text when the clipboard is unavailable.
+  onCopyText?: () => Promise<CopyResult>;
   // Saves the saved card as a template of the board and reports the outcome (shown in the dialog).
   onSaveTemplate?: () => { ok: boolean; message: string };
   onClose: () => void;
@@ -70,6 +75,8 @@ export function CardDialog({
   const [labelError, setLabelError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<"discard" | "delete" | null>(null);
   const [templateResult, setTemplateResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [copyResult, setCopyResult] = useState<CopyResult | null>(null);
+  const dismissCopy = useCallback(() => setCopyResult(null), []);
 
   function addLabel() {
     try {
@@ -332,6 +339,11 @@ export function CardDialog({
               Duplicate
             </Button>
           )}
+          {onCopyText && (
+            <Button variant="ghost" size="sm" title="Copies the saved card as plain text (unsaved edits are not copied)" onClick={async () => setCopyResult(await onCopyText())}>
+              Copy as text
+            </Button>
+          )}
           {onSaveTemplate && (
             <Button
               variant="ghost"
@@ -352,6 +364,7 @@ export function CardDialog({
           </p>
         )}
       </form>
+      {copyResult && <CopyLinkToast result={copyResult} kind="card" onDismiss={dismissCopy} />}
       {confirming === "discard" && (
         <ConfirmDialog
           title="Discard changes"

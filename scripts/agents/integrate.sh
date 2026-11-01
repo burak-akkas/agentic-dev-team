@@ -10,7 +10,7 @@
 #   4. With AGENT_QA_IN_QUEUE (the default when QA is on): unless QA already passed these own changes
 #      (qa-passed.sh), the queue waits while QA tests exactly that commit. Nothing else merges
 #      meanwhile, so QA runs once per PR, on the code that lands.
-#   5. If the base moved meanwhile (a human merged something), goes back to 2. Otherwise squash-merges
+#   5. If the base moved meanwhile (a human merged something), goes back to 2. Otherwise merges
 #      exactly that commit, so what lands on the base is what CI (and QA) tested.
 # Conflicts and red checks go to the Implementor, timeouts and failed merges to the back of the queue.
 # Red checks, timeouts and failed merges count as failed attempts: after AGENT_INTEGRATOR_MAX_ATTEMPTS
@@ -29,19 +29,24 @@
 # AGENT_QA_IN_QUEUE (true: QA once, at the front of the queue), AGENT_QA_ON_BASE_UPDATE (true: QA
 # after each update), AGENT_AUTO_MERGE_HIGH_RISK, AGENT_PROTECTED_PATHS
 # (default .github/,scripts/,templates/), AGENT_INTEGRATOR_MAX_ATTEMPTS (3),
-# AGENT_INTEGRATOR_CHECKS_MINUTES (30), AGENT_INTEGRATOR_QA_MINUTES (60).
+# AGENT_REQUIRED_CHECKS entries can be path-scoped (`Name@prefix|prefix`, see pr-paths.sh).
+# AGENT_INTEGRATOR_CHECKS_MINUTES (30), AGENT_INTEGRATOR_QA_MINUTES (60), AGENT_MERGE_METHOD (squash,
+# merge or rebase; default squash), AGENT_PRODUCTION_URL (the link in the issue's progress note, url.sh).
 set -Eeuo pipefail
 
 pr="$1"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 bot="${AGENT_BOT_ID:?AGENT_BOT_ID must be set}"
 here="$(dirname "$0")"
-required="${AGENT_REQUIRED_CHECKS:-CI}"
+required="${AGENT_REQUIRED_CHECKS:-CI}"   # narrowed to the checks that apply to this PR (pr-paths.sh) below
 qa_on_update="${AGENT_QA_ON_BASE_UPDATE:-}"
 qa_in_queue="${AGENT_QA_IN_QUEUE:-}"
+qa_paths="${AGENT_QA_PATHS:-}"   # QA only for PRs that change these paths (prefix|prefix), e.g. the frontend
 max_attempts="${AGENT_INTEGRATOR_MAX_ATTEMPTS:-3}"
 checks_minutes="${AGENT_INTEGRATOR_CHECKS_MINUTES:-30}"
 qa_minutes="${AGENT_INTEGRATOR_QA_MINUTES:-60}"
+method="${AGENT_MERGE_METHOD:-squash}"
+case "$method" in squash|merge|rebase) ;; *) echo "::warning::AGENT_MERGE_METHOD must be squash, merge or rebase, not '$method': squash-merging" >&2; method=squash ;; esac
 run_url="${GITHUB_SERVER_URL:-https://github.com}/$repo/actions/runs/${GITHUB_RUN_ID:-}"
 base=""
 
@@ -178,6 +183,7 @@ wait_checks() {   # <sha>
   deadline=$(( $(date +%s) + checks_minutes * 60 ))
   CHECKS=timeout
   FAILED=
+  if [ -z "$required" ]; then log "no required check applies to the paths this PR changes"; CHECKS=pass; return 0; fi
   while [ "$(date +%s)" -lt "$deadline" ]; do
     refresh_token
     if ! still_ours "$sha" agent:integrating; then CHECKS=moved; return 0; fi
@@ -216,7 +222,7 @@ hold_for_qa() {   # <sha> <why>
         # label is left over (e.g. a failed label change): only a recorded pass counts.
         if "$here/qa-passed.sh" "$pr" "$sha" >/dev/null; then return 0; fi
         log "agent:integrating, but no QA pass for ${sha:0:7} yet" ;;
-      *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:review,"*)
+      *",agent:changes-requested,"*|*",agent:fixing,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:review,"*)
         log "QA did not pass (labels: $labels)"; finish left ;;
     esac                                     # agent:qa, agent:approved or between labels: still going
   done
@@ -273,6 +279,16 @@ if [ -n "$touched" ]; then
   say "✋ **Merge queue:** #$pr changes the agent team's own tooling, so a human merges it:
 $(printf '%s\n' "$touched" | sed 's/^/- `/; s/$/`/')"
   finish left
+fi
+
+# The required checks that apply to the files this PR changes (all of them, unless some are path-scoped).
+required=$("$here/pr-paths.sh" required "$pr" | paste -sd, -)
+qa_applies=true
+if [ "$qa_in_queue" = true ] && [ -n "$qa_paths" ]; then
+  if "$here/pr-paths.sh" touches "$pr" "$qa_paths"; then :; else
+    rc=$?; [ "$rc" = 1 ] || fail requeue "couldn't read the files #$pr changes"
+    qa_applies=false; log "changes nothing under AGENT_QA_PATHS ($qa_paths): no QA"
+  fi
 fi
 
 # --- 2.-4. Update, test, merge. Repeats only if the base moves outside the queue. ---
@@ -338,7 +354,7 @@ for _ in 1 2 3; do
   # QA once, here: the checks passed, so this commit can merge, and nothing else merges while QA tests
   # it. A PR whose own changes QA already passed (e.g. a human merged into the base during QA, and the
   # loop updated it again) isn't tested again: CI covers the new combination.
-  if [ "$qa_in_queue" = true ] && ! "$here/qa-passed.sh" "$pr" "$head" >/dev/null; then
+  if [ "$qa_in_queue" = true ] && [ "$qa_applies" = true ] && ! "$here/qa-passed.sh" "$pr" "$head" >/dev/null; then
     hold_for_qa "$head" "The required checks passed on #$pr$updated, so it can merge."
   fi
   # Right before the merge (nothing slow in between: a human can still merge by hand meanwhile).
@@ -346,13 +362,13 @@ for _ in 1 2 3; do
   refresh_token
   # gh can report an error after the merge itself succeeded (e.g. deleting the branch failed), so
   # the PR's state decides, not the exit code.
-  err=$(gh pr merge "$pr" -R "$repo" --squash --delete-branch --match-head-commit "$head" 2>&1) || true
+  err=$(gh pr merge "$pr" -R "$repo" "--$method" --delete-branch --match-head-commit "$head" 2>&1) || true
   if [ "$(pr_json state | jq -r .state)" = MERGED ]; then
     "$here/transition.sh" "$pr" agent:done >/dev/null
     if [ -n "$issue" ]; then
       "$here/transition.sh" "$issue" agent:done >/dev/null
-      prod="https://${GITHUB_REPOSITORY_OWNER:-${repo%%/*}}.github.io/${repo#*/}/"
-      "$here/progress.sh" "$issue" "✅ **Merged** #$pr, deploying to [production]($prod)"
+      prod=$("$here/url.sh" production)
+      "$here/progress.sh" "$issue" "✅ **Merged** #$pr$([ -n "$prod" ] && echo ", deploying to [production]($prod)" || true)"
     fi
     "$here/sweep-conflicts.sh" "$pr" "$base" >&2
     finish merged

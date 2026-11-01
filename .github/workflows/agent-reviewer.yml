@@ -208,7 +208,16 @@ jobs:
           OUT: ${{ steps.agent.outputs.structured_output }}
           QA: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE == 'review' && 'true' || '' }}
           QA_IN_QUEUE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE != 'review' && 'true' || '' }}
+          QA_PATHS: ${{ vars.AGENT_QA_PATHS }}
         run: |
+          # AGENT_QA_PATHS: only PRs that change those paths (e.g. the frontend) go through browser QA.
+          # Only a clear "no" skips QA (exit 1); an error keeps it.
+          if [ "$QA" = "true" ] || [ "$QA_IN_QUEUE" = "true" ]; then
+            if [ -n "$QA_PATHS" ]; then
+              rc=0; "$BIN/pr-paths.sh" touches "$PR" "$QA_PATHS" || rc=$?
+              if [ "$rc" = 1 ]; then QA=""; QA_IN_QUEUE=""; fi
+            fi
+          fi
           verdict=$(echo "${OUT:-null}" | jq -r '.verdict // "error"')
           after=$("$BIN/count-comments.sh" "$PR" reviewer)
           if [ "$after" -le "${{ steps.guard.outputs.total }}" ]; then

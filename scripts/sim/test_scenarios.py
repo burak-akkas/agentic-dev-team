@@ -592,6 +592,89 @@ def watchdog_restarts_an_idle_queue_and_leaves_a_busy_one_alone():
     assert not st["events"]   # merging switched off: queued PRs wait quietly
 
 
+# --- monorepos: path-scoped required checks and QA ------------------------------------------------
+def pr_with(name, **extra):
+    return make_state({101: {"head": sha(0xa1), "files": files("+x", name=name),
+                             "comments": [approval(sha(0xa1), "reviewer"), queued()]}}, **extra)
+
+
+@test
+def pr_paths_picks_the_checks_and_scopes_that_apply():
+    req = "Backend CI@backend/|shared/, Frontend CI@web/, Lint"
+    out = lambda name, *a, **e: run(pr_with(name), script="pr-paths.sh", args=list(a), **e)
+    assert out("backend/api.py", "required", "101", AGENT_REQUIRED_CHECKS=req)["_stdout"].split("\n")[:2] == ["Backend CI", "Lint"]
+    assert out("shared/t.ts", "required", "101", AGENT_REQUIRED_CHECKS=req)["_stdout"].split("\n")[:2] == ["Backend CI", "Lint"]
+    r = out("README.md", "required", "101", AGENT_REQUIRED_CHECKS="Backend CI@backend/")
+    assert r["_stdout"].strip() == "" and r["_rc"] == 0
+    assert out("backend/a.py", "required", "101", AGENT_REQUIRED_CHECKS="Backend CI@backend/, Frontend CI@web/")["_rc"] == 0
+    assert out("web/a.ts", "touches", "101", "web/|mobile/")["_rc"] == 0
+    assert out("backend/a.py", "touches", "101", "web/")["_rc"] == 1
+    assert out("backend/a.py", "touches", "101", "")["_rc"] == 0             # no paths: everything
+    st = run(pr_with("backend/a.py", fail_cmds=["pulls/101/files"]), script="pr-paths.sh", args=["touches", "101", "web/"])
+    assert st["_rc"] == 3                                                     # an error is never a "no"
+    st = run(pr_with("backend/a.py", fail_cmds=["pulls/101/files"]), script="pr-paths.sh", args=["required", "101"],
+             AGENT_REQUIRED_CHECKS="Backend CI@backend/")
+    assert st["_rc"] != 0 and st["_stdout"].strip() == ""                     # never drops a check silently
+
+
+@test
+def the_queue_waits_only_for_the_checks_that_apply():
+    req = "Backend CI@backend/, Frontend CI@web/"
+    # Frontend CI never reports on a backend-only PR (path-filtered workflow): not waited for.
+    st = run(pr_with("backend/api.py", checks={sha(0xa1): "pass"}, workflows=["Backend CI"]), AGENT_REQUIRED_CHECKS=req)
+    assert st.get("merged") == [101], st["_stderr"][-1500:]
+    st = run(pr_with("backend/api.py", checks={sha(0xa1): "fail"}, workflows=["Backend CI"]), AGENT_REQUIRED_CHECKS=req)
+    assert not st.get("merged") and labels(st, 101) == ["agent:changes-requested"]   # and a red one still counts
+    # A docs-only PR: no check applies, it merges without waiting.
+    st = run(pr_with("docs/readme.md", checks={sha(0xa1): "none"}), AGENT_REQUIRED_CHECKS=req)
+    assert st.get("merged") == [101] and "no required check applies" in st["_stderr"]
+    # An unscoped check still applies to everything: never reporting still goes to a human.
+    st = run(pr_with("docs/readme.md", checks={sha(0xa1): "none"}), AGENT_REQUIRED_CHECKS=req + ", CI")
+    assert not st.get("merged") and labels(st, 101) == ["agent:needs-human"]
+
+
+@test
+def qa_in_the_queue_only_for_prs_that_change_qa_paths():
+    st = pr_with("backend/api.py", audit_qa=False)   # no QA: the audit's QA rule doesn't apply
+    st = run(st, AGENT_QA_IN_QUEUE="true", AGENT_QA_PATHS="web/")
+    assert st.get("merged") == [101] and not holds(st, 101) and "AGENT_QA_PATHS" in st["_stderr"]
+    st = pr_with("web/board.tsx")
+    st["hooks"] = [qa_passes(101)]
+    st = run(st, AGENT_QA_IN_QUEUE="true", AGENT_QA_PATHS="web/|packages/ui/")
+    assert st.get("merged") == [101] and len(holds(st, 101)) == 1
+
+
+@test
+def merge_method_and_production_link_are_configurable():
+    one = lambda: make_state({101: {"head": sha(0xa1), "issue": 11, "comments": [approval(sha(0xa1)), queued()]}})
+    st = run(one())
+    assert any(l.startswith("pr merge 101") and "--squash" in l for l in st["log"])   # the default
+    assert "https://o.github.io/r/" in "\n".join(bodies(st, 11))
+    st = run(one(), AGENT_MERGE_METHOD="rebase", AGENT_PRODUCTION_URL="https://app.example/{repo}/")
+    assert st.get("merged") == [101] and any(l.startswith("pr merge 101") and "--rebase" in l for l in st["log"])
+    assert "[production](https://app.example/r/)" in "\n".join(bodies(st, 11))
+    st = run(one(), AGENT_MERGE_METHOD="fast", AGENT_PRODUCTION_URL="none")   # a typo falls back to squash
+    assert st.get("merged") == [101] and any(l.startswith("pr merge 101") and "--squash" in l for l in st["log"])
+    assert "production" not in "\n".join(bodies(st, 11)) and "AGENT_MERGE_METHOD" in st["_stderr"]
+
+
+@test
+def a_pr_the_implementor_is_fixing_is_left_alone_and_restarted_if_its_run_died():
+    # agent:fixing: the sweep doesn't flag the PR again (no second Implementor run).
+    st = make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), queued()]},
+                     103: {"head": sha(0xc1), "labels": ["agent:fixing"], "branch": "agent/issue-3"}})
+    st["conflict_after_merge"] = {"101": [103]}
+    st = run(st)
+    assert st.get("merged") == [101] and labels(st, 103) == ["agent:fixing"] and not bodies(st, 103)
+    # The run died (no agent run active, the label is old): the watchdog restarts the Implementor.
+    st0 = make_state({103: {"head": sha(0xc1), "labels": ["agent:fixing"], "branch": "agent/issue-3",
+                            "label_at": {"agent:fixing": "2020-01-01T00:00:00Z"}}})
+    st = run(st0, script="watchdog.sh", AGENT_WATCHDOG_MINUTES=10)
+    assert labels(st, 103) == ["agent:changes-requested"] and "Restarting the Implementor" in bodies(st, 103)[-1], st["_stdout"]
+    st0["active_runs"] = [{"workflow": "agent-implementor.yml", "status": "in_progress", "name": "Agent · Implementor", "displayTitle": "T103"}]
+    assert labels(run(st0, script="watchdog.sh", AGENT_WATCHDOG_MINUTES=10), 103) == ["agent:fixing"]   # still working
+
+
 def main():
     only = sys.argv[1] if len(sys.argv) > 1 else ""
     failed = 0

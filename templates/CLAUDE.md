@@ -18,6 +18,22 @@
 
 > Each command above must also be allowed in the repo variable `AGENT_BUILD_TOOLS`,
 > e.g. `Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)`.
+> Agents run every command on its own, from the repository root: no `cd x && …`. Write commands for
+> sub-directories with a directory flag (`npm --prefix web test`, `make -C backend test`,
+> `go -C api test ./...`, `uv --directory backend run pytest`), or give the root one task runner.
+
+## Packages (monorepos: delete this section otherwise)
+| Path | What it is | Check it with | Depends on |
+|---|---|---|---|
+| `<backend/>` | <API, language> | `<make -C backend check>` | `<shared/>` |
+| `<web/>` | <frontend> | `<npm --prefix web run check>` | `<shared/>`, the backend's API |
+| `<shared/>` | <shared types> | `<...>` | |
+
+- A change is done when the checks of every package it touches **and of the packages that depend on
+  them** pass.
+- Package-specific conventions go in a `CLAUDE.md` inside that package; agents read it when they work there.
+- Services the tests need (database, queue): <how they start, e.g. `docker compose up -d db`; the repo
+  variable `AGENT_SETUP_COMMAND` starts them on the agents' runners>.
 
 ## Conventions
 - <language/style rules a linter does not enforce>

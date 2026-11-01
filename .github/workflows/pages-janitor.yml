@@ -26,12 +26,22 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       DAYS: ${{ vars.AGENT_QA_SCREENSHOT_DAYS || '7' }}
     steps:
+      # Repositories without a gh-pages branch (no Pages previews, QA screenshots as artifacts) have
+      # nothing to clean.
+      - name: Is there a gh-pages branch?
+        id: pages
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/branches/gh-pages" --silent 2>/dev/null; then echo "exists=true" >> "$GITHUB_OUTPUT"
+          else echo "No gh-pages branch: nothing to clean" >> "$GITHUB_STEP_SUMMARY"; fi
+
       - uses: actions/checkout@v6
+        if: steps.pages.outputs.exists == 'true'
         with:
           ref: gh-pages
           fetch-depth: 1
 
       - name: Remove expired screenshots and stale previews
+        if: steps.pages.outputs.exists == 'true'
         run: |
           cutoff=$(date -u -d "$DAYS days ago" +%s)
           removed=0
@@ -49,6 +59,7 @@ jobs:
           echo "Removed $removed folder(s); screenshot retention: $DAYS days" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Squash gh-pages history
+        if: steps.pages.outputs.exists == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
@@ -60,4 +71,5 @@ jobs:
           echo "gh-pages squashed to one commit" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Request a Pages build
+        if: steps.pages.outputs.exists == 'true'
         run: gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" --jq .status || true

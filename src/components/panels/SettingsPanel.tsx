@@ -7,6 +7,7 @@ import type { Board } from "@/lib/board";
 import { BoardTransfer } from "@/components/app/BoardTransfer";
 import { Button, Dialog, Input } from "@/components/ui";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
+import { formatVersionLine } from "@/lib/version";
 import { BackgroundSettings } from "./BackgroundSettings";
 import { ListChoice } from "./ListChoice";
 
@@ -89,6 +90,7 @@ export function SettingsPanel({
   const wipHeadingId = useId();
   const transferHeadingId = useId();
   const themeHeadingId = useId();
+  const versionLine = formatVersionLine(process.env.NEXT_PUBLIC_APP_VERSION, process.env.NEXT_PUBLIC_COMMIT_SHA);
   return (
     <Dialog labelledBy={headingId} onRequestClose={onClose}>
       <div className="flex max-w-full min-w-0 flex-col gap-5 p-5">
@@ -125,6 +127,7 @@ export function SettingsPanel({
           </h3>
           <BoardTransfer />
         </section>
+        {versionLine && <p className="text-xs text-muted">{versionLine}</p>}
         <div className="flex">
           <Button variant="primary" size="sm" onClick={onClose}>
             Close

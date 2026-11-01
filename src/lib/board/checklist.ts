@@ -100,6 +100,13 @@ export function moveChecklistItem(board: Board, cardId: string, itemId: string, 
   });
 }
 
+// Unticks every item. Returns the same board when no item is ticked.
+export function uncheckAllChecklistItems(board: Board, cardId: string): Board {
+  return changeChecklist(board, cardId, (items) =>
+    items.some((item) => item.done) ? items.map((item) => (item.done ? { ...item, done: false } : item)) : items,
+  );
+}
+
 // Done and total checklist items, or `undefined` when the card has no checklist.
 export function checklistProgress(card: Card): { done: number; total: number } | undefined {
   const items = card.checklist;

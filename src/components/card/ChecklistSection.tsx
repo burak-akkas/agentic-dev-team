@@ -10,6 +10,7 @@ import {
   moveChecklistItem,
   normalizeChecklistText,
   toggleChecklistItem,
+  uncheckAllChecklistItems,
   type Board,
   type Card,
 } from "@/lib/board";
@@ -66,14 +67,24 @@ export function ChecklistSection({
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="flex items-baseline gap-2 text-xs font-medium text-subtle">
-        Checklist
-        {progress && (
-          <span className="text-muted" aria-hidden="true">
-            {progress.done}/{progress.total}
-          </span>
-        )}
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex items-baseline gap-2 text-xs font-medium text-subtle">
+          Checklist
+          {progress && (
+            <span className="text-muted" aria-hidden="true">
+              {progress.done}/{progress.total}
+            </span>
+          )}
+        </h3>
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={!progress || progress.done === 0}
+          onClick={() => onChange((b) => uncheckAllChecklistItems(b, card.id))}
+        >
+          Uncheck all
+        </Button>
+      </div>
       {items.length > 0 && (
         <ul aria-label="Checklist items" className="flex flex-col gap-1">
           {items.map((item, index) => (

@@ -7,11 +7,11 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 ## How it works
 
 ```
- new issue ──► 🔍 Analyst ──► 🏛 Architect ──► 🛠 Implementor ──► 🧐 Reviewer ──► 🧪 QA ──► 🚦 Merge queue ─► ✅ merged
-                  │               │  risk:low/med       opens PR      ▲     │ approve   │ pass     risk not high,│
-                  │               │                   + 🔎 preview    │     │           │          one at a time │
-                  │               │                           fix ────┘◄────┴───────────┘ changes/defects      ▼
-                  │               │                       (Implementor)                              🌐 production
+ new issue ──► 🔍 Analyst ──► 🏛 Architect ──► 🛠 Implementor ──► 🧐 Reviewer ──► 🚦 Merge queue ──► 🧪 QA ──► ✅ merged
+                  │               │  risk:low/med       opens PR      ▲     │ approve      │ up to date,   │ pass,    │
+                  │               │                   + 🔎 preview    │     │              │ checks green  │ once     ▼
+                  │               │                           fix ────┘◄────┴──────────────┴───────────────┘    🌐 production
+                  │               │                       (Implementor)   changes · conflicts · red checks · defects
                   ▼               ▼
          open questions    high risk / unsure      stuck · failed · review/QA deadlock · merge conflict
                   └───────────────┴──────────────────────┬───────────────────┘
@@ -27,8 +27,8 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 - **Handoffs are structured comments** with a hidden marker (`<!-- agent:analyst -->` and so on). Workflows check that the comment was actually posted; if it wasn't, the item goes to the Lead.
 - **The Lead is the decision maker.** Every "stuck" state goes to `agent:needs-decision` instead of a human. The Lead answers the Analyst's questions, rules on high-risk designs and review deadlocks, retries failed stages, or closes the item. Its decision overrides earlier comments. It only escalates for irreversible or high-impact choices, or after `AGENT_MAX_LEAD_DECISIONS` (default 3) on the same item.
 - **Big issues are split.** When an issue is too big for one reviewable PR, the Architect returns a split plan instead of a design. [`split.sh`](scripts/agents/split.sh) creates the sub-issues (linked as GitHub sub-issues, each with its own acceptance criteria) and the parent waits in `agent:split`. Sub-issues without dependencies start at once and run in parallel; the others wait in `agent:blocked` until what they depend on is merged. When the last one closes, the parent closes. Sub-issues never split again.
-- **Every PR gets a live preview** at `…/pr-<N>/` (link posted on the PR). After the Reviewer approves, **the QA agent** waits until the preview serves the PR's exact commit, runs the project's Playwright e2e suite against it, then tests the acceptance criteria in a real headless Chrome (Playwright MCP). It also **compares the changed screens with the baseline** (production, i.e. the base branch without the PR) at desktop and phone width: any visual change the issue didn't ask for, such as clipped or overlapping controls, is a defect. It posts a report with **screenshots in the PR**, including the before/after pairs. Defects go back to the Implementor, with steps to reproduce.
-- **The merge queue replaces the human merge.** The merge gate checks the approval and the risk, then puts the PR in the queue (`agent:queued`). High-risk changes (`risk:high`, set by the Architect) still go to a human unless you allow them explicitly. The **Integrator** merges queued PRs **one at a time**, oldest first: right before merging, it brings the PR up to date with the default branch, waits for the required checks on exactly that commit, and squash-merges exactly that commit. So CI always tests what lands, and every PR is updated and tested once, however many PRs run in parallel. Its own updates don't change the PR's changes, so they skip review (and QA, unless `AGENT_QA_ON_BASE_UPDATE`).
+- **Every PR gets a live preview** at `…/pr-<N>/` (link posted on the PR). **The QA agent** tests a PR **once, at the front of the merge queue**: after the Reviewer approved it, the Integrator brought it up to date with the default branch and the required checks passed on that commit. Nothing else merges while QA tests, so QA tests exactly the code that lands, and conflicts with other PRs never cost a QA round (`AGENT_QA_STAGE=review` restores the older flow: QA right after the review, before the queue). QA waits until the preview serves the PR's exact commit, runs the project's Playwright e2e suite against it, then tests the acceptance criteria in a real headless Chrome (Playwright MCP). It also **compares the changed screens with the baseline** (production, i.e. the base branch without the PR) at desktop and phone width: any visual change the issue didn't ask for, such as clipped or overlapping controls, is a defect. It posts a report with **screenshots in the PR**, including the before/after pairs. Defects go back to the Implementor, with steps to reproduce.
+- **The merge queue replaces the human merge.** The merge gate checks the approval and the risk, then puts the PR in the queue (`agent:queued`). High-risk changes (`risk:high`, set by the Architect) still go to a human unless you allow them explicitly. The **Integrator** merges queued PRs **one at a time**, oldest first: right before merging, it brings the PR up to date with the default branch, waits for the required checks on exactly that commit, and squash-merges exactly that commit. So CI always tests what lands, and every PR is updated and tested once, however many PRs run in parallel. Its own updates don't change the PR's changes, so they skip review. QA runs at the front of the queue, unless it already passed the same own changes (or the Lead or a human approved them).
 - **One custom GitHub App** is the agents' identity. Events created by an App token *do* trigger other workflows. Events created by the default `GITHUB_TOKEN` don't, and that would break the chain.
 
 | File | Purpose |
@@ -72,8 +72,9 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_AUTO_START` | – | `true` | New issues from collaborators enter the pipeline without a label |
 | `AGENT_AUTONOMY` | – | `full` | The Lead answers the Analyst's questions instead of a human |
 | `AGENT_REQUIRE_DESIGN_APPROVAL` | `true` | – | When `true`, every design waits for a human `agent:ready` |
-| `AGENT_QA` | – | `true` | Reviewer approval goes to the QA agent before merge (needs a preview deploy) |
-| `AGENT_QA_ON_BASE_UPDATE` | – | – | `true`: QA tests an approved PR again after the Integrator merged the latest default branch into it, and the merge queue waits for it. Otherwise only CI re-runs |
+| `AGENT_QA` | – | `true` | The QA agent tests every PR in the browser before it merges (needs a preview deploy) |
+| `AGENT_QA_STAGE` | | | When QA runs. Unset or `queue`: once, at the front of the merge queue, on the up-to-date commit whose checks passed, while the queue waits. `review`: right after the Reviewer approves, before the queue (the older flow: conflicts and fixes after QA send the PR through QA again) |
+| `AGENT_QA_ON_BASE_UPDATE` | – | – | Only with `AGENT_QA_STAGE=review`. `true`: QA tests an approved PR again after the Integrator merged the latest default branch into it, and the merge queue waits for it. Otherwise only CI re-runs |
 | `AGENT_SKIP_REVIEW_ON_SAME_CHANGES` | – | `true` | `true`: when an approved PR is pushed again but its own added and removed lines are exactly as approved (typically a conflict resolution that kept both sides), skip the re-review, as for a clean update; CI tests the combination. Otherwise the Reviewer re-reviews, focused on how the PR's own edits changed |
 | `AGENT_AUTO_MERGE` | – | `true` | **Kill switch** for the merge gate and the merge queue |
 | `AGENT_PAUSED` | | | `true` pauses every agent job (see Human controls) |
@@ -90,7 +91,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 | `AGENT_MAX_LEAD_DECISIONS` | `3` | `3` | Lead decisions per item before a human is assigned |
 | `AGENT_INTEGRATOR_MAX_ATTEMPTS` | `3` | `3` | Failed merge attempts per PR (red checks on the combined code, checks that don't finish, failed merges) since the last Lead decision before the Lead steps in. Conflicts don't count |
 | `AGENT_INTEGRATOR_CHECKS_MINUTES` | `30` | `30` | How long the Integrator waits for the required checks before sending the PR to the back of the queue |
-| `AGENT_INTEGRATOR_QA_MINUTES` | `60` | `60` | With `AGENT_QA_ON_BASE_UPDATE`: how long the queue waits for QA |
+| `AGENT_INTEGRATOR_QA_MINUTES` | `60` | `60` | How long the queue waits for QA at its front. After that the queue moves on, and the PR rejoins it when QA passes |
 | `AGENT_INTEGRATOR_DRAIN_MINUTES` | `100` | `100` | After this long, an Integrator run hands the rest of the queue to a fresh run (jobs can't run forever) |
 | `AGENT_PREVIEW_URL` | | | Preview URL template for QA, default `https://{owner}.github.io/{repo}/pr-{pr}/`. The preview must serve `version.txt` containing the PR head SHA |
 | `AGENT_BASELINE_URL` | | | The "before" site for QA's visual comparison: the base branch without the PR, default `https://{owner}.github.io/{repo}/` (production). It should serve `version.txt`, so QA knows when it lags the base branch. `none` turns the comparison off |

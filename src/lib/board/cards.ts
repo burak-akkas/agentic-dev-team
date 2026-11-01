@@ -123,6 +123,24 @@ export function moveCard(board: Board, cardId: string, to: ColumnId, opts: Activ
   };
 }
 
+// Moves a card to the top or bottom of its own list. Returns the same board when it is already there.
+export function reorderCard(board: Board, cardId: string, to: "top" | "bottom"): Board {
+  const found = findCard(board, cardId);
+  if (!found) {
+    throw new Error(`Card ${cardId} not found`);
+  }
+  const cards = board.columns[found.column];
+  const index = cards.findIndex((c) => c.id === cardId);
+  if (to === "top" ? index === 0 : index === cards.length - 1) {
+    return board;
+  }
+  const rest = cards.filter((c) => c.id !== cardId);
+  return {
+    ...board,
+    columns: { ...board.columns, [found.column]: to === "top" ? [found.card, ...rest] : [...rest, found.card] },
+  };
+}
+
 const COPY_SUFFIX = " (copy)";
 
 // Inserts a copy right after the original, in the same column. The copy keeps notes, priority, due date,

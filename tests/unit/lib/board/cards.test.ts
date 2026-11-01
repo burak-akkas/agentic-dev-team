@@ -10,6 +10,7 @@ import {
   MAX_TITLE_LENGTH,
   moveCard,
   renameCard,
+  reorderCard,
   setPriority,
   updateCard,
   type Card,
@@ -17,6 +18,40 @@ import {
 } from "@/lib/board";
 
 const ids = (cards: { id: string }[]) => cards.map((c) => c.id);
+
+describe("reorderCard", () => {
+  function three() {
+    let board = addCard(emptyBoard(), "A", { id: "a" });
+    board = addCard(board, "B", { id: "b" });
+    board = addCard(board, "C", { id: "c" });
+    return addCard(board, "D", { id: "d", listId: "doing" });
+  }
+
+  it("moves a card to the top, leaving the rest and other lists alone", () => {
+    const board = three();
+    const next = reorderCard(board, "c", "top");
+    expect(ids(next.columns.todo)).toEqual(["c", "a", "b"]);
+    expect(next.columns.todo[0]).toBe(board.columns.todo[2]);
+    expect(next.columns.doing).toBe(board.columns.doing);
+    expect(ids(board.columns.todo)).toEqual(["a", "b", "c"]);
+  });
+
+  it("moves a card to the bottom", () => {
+    expect(ids(reorderCard(three(), "a", "bottom").columns.todo)).toEqual(["b", "c", "a"]);
+  });
+
+  it("returns the same board when already in position or alone", () => {
+    const board = three();
+    expect(reorderCard(board, "a", "top")).toBe(board);
+    expect(reorderCard(board, "c", "bottom")).toBe(board);
+    expect(reorderCard(board, "d", "top")).toBe(board);
+    expect(reorderCard(board, "d", "bottom")).toBe(board);
+  });
+
+  it("throws for an unknown card", () => {
+    expect(() => reorderCard(three(), "zzz", "top")).toThrow("Card zzz not found");
+  });
+});
 
 describe("addCard", () => {
   it("adds a trimmed card to the end of To do", () => {

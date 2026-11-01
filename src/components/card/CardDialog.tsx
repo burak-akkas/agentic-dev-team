@@ -40,6 +40,10 @@ export function CardDialog({
   onDuplicate,
   onArchive,
   onSaveTemplate,
+  onMoveToTop,
+  onMoveToBottom,
+  canMoveToTop = true,
+  canMoveToBottom = true,
   onClose,
   onChecklist,
   onUpdateBoard,
@@ -58,6 +62,11 @@ export function CardDialog({
   onArchive?: () => void;
   // Saves the saved card as a template of the board and reports the outcome (shown in the dialog).
   onSaveTemplate?: () => { ok: boolean; message: string };
+  // Reorder the card within its list; the dialog stays open and unsaved edits are neither lost nor saved.
+  onMoveToTop?: () => void;
+  onMoveToBottom?: () => void;
+  canMoveToTop?: boolean;
+  canMoveToBottom?: boolean;
   onClose: () => void;
   onUpdateBoard: (fn: (board: Board) => Board) => void;
 }) {
@@ -333,6 +342,28 @@ export function CardDialog({
           {onDuplicate && (
             <Button variant="ghost" size="sm" title="Duplicates the saved card (unsaved edits are not copied)" onClick={onDuplicate}>
               Duplicate
+            </Button>
+          )}
+          {onMoveToTop && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Moves the card to the top of its list (unsaved edits are kept but not saved)"
+              disabled={!canMoveToTop}
+              onClick={onMoveToTop}
+            >
+              Move to top
+            </Button>
+          )}
+          {onMoveToBottom && (
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Moves the card to the bottom of its list (unsaved edits are kept but not saved)"
+              disabled={!canMoveToBottom}
+              onClick={onMoveToBottom}
+            >
+              Move to bottom
             </Button>
           )}
           {onArchive && (

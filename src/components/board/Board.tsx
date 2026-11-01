@@ -26,6 +26,7 @@ import {
   listCards,
   moveCard,
   renameCard,
+  reorderCard,
   restoreCard,
   setView,
   toggleListCollapsed,
@@ -159,6 +160,7 @@ export function Board() {
 
   // Looked up in the unfiltered board so an active search never drops the open dialog.
   const open = openCardId ? findCard(board, openCardId) : undefined;
+  const openIndex = open ? listCards(board, open.column).findIndex((c) => c.id === open.card.id) : -1;
 
   // The card may have changed column (and remounted), so find its title button in the DOM after the commit.
   function closeDialog(focusCardId?: string) {
@@ -208,6 +210,10 @@ export function Board() {
             update((b) => duplicateCard(b, openCardId, { id }));
             setOpenCardId(id);
           }}
+          onMoveToTop={() => update((b) => reorderCard(b, openCardId, "top"))}
+          onMoveToBottom={() => update((b) => reorderCard(b, openCardId, "bottom"))}
+          canMoveToTop={openIndex > 0}
+          canMoveToBottom={openIndex >= 0 && openIndex < listCards(board, open.column).length - 1}
           onArchive={() => {
             update((b) => archiveCard(b, openCardId));
             closeDialog();

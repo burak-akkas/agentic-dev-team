@@ -451,6 +451,58 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  describe("empty archive", () => {
+    async function archiveCards(user: ReturnType<typeof userEvent.setup>, titles: string[]) {
+      for (const title of titles) {
+        await user.type(screen.getByLabelText("New card title"), title);
+        await user.click(screen.getByRole("button", { name: "Add card" }));
+        await user.click(await screen.findByRole("button", { name: title }));
+        const dialog = await screen.findByRole("dialog");
+        await user.selectOptions(within(dialog).getByLabelText("Status"), "Done");
+        await user.click(within(dialog).getByRole("button", { name: "Save" }));
+      }
+      await choose(user, "Archive done cards");
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Archive" }));
+    }
+
+    it("is disabled while the archive is empty", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      const item = screen.getByRole("menuitem", { name: "Empty archive" });
+      expect(item).toHaveAttribute("aria-disabled", "true");
+      await user.click(item);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("asks with the singular count and keeps the archive when cancelled or escaped", async () => {
+      const { user } = setup();
+      await archiveCards(user, ["Alpha"]);
+      await choose(user, "Empty archive");
+      expect(screen.getByRole("dialog")).toHaveTextContent(/delete 1 card from the archive\? this cannot be undone/i);
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      await choose(user, "Empty archive");
+      const dialog = screen.getByRole("dialog");
+      fireEvent(dialog, createEvent("cancel", dialog, { cancelable: true }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Archived (1)" })).toBeInTheDocument();
+    });
+
+    it("deletes all archived cards after confirming and disables the item again", async () => {
+      const { user } = setup();
+      await archiveCards(user, ["Alpha", "Beta"]);
+      await choose(user, "Empty archive");
+      expect(screen.getByRole("dialog")).toHaveTextContent(/delete 2 cards from the archive/i);
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Archived (0)" })).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(screen.getByRole("menuitem", { name: "Empty archive" })).toHaveAttribute("aria-disabled", "true");
+    });
+  });
+
   it("shows a single Board actions button instead of separate board buttons", () => {
     setup();
     const trigger = screen.getByRole("button", { name: "Board actions" });

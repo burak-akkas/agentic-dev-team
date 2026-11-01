@@ -3,6 +3,7 @@ import {
   addCard,
   archiveDone,
   deleteArchived,
+  emptyArchive,
   emptyBoard,
   filterCards,
   findCard,
@@ -80,5 +81,25 @@ describe("archive", () => {
     expect(addCard(board, "x", { id: "x" }).archive).toEqual(board.archive);
     expect(moveCard(board, "c", "done").archive).toEqual(board.archive);
     expect(filterCards(board, "zzz").archive).toEqual(board.archive);
+  });
+
+  describe("emptyArchive", () => {
+    it("deletes every archived card and leaves the lists alone", () => {
+      const board = archiveDone(seed());
+      const next = emptyArchive(board);
+      expect(next.archive).toEqual([]);
+      expect(next.columns).toEqual(board.columns);
+    });
+
+    it("does not mutate its input", () => {
+      const board = archiveDone(seed());
+      emptyArchive(board);
+      expect(ids(board.archive)).toEqual(["a", "b"]);
+    });
+
+    it("returns the same board when the archive is already empty", () => {
+      const board = seed();
+      expect(emptyArchive(board)).toBe(board);
+    });
   });
 });

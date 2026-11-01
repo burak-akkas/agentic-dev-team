@@ -9,6 +9,7 @@ import {
   boardLists,
   collapseAllLists,
   collapseEmptyLists,
+  emptyArchive,
   expandAllLists,
   hasDueDates,
   hasExpandedEmptyList,
@@ -21,7 +22,7 @@ import { useBoard, useBoards } from "@/hooks/useBoard";
 
 import { Button, ConfirmDialog, Dialog, Input, Menu, MoreIcon, Select } from "@/components/ui";
 
-type Dialogs = "create" | "rename" | "delete" | "archive" | null;
+type Dialogs = "create" | "rename" | "delete" | "archive" | "empty" | null;
 
 function BoardNameDialog({
   title,
@@ -109,6 +110,7 @@ export function BoardSwitcher() {
   const copyMarkdown = () => copyText("markdown", boardToMarkdown(board, current.name));
   const doneId = insightsListIds(board).done;
   const doneCount = doneId === undefined ? 0 : listCards(board, doneId).length;
+  const archivedCount = board.archive.length;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -151,6 +153,7 @@ export function BoardSwitcher() {
           },
           { label: "Sort lists by due date", disabled: !hasDueDates(board), onSelect: () => update(sortListsByDueDate) },
           { label: "Archive done cards", disabled: doneCount === 0, onSelect: () => setDialog("archive") },
+          { label: "Empty archive", disabled: archivedCount === 0, onSelect: () => setDialog("empty") },
         ]}
       />
       {copy && <CopyLinkToast result={copy.result} kind={copy.kind} onDismiss={dismissCopy} />}
@@ -173,6 +176,18 @@ export function BoardSwitcher() {
           confirmLabel="Archive"
           onConfirm={() => {
             update((b) => archiveDone(b));
+            close();
+          }}
+          onCancel={close}
+        />
+      )}
+      {dialog === "empty" && (
+        <ConfirmDialog
+          title="Empty archive"
+          message={`Permanently delete ${archivedCount} ${archivedCount === 1 ? "card" : "cards"} from the archive? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={() => {
+            update(emptyArchive);
             close();
           }}
           onCancel={close}

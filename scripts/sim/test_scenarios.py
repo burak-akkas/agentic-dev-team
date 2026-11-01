@@ -592,6 +592,95 @@ def watchdog_restarts_an_idle_queue_and_leaves_a_busy_one_alone():
     assert not st["events"]   # merging switched off: queued PRs wait quietly
 
 
+# --- conflict avoidance (overlap.sh, release-waiting.sh) --------------------------------------------
+def add_issue(st, n, labels, planned=None, label_at=None):
+    it = {"kind": "issue", "labels": list(labels), "comments": [], "state": "OPEN", "head": None}
+    if label_at:
+        it["label_at"] = {l: label_at for l in labels}
+    st["items"][str(n)] = it
+    if planned is not None:
+        st["clock"] += 1
+        c = dict(bot_comment("<!-- agent:files %s -->\n📁 Planned files" % __import__("json").dumps(planned)),
+                 id=len(st["comments_all"]) + 1, created_at="2020-01-01T00:00:%02dZ" % (st["clock"] % 60))
+        st["comments_all"].append(c)
+        it["comments"].append(c["id"])
+
+
+def in_flight():
+    st = make_state({
+        101: {"head": sha(0xa1), "labels": [], "branch": "agent/issue-1", "files": files("+x", name="src/a.ts")},
+        102: {"head": sha(0xb1), "labels": ["agent:needs-human"], "branch": "agent/issue-2", "files": files("+x", name="src/a.ts")},
+        103: {"head": sha(0xc1), "labels": [], "draft": True, "branch": "agent/issue-3", "files": files("+x", name="src/a.ts")},
+        104: {"head": sha(0xd1), "labels": [], "branch": "agent/issue-201", "files": files("+x", name="src/a.ts")},   # its own PR
+        105: {"head": sha(0xe1), "labels": [], "branch": "agent/issue-5", "files": files("+x", name="package-lock.json")},
+        106: {"head": sha(0xf1), "labels": [], "branch": "human/tweak", "files": files("+x", name="src/a.ts")},          # not an agent PR
+    })
+    add_issue(st, 202, ["agent:ready"], ["src/b.ts"])
+    add_issue(st, 203, ["agent:in-progress"], ["src/a.ts", "src/c.ts"])
+    add_issue(st, 204, ["agent:analyzed"], ["src/a.ts"])   # not started: doesn't count
+    return st
+
+
+@test
+def overlap_finds_in_flight_work_on_the_same_files():
+    st = in_flight()
+    add_issue(st, 201, ["agent:analyzed"], ["src/a.ts", "package-lock.json", "src/new.ts"])
+    out = run(st, script="overlap.sh", args=["201"])
+    assert out["_rc"] == 0 and out["_stdout"].strip().split("\n") == ["#101 src/a.ts", "#203 src/a.ts"], out["_stdout"] + out["_stderr"]
+    st = in_flight()
+    add_issue(st, 201, ["agent:analyzed"])   # no planned files: overlaps nothing
+    assert run(st, script="overlap.sh", args=["201"])["_stdout"].strip() == ""
+    st = in_flight()
+    add_issue(st, 201, ["agent:analyzed"], ["src/a.ts"])
+    st["fail_cmds"] = ["pulls/101/files"]
+    assert run(st, script="overlap.sh", args=["201"])["_rc"] != 0   # an error is never "no overlap"
+
+
+@test
+def waiting_issues_start_one_by_one_when_the_overlap_is_gone():
+    st = make_state({101: {"head": sha(0xa1), "labels": [], "branch": "agent/issue-1", "files": files("+x", name="src/a.ts"),
+                           "state": "MERGED"}})
+    add_issue(st, 201, ["agent:waiting"], ["src/a.ts"], label_at="2020-01-01T00:00:00Z")
+    add_issue(st, 202, ["agent:waiting"], ["src/a.ts", "src/b.ts"], label_at="2020-01-01T00:00:00Z")
+    add_issue(st, 203, ["agent:waiting"], ["src/z.ts"], label_at="2020-01-01T00:00:00Z")
+    st = run(st, script="release-waiting.sh", AGENT_CONFLICT_WAIT_MINUTES=10**9)
+    # #101 merged: #201 starts; #202 overlaps #201 now, so it keeps waiting; #203 never overlapped.
+    assert labels(st, 201) == ["agent:ready"] and labels(st, 202) == ["agent:waiting"] and labels(st, 203) == ["agent:ready"], st["_stdout"]
+    assert "nothing in flight" in "\n".join(bodies(st, 201))
+    # Waited too long: starts anyway, and says what it will likely conflict with.
+    st = run(st, script="release-waiting.sh", AGENT_CONFLICT_WAIT_MINUTES=1)
+    b = next(b for b in bodies(st, 202) if "Conflict avoidance:" in b)
+    assert labels(st, 202) == ["agent:ready"] and "starts anyway" in b and "#201" in b
+
+
+@test
+def the_architect_records_planned_files_and_waits_on_overlap():
+    import json as js, simlib
+    apply = "ln -s %s/scripts scripts\n" % simlib.REPO + steps("agent-architect.yml", "architect")["Apply state transition"]["run"]
+    def design(**env):
+        st = make_state({101: {"head": sha(0xa1), "labels": [], "branch": "agent/issue-1", "files": files("+x", name="src/a.ts")}})
+        add_issue(st, 201, ["agent:analyzed"])
+        st["items"]["201"]["comments"].append(len(st["comments_all"]) + 1)
+        st["comments_all"].append(dict(bot_comment("<!-- agent:architect -->\n## 🏛 Architect"), id=len(st["comments_all"]) + 1))
+        out = js.dumps({"decision": "ready", "risk": "low", "files": ["./src/a.ts", "src/b.ts"]})
+        return run(st, shell=apply, N=201, OUT=out, BEFORE=0, REQUIRE_APPROVAL="", SPLIT_ALLOWED="true", **env)
+    st = design(AVOID_CONFLICTS="true")
+    assert st["_rc"] == 0 and sorted(labels(st, 201)) == ["agent:waiting", "risk:low"], (labels(st, 201), st["_stderr"][-800:])
+    b = "\n".join(bodies(st, 201))
+    assert '<!-- agent:files ["src/a.ts","src/b.ts"] -->' in b and "#101: src/a.ts" in b
+    st = design(AVOID_CONFLICTS="")   # AGENT_AVOID_CONFLICTS=false
+    assert sorted(labels(st, 201)) == ["agent:ready", "risk:low"]
+
+
+@test
+def a_failed_overlap_check_keeps_waiting_and_retries():
+    st = make_state({101: {"head": sha(0xa1), "labels": [], "branch": "agent/issue-1", "files": files("+x", name="src/a.ts")}})
+    add_issue(st, 201, ["agent:waiting"], ["src/a.ts"], label_at="2020-01-01T00:00:00Z")
+    st["fail_cmds"] = ["pulls/101/files"]
+    st = run(st, script="release-waiting.sh", AGENT_CONFLICT_WAIT_MINUTES=10**9)
+    assert st["_rc"] == 0 and labels(st, 201) == ["agent:waiting"] and "trying again later" in st["_stdout"]
+
+
 # --- monorepos: path-scoped required checks and QA ------------------------------------------------
 def pr_with(name, **extra):
     return make_state({101: {"head": sha(0xa1), "files": files("+x", name=name),

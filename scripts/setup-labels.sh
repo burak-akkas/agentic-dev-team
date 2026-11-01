@@ -13,6 +13,7 @@ label "agent:needs-info"      "fbca04" "Analyst is waiting for answers from a hu
 label "agent:analyzed"        "c5def5" "Analysis done, Architect agent picks it up"
 label "agent:design-review"   "d4c5f9" "Design waiting for human approval (apply agent:ready to approve)"
 label "agent:ready"           "0e8a16" "Approved for implementation, Implementor agent picks it up"
+label "agent:waiting"         "fef2c0" "Waits for in-flight work on the same files to merge first, then starts"
 label "agent:in-progress"     "1d76db" "Implementor agent is working"
 label "agent:pr-open"         "5319e7" "A PR is open for this issue"
 label "agent:out-of-scope"    "cccccc" "Analyst judged this not actionable"

@@ -332,14 +332,14 @@ for _ in 1 2 3; do
 
   # Merge only if nothing landed on the base since the checks started: then the tested code is
   # exactly what lands. Inside the queue nothing else merges; this catches merges by humans.
-  if [ "$(behind "$head")" -gt 0 ]; then log "$base moved while the checks ran, updating again"; continue; fi
   # QA once, here: the checks passed, so this commit can merge, and nothing else merges while QA tests
   # it. A PR whose own changes QA already passed (e.g. a human merged into the base during QA, and the
   # loop updated it again) isn't tested again: CI covers the new combination.
   if [ "$qa_in_queue" = true ] && ! "$here/qa-passed.sh" "$pr" "$head" >/dev/null; then
     hold_for_qa "$head" "The required checks passed on #$pr$updated, so it can merge."
-    if [ "$(behind "$head")" -gt 0 ]; then log "$base moved while QA tested, updating again"; continue; fi
   fi
+  # Right before the merge (nothing slow in between: a human can still merge by hand meanwhile).
+  if [ "$(behind "$head")" -gt 0 ]; then log "$base moved while the checks (or QA) ran, updating again"; continue; fi
   refresh_token
   # gh can report an error after the merge itself succeeded (e.g. deleting the branch failed), so
   # the PR's state decides, not the exit code.

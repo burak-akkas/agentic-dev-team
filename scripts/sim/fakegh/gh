@@ -316,8 +316,9 @@ if cmd == "pr":
         bad = [k for k in required if not audit[k]] + (["draft"] if audit["draft"] else [])
         if bad:
             # A human merging by hand right after the Integrator's last freshness check: GitHub doesn't
-            # stop that without a branch rule. Reported apart from the queue's own mistakes.
-            race = bad == ["up_to_date"] and any(c > st.get("last_fresh_check", {}).get(h, 0) for c in st.get("human_merges", []))
+            # stop that without a branch rule. Reported apart from the queue's own mistakes. A human
+            # merge the simulated world records at the check's own call count happened after the check.
+            race = bad == ["up_to_date"] and any(c >= st.get("last_fresh_check", {}).get(h, 0) for c in st.get("human_merges", []))
             violation("human-merge-race" if race else "unsafe-merge", pr=int(n), problems=bad)
         it["state"] = "MERGED"
         st["base_version"] += 1

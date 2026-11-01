@@ -3,12 +3,20 @@
 import { useCallback, useId, useState, type FormEvent } from "react";
 import { boardLink, MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
 import { CopyLinkToast } from "@/components/app/CopyLinkToast";
-import { boardLists, collapseAllLists, expandAllLists, isListCollapsed } from "@/lib/board";
+import {
+  archiveDone,
+  boardLists,
+  collapseAllLists,
+  expandAllLists,
+  insightsListIds,
+  isListCollapsed,
+  listCards,
+} from "@/lib/board";
 import { useBoard, useBoards } from "@/hooks/useBoard";
 
 import { Button, ConfirmDialog, Dialog, Input, Menu, MoreIcon, Select } from "@/components/ui";
 
-type Dialogs = "create" | "rename" | "delete" | null;
+type Dialogs = "create" | "rename" | "delete" | "archive" | null;
 
 function BoardNameDialog({
   title,
@@ -93,6 +101,8 @@ export function BoardSwitcher() {
       setCopy({ url });
     }
   }
+  const doneId = insightsListIds(board).done;
+  const doneCount = doneId === undefined ? 0 : listCards(board, doneId).length;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -126,6 +136,7 @@ export function BoardSwitcher() {
             disabled: !board.collapsedLists?.length,
             onSelect: () => update(expandAllLists),
           },
+          { label: "Archive done cards", disabled: doneCount === 0, onSelect: () => setDialog("archive") },
         ]}
       />
       {copy && <CopyLinkToast result={copy} onDismiss={dismissCopy} />}
@@ -139,6 +150,18 @@ export function BoardSwitcher() {
           initialName={current.name}
           onSubmit={(name) => renameBoard(current.id, name)}
           onClose={close}
+        />
+      )}
+      {dialog === "archive" && (
+        <ConfirmDialog
+          title="Archive done cards"
+          message={`Archive all ${doneCount} ${doneCount === 1 ? "card" : "cards"} in the done list? You can restore them from the archive.`}
+          confirmLabel="Archive"
+          onConfirm={() => {
+            update((b) => archiveDone(b));
+            close();
+          }}
+          onCancel={close}
         />
       )}
       {dialog === "delete" && (

@@ -30,6 +30,9 @@ from simlib import BOT, files, locked, read, sha
 DEFAULTS = dict(
     # the agents (scripted LLM outcomes)
     review_ok=0.8, qa_ok=0.85, keep_edits=0.6, impl_blocked=0.05, lead_fix=0.3,
+    # how long an agent works (real seconds, random up to this) before it acts: real agents take
+    # minutes, and races between runs only show up when their work overlaps
+    agent_time=0.0,
     # CI on each new commit: red, hanging (never finishes), never reporting, slow (pending for a while)
     ci_fail=0.1, ci_hang=0.03, ci_none=0.0, ci_slow=0.2,
     # merging and the base branch
@@ -76,7 +79,8 @@ class Team:
         self.rng = random.Random(seed)
         self.seed, self.sequential, self.keep = seed, sequential, keep
         self.repo = legacy_dir or simlib.REPO
-        self.legacy = bool(legacy_dir)
+        # An older ref with the merge queue runs like the current code; one without it, with its merge gate.
+        self.legacy = bool(legacy_dir) and not os.path.exists(os.path.join(legacy_dir, ".github/workflows/agent-integrator.yml"))
         self.bin = os.path.join(self.repo, "scripts/agents")
         self.reviewer_steps = simlib.steps("agent-reviewer.yml", "review", self.repo)
         self.merge_steps = simlib.steps("agent-merge.yml", "merge", self.repo)
@@ -85,7 +89,7 @@ class Team:
         self.f = os.path.join(self.dir, "state.json")
         self.lock = threading.Lock()
         self.groups = {}
-        self.stats = dict(jobs=0, reviews=0, qa=0, impl=0, lead=0, integrator_runs=0, watchdog_runs=0, watchdog_kicks=0,
+        self.stats = dict(jobs=0, reviews=0, qa=0, impl=0, impl_nochange=0, lead=0, integrator_runs=0, watchdog_runs=0, watchdog_kicks=0,
                           dropped_pending=0, lost_webhooks=0, duplicated=0, killed=0, failed_jobs=0, human_actions=0)
         self.failures = []
         self.step = 0
@@ -173,6 +177,7 @@ class Team:
         if out.get("stop") == "true":
             return
         self.stats["reviews"] += 1
+        self.work()
         verdict = "approve" if self.rng.random() < self.p["review_ok"] else "request-changes"
         self.comment(n, "<!-- agent:reviewer -->\n**Verdict:** %s" % verdict)
         ctx.update({"steps.guard.outputs.total": out.get("total", 0), "steps.guard.outputs.round": out.get("round", 1)})
@@ -184,6 +189,7 @@ class Team:
         if so.strip():
             return
         self.stats["qa"] += 1
+        self.work()
         st = read(self.f)
         mine = [c["body"] for c in st["comments_all"] if c["id"] in st["items"][n]["comments"]]
         last_lead = max([i for i, b in enumerate(mine) if "<!-- agent:lead -->" in b] or [-1])
@@ -200,23 +206,38 @@ class Team:
     def implementor(self, job, n):
         self.stats["impl"] += 1
         self.sh(job, "transition.sh", [n])   # Prepare: clears agent:changes-requested
+        self.work()   # the label is already cleared while the Implementor works (the window the sweep must respect)
         blocked = self.rng.random() < self.p["impl_blocked"]
+        nothing_to_do = False
         with locked(self.f) as st:
             it = st["items"][n]
+            # Why it was called: the latest of a rejection (review/QA) or a merge-queue notice. Asked to fix
+            # a conflict that is already gone (and the branch is up to date), the real Implementor reports
+            # no-change, which goes to the Lead.
+            mine = [c["body"] for c in st["comments_all"] if c["id"] in it["comments"]]
+            why = next((b for b in reversed(mine) if "<!-- agent:merge -->" in b or "Verdict:** request-changes" in b
+                        or ("<!-- agent:qa -->" in b and "Verdict:** fail" in b)), "")
+            behind = st["shas"][it["head"]]["base_version"] < st["base_version"]
+            red = "checks failed" in why.lower() or "<!-- agent:integration-failed -->" in why
+            if not blocked and "<!-- agent:merge -->" in why and not red and not it.get("conflict") and not behind:
+                nothing_to_do = True
             if not blocked and st["shas"][it["head"]]["base_version"] < st.get("workflow_version", -1):
                 blocked = self.rng.random() < 0.5   # pushing a merge that brings in workflow changes may be refused
-            if not blocked:
+            if not blocked and not nothing_to_do:
                 old = st["shas"][it["head"]]["files"]
                 keep = it.get("conflict") and self.rng.random() < self.p["keep_edits"]
                 fls = old if keep else [dict(old[0], patch=old[0]["patch"] + "\n+fix%d" % st.get("sha_counter", 0))]
                 h = self.new_sha(st, st["base_version"], fls)   # always merges the base before pushing
                 it["head"], it["conflict"] = h, False
                 st["events"].append(["synchronize", n, h, "implementor"])
-        if blocked:
+        if nothing_to_do:
+            self.count("impl_nochange")
+        if blocked or nothing_to_do:
             self.sh(job, "transition.sh", [n, "agent:needs-decision"])
 
     def lead(self, job, n):
         self.stats["lead"] += 1
+        self.work()
         st = read(self.f)
         used = sum(1 for c in st["comments_all"] if c["id"] in st["items"][n]["comments"] and "<!-- agent:lead -->" in c["body"])
         if used >= 3:
@@ -266,6 +287,11 @@ class Team:
         so, _ = self.sh(job, "watchdog.sh", [])
         if "restarting" in so:
             self.stats["watchdog_kicks"] += 1
+
+    def work(self):
+        """An agent thinking: real time passes while other runs go on."""
+        if self.p["agent_time"]:
+            time.sleep(self.rng.uniform(0, self.p["agent_time"]))
 
     def count(self, k):
         with self.lock:

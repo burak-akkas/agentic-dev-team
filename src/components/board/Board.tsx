@@ -29,6 +29,7 @@ import {
   reorderCard,
   restoreCard,
   setView,
+  sortListByTitle,
   toggleListCollapsed,
   undoArchive,
   updateCard,
@@ -53,7 +54,7 @@ import { TableView } from "@/components/views/TableView";
 import { TemplatesPanel } from "@/components/panels/TemplatesPanel";
 import { UndoToast } from "./UndoToast";
 import { ViewSwitch } from "@/components/views/ViewSwitch";
-import { ArchiveIcon, Button } from "@/components/ui";
+import { ArchiveIcon, Button, SortIcon } from "@/components/ui";
 
 export function Board() {
   const [board, update] = useBoard();
@@ -356,6 +357,16 @@ export function Board() {
                 role={id === doneId ? "done" : id === doingId ? "doing" : undefined}
                 onToggleCollapsed={() => update((b) => toggleListCollapsed(b, id))}
               >
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  aria-label={`Sort ${title} by title`}
+                  title={`Sort ${title} by title`}
+                  disabled={listCards(board, id).length < 2}
+                  onClick={() => update((b) => sortListByTitle(b, id))}
+                >
+                  <SortIcon />
+                </Button>
                 <Button
                   size="xs"
                   variant="ghost"

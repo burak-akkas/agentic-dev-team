@@ -5,4 +5,4 @@ export { ArchiveIcon, ChevronIcon, GearIcon, KeyboardIcon, MoreIcon, SortIcon } 
 export { Input, Select, Textarea, type FieldSize } from "./Input";
 export { Menu, type MenuItem } from "./Menu";
 export { Surface } from "./Surface";
-export { Toast } from "./Toast";
+export { Toast, ToastAction } from "./Toast";

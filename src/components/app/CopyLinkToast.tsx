@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Toast } from "@/components/ui";
+import { Toast, ToastAction } from "@/components/ui";
 
 export const COPY_TOAST_MS = 3000;
 
@@ -58,13 +58,7 @@ export function CopyLinkToast({
           {result.text}
         </code>
       )}
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="rounded px-2 py-1 font-semibold underline outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        Dismiss
-      </button>
+      <ToastAction onClick={onDismiss}>Dismiss</ToastAction>
     </Toast>
   );
 }

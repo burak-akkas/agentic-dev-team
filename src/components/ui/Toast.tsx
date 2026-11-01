@@ -10,3 +10,15 @@ export function Toast({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
+export function ToastAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded px-2 py-1 font-semibold underline outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      {children}
+    </button>
+  );
+}

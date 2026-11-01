@@ -56,6 +56,39 @@ describe("<Board /> checklist", () => {
     expect(within(dialog).getAllByRole("checkbox")).toHaveLength(1);
   });
 
+  it("Uncheck all is disabled until an item is ticked, then unticks everything", async () => {
+    seed(["a", "b"]);
+    const user = userEvent.setup();
+    render(<Board />);
+    const dialog = await openTask(user);
+    const button = within(dialog).getByRole("button", { name: "Uncheck all" });
+    expect(button).toBeDisabled();
+
+    await user.click(within(dialog).getByRole("checkbox", { name: "a" }));
+    await user.click(within(dialog).getByRole("checkbox", { name: "b" }));
+    expect(button).toBeEnabled();
+
+    await user.click(button);
+    expect(within(dialog).getAllByRole("checkbox")).toHaveLength(2);
+    for (const box of within(dialog).getAllByRole("checkbox")) {
+      expect(box).not.toBeChecked();
+    }
+    expect(button).toBeDisabled();
+  });
+
+  it("Uncheck all works from the keyboard and is disabled for an empty checklist", async () => {
+    seed(["a"]);
+    const user = userEvent.setup();
+    render(<Board />);
+    const dialog = await openTask(user);
+    await user.click(within(dialog).getByRole("checkbox", { name: "a" }));
+    within(dialog).getByRole("button", { name: "Uncheck all" }).focus();
+    await user.keyboard("{Enter}");
+    expect(within(dialog).getByRole("checkbox", { name: "a" })).not.toBeChecked();
+    await user.click(within(dialog).getByRole("button", { name: 'Delete checklist item "a"' }));
+    expect(within(dialog).getByRole("button", { name: "Uncheck all" })).toBeDisabled();
+  });
+
   it("shows an error for empty items and keeps the dialog open", async () => {
     seed();
     const user = userEvent.setup();

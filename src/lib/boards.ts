@@ -108,6 +108,16 @@ export function resolveBoardId(list: { boards: { id: string }[]; currentId: stri
   return list.boards.some((b) => b.id === param) ? param : list.boards[0].id;
 }
 
+// The relative URL that selects a board. Relative, so it works under any sub-path.
+export function boardQuery(id: string): string {
+  return `?board=${encodeURIComponent(id)}`;
+}
+
+// The absolute link to a board, resolved against the page's current URL (base).
+export function boardLink(id: string, base: string): string {
+  return new URL(boardQuery(id), base).href;
+}
+
 export function currentEntry(list: BoardList): BoardEntry {
   return list.boards.find((b) => b.id === list.currentId) ?? list.boards[0];
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
-import { MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
+import { useCallback, useId, useState, type FormEvent } from "react";
+import { boardLink, MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
+import { CopyLinkToast } from "@/components/app/CopyLinkToast";
 import {
   archiveDone,
   boardLists,
@@ -88,6 +89,18 @@ export function BoardSwitcher() {
   const [dialog, setDialog] = useState<Dialogs>(null);
   const current = boards.find((b) => b.id === currentId) ?? boards[0];
   const close = () => setDialog(null);
+  const [copy, setCopy] = useState<"copied" | { url: string } | null>(null);
+  const dismissCopy = useCallback(() => setCopy(null), []);
+
+  async function copyLink() {
+    const url = boardLink(currentId, window.location.href);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopy("copied");
+    } catch {
+      setCopy({ url });
+    }
+  }
   const doneId = insightsListIds(board).done;
   const doneCount = doneId === undefined ? 0 : listCards(board, doneId).length;
 
@@ -112,6 +125,7 @@ export function BoardSwitcher() {
           { label: "New board", onSelect: () => setDialog("create") },
           { label: "Rename board", onSelect: () => setDialog("rename") },
           { label: "Duplicate board", onSelect: duplicateBoard },
+          { label: "Copy board link", onSelect: copyLink },
           { label: "Delete board", disabled: boards.length <= 1, onSelect: () => setDialog("delete") },
           {
             label: "Collapse all lists",
@@ -126,6 +140,7 @@ export function BoardSwitcher() {
           { label: "Archive done cards", disabled: doneCount === 0, onSelect: () => setDialog("archive") },
         ]}
       />
+      {copy && <CopyLinkToast result={copy} onDismiss={dismissCopy} />}
       {dialog === "create" && (
         <BoardNameDialog title="New board" submitLabel="Create" initialName="" onSubmit={createBoard} onClose={close} />
       )}

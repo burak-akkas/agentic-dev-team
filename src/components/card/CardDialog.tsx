@@ -38,6 +38,7 @@ export function CardDialog({
   onSave,
   onDelete,
   onDuplicate,
+  onArchive,
   onSaveTemplate,
   onMoveToTop,
   onMoveToBottom,
@@ -57,6 +58,8 @@ export function CardDialog({
   onDelete: () => void;
   // Duplicates the saved card (unsaved edits in this dialog are not copied).
   onDuplicate?: () => void;
+  // Archives the saved card (unsaved edits in this dialog are not saved).
+  onArchive?: () => void;
   // Saves the saved card as a template of the board and reports the outcome (shown in the dialog).
   onSaveTemplate?: () => { ok: boolean; message: string };
   // Reorder the card within its list; the dialog stays open and unsaved edits are neither lost nor saved.
@@ -361,6 +364,11 @@ export function CardDialog({
               onClick={onMoveToBottom}
             >
               Move to bottom
+            </Button>
+          )}
+          {onArchive && (
+            <Button variant="ghost" size="sm" title="Archives the saved card (unsaved edits are not saved)" onClick={onArchive}>
+              Archive
             </Button>
           )}
           {onSaveTemplate && (

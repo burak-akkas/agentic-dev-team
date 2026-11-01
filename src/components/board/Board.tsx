@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
   addCard,
+  archiveCard,
   archiveList,
   backgroundImageCss,
   boardLabels,
@@ -213,6 +214,10 @@ export function Board() {
           onMoveToBottom={() => update((b) => reorderCard(b, openCardId, "bottom"))}
           canMoveToTop={openIndex > 0}
           canMoveToBottom={openIndex >= 0 && openIndex < listCards(board, open.column).length - 1}
+          onArchive={() => {
+            update((b) => archiveCard(b, openCardId));
+            closeDialog();
+          }}
           onSaveTemplate={() => {
             try {
               const id = crypto.randomUUID();

@@ -89,6 +89,26 @@ describe("<Board /> checklist", () => {
     expect(within(dialog).getByRole("button", { name: "Uncheck all" })).toBeDisabled();
   });
 
+  it("Move completed to bottom is disabled when sorted, and reorders via click or keyboard", async () => {
+    seed(["a", "b", "c"]);
+    const user = userEvent.setup();
+    render(<Board />);
+    const dialog = await openTask(user);
+    const button = within(dialog).getByRole("button", { name: "Move completed to bottom" });
+    expect(button).toBeDisabled();
+
+    await user.click(within(dialog).getByRole("checkbox", { name: "a" }));
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(within(dialog).getAllByRole("checkbox").map((c) => c.closest("label")?.textContent)).toEqual(["b", "c", "a"]);
+    expect(button).toBeDisabled();
+
+    await user.click(within(dialog).getByRole("checkbox", { name: "b" }));
+    button.focus();
+    await user.keyboard("{Enter}");
+    expect(within(dialog).getAllByRole("checkbox").map((c) => c.closest("label")?.textContent)).toEqual(["c", "b", "a"]);
+  });
+
   it("Delete completed is disabled until an item is ticked, then removes only the ticked items", async () => {
     seed(["a", "b", "c"]);
     const user = userEvent.setup();

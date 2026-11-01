@@ -107,6 +107,21 @@ export function uncheckAllChecklistItems(board: Board, cardId: string): Board {
   );
 }
 
+// True when some ticked item comes before an unticked one.
+export function hasCompletedItemsAboveOpen(items: ChecklistItem[]): boolean {
+  const firstDone = items.findIndex((item) => item.done);
+  return firstDone !== -1 && items.slice(firstDone).some((item) => !item.done);
+}
+
+// Moves ticked items below unticked ones, keeping the order within each group. Returns the same board when already so.
+export function moveCompletedChecklistItemsToBottom(board: Board, cardId: string): Board {
+  return changeChecklist(board, cardId, (items) =>
+    hasCompletedItemsAboveOpen(items)
+      ? [...items.filter((item) => !item.done), ...items.filter((item) => item.done)]
+      : items,
+  );
+}
+
 // Removes every ticked item. Returns the same board when no item is ticked.
 export function deleteCompletedChecklistItems(board: Board, cardId: string): Board {
   return changeChecklist(board, cardId, (items) =>

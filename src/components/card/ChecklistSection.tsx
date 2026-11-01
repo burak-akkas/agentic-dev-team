@@ -7,8 +7,10 @@ import {
   deleteChecklistItem,
   deleteCompletedChecklistItems,
   editChecklistItem,
+  hasCompletedItemsAboveOpen,
   MAX_CHECKLIST_ITEM_LENGTH,
   moveChecklistItem,
+  moveCompletedChecklistItemsToBottom,
   normalizeChecklistText,
   toggleChecklistItem,
   uncheckAllChecklistItems,
@@ -78,6 +80,14 @@ export function ChecklistSection({
           )}
         </h3>
         <div className="flex flex-wrap items-center justify-end gap-1">
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={!hasCompletedItemsAboveOpen(items)}
+            onClick={() => onChange((b) => moveCompletedChecklistItemsToBottom(b, card.id))}
+          >
+            Move completed to bottom
+          </Button>
           <Button
             size="xs"
             variant="ghost"

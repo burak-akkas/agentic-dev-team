@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { addCard, addList, emptyBoard, moveCard, setWipLimit } from "@/lib/board";
+import { addCard, addList, emptyBoard, moveCard, setDueDate, setWipLimit } from "@/lib/board";
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/board/Board";
@@ -104,6 +104,42 @@ describe("list name tooltip", () => {
     await user.click(screen.getByRole("button", { name: `Collapse ${LONG}` }));
     const heading = screen.getByRole("heading", { name: new RegExp(`^${LONG}`) });
     expect(within(heading).getByText(LONG)).toHaveAttribute("title", LONG);
+  });
+});
+
+describe("overdue badge", () => {
+  beforeEach(() => resetBoardStore());
+
+  function overdueBoard() {
+    let board = addCard(emptyBoard(), "Late", { id: "l" });
+    board = addCard(board, "Later", { id: "m" });
+    board = addCard(board, "Fine", { id: "f" });
+    board = setDueDate(board, "l", "2000-01-01");
+    board = setDueDate(board, "m", "2000-01-02");
+    saveBoard(board);
+  }
+
+  it("shows 'N overdue' next to the count and hides it at zero", () => {
+    overdueBoard();
+    render(<Board />);
+    expect(within(column("To do")).getByText("2 overdue")).toBeInTheDocument();
+    expect(within(column("Doing")).queryByText(/overdue/)).not.toBeInTheDocument();
+  });
+
+  it("stays visible when the list is collapsed or filtered", async () => {
+    const user = userEvent.setup();
+    overdueBoard();
+    render(<Board />);
+    await user.type(screen.getByLabelText("Search cards"), "Fine");
+    expect(within(column("To do")).getByText("2 overdue")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Collapse To do" }));
+    expect(within(column("To do")).getByText("2 overdue")).toBeInTheDocument();
+  });
+
+  it("is never shown on the done list", () => {
+    saveBoard(setDueDate(moveCard(addCard(emptyBoard(), "Old", { id: "o" }), "o", "done"), "o", "2000-01-01"));
+    render(<Board />);
+    expect(screen.queryByText(/overdue/)).not.toBeInTheDocument();
   });
 });
 

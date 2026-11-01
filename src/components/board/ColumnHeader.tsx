@@ -14,6 +14,8 @@ interface ColumnHeaderProps {
   onToggleCollapsed: () => void;
   // Set for the board's designated in-progress or done list (see the Insights panel).
   role?: "doing" | "done";
+  // The real number of overdue cards in the column; the badge is hidden at 0.
+  overdue?: number;
   children?: ReactNode;
 }
 
@@ -25,6 +27,7 @@ export function ColumnHeader({
   collapsed,
   onToggleCollapsed,
   role,
+  overdue = 0,
   children,
 }: ColumnHeaderProps) {
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -56,7 +59,13 @@ export function ColumnHeader({
     </span>
   );
 
-  const toggleLabel = `${collapsed ? "Expand" : "Collapse"} ${title}`;
+  const overdueBadge = overdue > 0 && (
+    <span className="rounded-full bg-red-100 px-2 text-xs font-medium text-red-800 dark:bg-red-950 dark:text-red-200">
+      {overdue} overdue
+    </span>
+  );
+
+  const toggleLabel =`${collapsed ? "Expand" : "Collapse"} ${title}`;
   const toggleButton = (
     <Button
       ref={toggleRef}
@@ -83,6 +92,7 @@ export function ColumnHeader({
             {limit === undefined ? total : `${total} / ${limit}`}
           </span>
         </h2>
+        {overdueBadge}
         {roleMarker}
         {toggleButton}
       </div>
@@ -98,6 +108,7 @@ export function ColumnHeader({
             {limit === undefined ? total : `${total} / ${limit}`}
           </span>
         </h2>
+        {overdueBadge}
         {roleMarker}
         {status.state === "at" && (
           <span className="text-xs font-medium text-amber-800 dark:text-amber-300">At limit</span>

@@ -35,6 +35,12 @@ export function boardStats(board: Board, today: string = todayString()): BoardSt
   return { total, done, percentDone: total === 0 ? 0 : Math.round((done / total) * 100), overdue, highOpen };
 }
 
+// How many cards in one list are overdue (always 0 for the done list).
+export function listOverdueCount(board: Board, listId: string, today: string = todayString()): number {
+  const doneId = insightsListIds(board).done ?? null;
+  return listCards(board, listId).filter((c) => isOverdue(c, listId, today, doneId)).length;
+}
+
 // Only the overdue cards (due before today, not in the done list).
 export function filterOverdue(board: Board, today: string = todayString()): Board {
   const doneId = insightsListIds(board).done ?? null;

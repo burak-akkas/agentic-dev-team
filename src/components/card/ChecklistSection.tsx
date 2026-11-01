@@ -5,6 +5,7 @@ import {
   addChecklistItem,
   checklistProgress,
   deleteChecklistItem,
+  deleteCompletedChecklistItems,
   editChecklistItem,
   MAX_CHECKLIST_ITEM_LENGTH,
   moveChecklistItem,
@@ -76,14 +77,24 @@ export function ChecklistSection({
             </span>
           )}
         </h3>
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={!progress || progress.done === 0}
-          onClick={() => onChange((b) => uncheckAllChecklistItems(b, card.id))}
-        >
-          Uncheck all
-        </Button>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={!progress || progress.done === 0}
+            onClick={() => onChange((b) => uncheckAllChecklistItems(b, card.id))}
+          >
+            Uncheck all
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={!progress || progress.done === 0}
+            onClick={() => onChange((b) => deleteCompletedChecklistItems(b, card.id))}
+          >
+            Delete completed
+          </Button>
+        </div>
       </div>
       {items.length > 0 && (
         <ul aria-label="Checklist items" className="flex flex-col gap-1">

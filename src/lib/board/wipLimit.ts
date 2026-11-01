@@ -1,4 +1,4 @@
-import { boardLists } from "./lists";
+import { boardLists, listCards } from "./lists";
 import { MAX_WIP_LIMIT } from "./types";
 import type { Board, ColumnId, WipLimitResult, WipState } from "./types";
 
@@ -61,6 +61,22 @@ export function collapseAllLists(board: Board): Board {
     return board;
   }
   return { ...board, collapsedLists: lists.map((l) => l.id) };
+}
+
+// True when some list has no cards and is not collapsed yet (archived cards live outside the columns).
+export function hasExpandedEmptyList(board: Board): boolean {
+  return boardLists(board).some((l) => listCards(board, l.id).length === 0 && !isListCollapsed(board, l.id));
+}
+
+// Collapses every expanded list without cards, keeping already collapsed ids. Returns the same board when there are none.
+export function collapseEmptyLists(board: Board): Board {
+  if (!hasExpandedEmptyList(board)) {
+    return board;
+  }
+  const added = boardLists(board)
+    .filter((l) => listCards(board, l.id).length === 0 && !isListCollapsed(board, l.id))
+    .map((l) => l.id);
+  return { ...board, collapsedLists: [...(board.collapsedLists ?? []), ...added] };
 }
 
 // Expands every list by removing the key. Returns the same board when nothing is collapsed.

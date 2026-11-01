@@ -33,6 +33,9 @@ on:
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
   AGENT_BOT_ID: ${{ vars.AGENT_BOT_ID }}   # the App's bot user id: unlike its login, it survives renames
+  AGENT_AVOID_CONFLICTS: ${{ vars.AGENT_AVOID_CONFLICTS }}           # conflict avoidance (overlap.sh, release-waiting.sh)
+  AGENT_CONFLICT_IGNORE: ${{ vars.AGENT_CONFLICT_IGNORE }}
+  AGENT_CONFLICT_WAIT_MINUTES: ${{ vars.AGENT_CONFLICT_WAIT_MINUTES }}
 
 jobs:
   watch:

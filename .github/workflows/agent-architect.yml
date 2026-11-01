@@ -74,7 +74,7 @@ jobs:
             --max-turns 40
             ${{ vars.AGENT_MODEL && format('--model {0}', vars.AGENT_MODEL) || '' }}
             --allowedTools "Read,Grep,Glob,Write,Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh issue comment:*),Bash(gh pr list:*),Bash(git log:*)"
-            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["ready","needs-human","split"]},"risk":{"type":"string","enum":["low","medium","high"]},"subtasks":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"},"acceptance_criteria":{"type":"array","items":{"type":"string"}},"depends_on":{"type":"array","items":{"type":"integer"}}},"required":["title","summary","acceptance_criteria"]}}},"required":["decision","risk"]}'
+            --json-schema '{"type":"object","properties":{"decision":{"type":"string","enum":["ready","needs-human","split"]},"risk":{"type":"string","enum":["low","medium","high"]},"subtasks":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"summary":{"type":"string"},"acceptance_criteria":{"type":"array","items":{"type":"string"}},"depends_on":{"type":"array","items":{"type":"integer"}}},"required":["title","summary","acceptance_criteria"]}},"files":{"type":"array","items":{"type":"string"}}},"required":["decision","risk"]}'
 
       - name: Report denied tools
         if: ${{ !cancelled() && steps.agent.outputs.execution_file != '' }}
@@ -96,6 +96,8 @@ jobs:
           REQUIRE_APPROVAL: ${{ vars.AGENT_REQUIRE_DESIGN_APPROVAL }}
           SPLIT_ALLOWED: ${{ (vars.AGENT_SPLIT == 'false' || contains(github.event.issue.body, '<!-- agent:sub-issue')) && 'false' || 'true' }}
           AGENT_MAX_SUBISSUES: ${{ vars.AGENT_MAX_SUBISSUES || '5' }}
+          AVOID_CONFLICTS: ${{ vars.AGENT_AVOID_CONFLICTS != 'false' && 'true' || '' }}
+          AGENT_CONFLICT_IGNORE: ${{ vars.AGENT_CONFLICT_IGNORE }}
         run: |
           decision=$(echo "${OUT:-null}" | jq -r '.decision // "error"')
           after=$(scripts/agents/count-comments.sh "$N" architect)
@@ -108,6 +110,12 @@ jobs:
             for old in low medium high; do gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$N/labels/risk:$old" >/dev/null 2>&1 || true; done
             gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$N/labels" -f "labels[]=risk:$risk" >/dev/null ;;
           esac
+          # The files the design plans to change (the Changes table), for conflict avoidance (overlap.sh).
+          files=$(echo "${OUT:-null}" | jq -c '[.files[]? | select(type == "string" and length > 0) | sub("^\\./"; "")] | unique')
+          if [ "$files" != "[]" ] && [ "$decision" != "split" ]; then
+            gh issue comment "$N" --body "<!-- agent:files $files -->
+          📁 Planned files: $(echo "$files" | jq -r 'map("`" + . + "`") | join(", ")')" >/dev/null
+          fi
           if [ "$decision" = "split" ] && [ "$SPLIT_ALLOWED" != "true" ]; then
             echo "::warning::Architect chose split, but splitting is not allowed here"
             decision=needs-human
@@ -129,7 +137,17 @@ jobs:
               scripts/agents/transition.sh "$N" agent:design-review
               gh issue comment "$N" --body "👀 Design is waiting for human approval (risk: **$risk**). Apply \`agent:ready\` to start implementation, or comment and re-apply \`agent:analyzed\` to redesign."
             elif [ "$decision" = "ready" ] && [ "$risk" != "high" ]; then
-              scripts/agents/transition.sh "$N" agent:ready
+              # Conflict avoidance: if in-flight work changes the same files, wait for it to merge and start
+              # from code that contains it (release-waiting.sh starts it). A failed check never blocks.
+              blockers=""
+              if [ "$AVOID_CONFLICTS" = true ]; then blockers=$(scripts/agents/overlap.sh "$N" 2>/dev/null) || blockers=""; fi
+              if [ -n "$blockers" ]; then
+                scripts/agents/transition.sh "$N" agent:waiting
+                gh issue comment "$N" --body "⏸️ **Conflict avoidance:** the design changes files that work in flight changes too, so this waits until that work merges, then starts from the latest code (at most \`AGENT_CONFLICT_WAIT_MINUTES\`, default 120):
+          $(echo "$blockers" | sed -E 's/^(#[0-9]+) (.*)$/- \1: \2/')"
+              else
+                scripts/agents/transition.sh "$N" agent:ready
+              fi
             else
               scripts/agents/transition.sh "$N" agent:needs-decision
             fi
@@ -141,6 +159,7 @@ jobs:
           case "$next" in
             agent:ready)         msg="design ready, risk **$risk**, implementing" ;;
             agent:design-review) msg="design ready, risk **$risk**, waiting for human approval" ;;
+            agent:waiting)       msg="design ready, risk **$risk**, ⏸️ waiting for $(echo "$blockers" | cut -d' ' -f1 | paste -sd' ' -) to merge first (same files)" ;;
             *)                   msg="risk **$risk**, handed to the Lead" ;;
           esac
           scripts/agents/progress.sh "$N" "🏛 **Architect**: $msg"

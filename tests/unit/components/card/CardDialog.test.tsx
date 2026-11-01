@@ -33,6 +33,12 @@ function setup(overrides: Partial<Card> = {}, onDuplicate?: () => void, onArchiv
   return { onSave, onDelete, onClose, onUpdateBoard, user: userEvent.setup() };
 }
 
+function renderCopy(onCopyText: () => Promise<"copied" | { text: string }>) {
+  render(
+    <CardDialog card={card} column="todo" onSave={vi.fn()} onDelete={vi.fn()} onCopyText={onCopyText} onClose={vi.fn()} onUpdateBoard={vi.fn()} />,
+  );
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("<CardDialog /> size", () => {
@@ -231,6 +237,40 @@ describe("<CardDialog />", () => {
     await user.keyboard("{Enter}");
     await user.keyboard(" ");
     expect(onDuplicate).toHaveBeenCalledTimes(3);
+  });
+
+  it("copies as text with the mouse and with the keyboard", async () => {
+    const onCopyText = vi.fn().mockResolvedValue("copied");
+    const user = userEvent.setup();
+    renderCopy(onCopyText);
+    await user.click(screen.getByRole("button", { name: "Copy as text" }));
+    expect(onCopyText).toHaveBeenCalledTimes(1);
+    screen.getByRole("button", { name: "Copy as text" }).focus();
+    await user.keyboard("{Enter}");
+    expect(onCopyText).toHaveBeenCalledTimes(2);
+  });
+
+  it("confirms a successful copy", async () => {
+    const user = userEvent.setup();
+    renderCopy(vi.fn().mockResolvedValue("copied"));
+    await user.click(screen.getByRole("button", { name: "Copy as text" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Copied");
+  });
+
+  it("shows the text to copy by hand when copying fails, and can be dismissed", async () => {
+    const user = userEvent.setup();
+    renderCopy(vi.fn().mockResolvedValue({ text: "Write docs\n\n[ ] one" }));
+    await user.click(screen.getByRole("button", { name: "Copy as text" }));
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Copy the text by hand");
+    expect(status).toHaveTextContent("[ ] one");
+    await user.click(within(status).getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("has no Copy as text button without the callback", () => {
+    setup();
+    expect(screen.queryByRole("button", { name: "Copy as text" })).not.toBeInTheDocument();
   });
 
   it("archives with the mouse and the keyboard, and explains that unsaved edits are not saved", async () => {

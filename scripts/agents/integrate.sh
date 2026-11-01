@@ -29,6 +29,7 @@
 # AGENT_QA_IN_QUEUE (true: QA once, at the front of the queue), AGENT_QA_ON_BASE_UPDATE (true: QA
 # after each update), AGENT_AUTO_MERGE_HIGH_RISK, AGENT_PROTECTED_PATHS
 # (default .github/,scripts/,templates/), AGENT_INTEGRATOR_MAX_ATTEMPTS (3),
+# AGENT_REQUIRED_CHECKS entries can be path-scoped (`Name@prefix|prefix`, see pr-paths.sh).
 # AGENT_INTEGRATOR_CHECKS_MINUTES (30), AGENT_INTEGRATOR_QA_MINUTES (60), AGENT_MERGE_METHOD (squash,
 # merge or rebase; default squash), AGENT_PRODUCTION_URL (the link in the issue's progress note, url.sh).
 set -Eeuo pipefail
@@ -37,9 +38,10 @@ pr="$1"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 bot="${AGENT_BOT_ID:?AGENT_BOT_ID must be set}"
 here="$(dirname "$0")"
-required="${AGENT_REQUIRED_CHECKS:-CI}"
+required="${AGENT_REQUIRED_CHECKS:-CI}"   # narrowed to the checks that apply to this PR (pr-paths.sh) below
 qa_on_update="${AGENT_QA_ON_BASE_UPDATE:-}"
 qa_in_queue="${AGENT_QA_IN_QUEUE:-}"
+qa_paths="${AGENT_QA_PATHS:-}"   # QA only for PRs that change these paths (prefix|prefix), e.g. the frontend
 max_attempts="${AGENT_INTEGRATOR_MAX_ATTEMPTS:-3}"
 checks_minutes="${AGENT_INTEGRATOR_CHECKS_MINUTES:-30}"
 qa_minutes="${AGENT_INTEGRATOR_QA_MINUTES:-60}"
@@ -181,6 +183,7 @@ wait_checks() {   # <sha>
   deadline=$(( $(date +%s) + checks_minutes * 60 ))
   CHECKS=timeout
   FAILED=
+  if [ -z "$required" ]; then log "no required check applies to the paths this PR changes"; CHECKS=pass; return 0; fi
   while [ "$(date +%s)" -lt "$deadline" ]; do
     refresh_token
     if ! still_ours "$sha" agent:integrating; then CHECKS=moved; return 0; fi
@@ -278,6 +281,16 @@ $(printf '%s\n' "$touched" | sed 's/^/- `/; s/$/`/')"
   finish left
 fi
 
+# The required checks that apply to the files this PR changes (all of them, unless some are path-scoped).
+required=$("$here/pr-paths.sh" required "$pr" | paste -sd, -)
+qa_applies=true
+if [ "$qa_in_queue" = true ] && [ -n "$qa_paths" ]; then
+  if "$here/pr-paths.sh" touches "$pr" "$qa_paths"; then :; else
+    rc=$?; [ "$rc" = 1 ] || fail requeue "couldn't read the files #$pr changes"
+    qa_applies=false; log "changes nothing under AGENT_QA_PATHS ($qa_paths): no QA"
+  fi
+fi
+
 # --- 2.-4. Update, test, merge. Repeats only if the base moves outside the queue. ---
 for _ in 1 2 3; do
   if ! still_ours "$head" agent:integrating; then leave_if_draft; log "the PR changed or left the queue"; finish left; fi
@@ -341,7 +354,7 @@ for _ in 1 2 3; do
   # QA once, here: the checks passed, so this commit can merge, and nothing else merges while QA tests
   # it. A PR whose own changes QA already passed (e.g. a human merged into the base during QA, and the
   # loop updated it again) isn't tested again: CI covers the new combination.
-  if [ "$qa_in_queue" = true ] && ! "$here/qa-passed.sh" "$pr" "$head" >/dev/null; then
+  if [ "$qa_in_queue" = true ] && [ "$qa_applies" = true ] && ! "$here/qa-passed.sh" "$pr" "$head" >/dev/null; then
     hold_for_qa "$head" "The required checks passed on #$pr$updated, so it can merge."
   fi
   # Right before the merge (nothing slow in between: a human can still merge by hand meanwhile).

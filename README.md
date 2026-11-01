@@ -35,7 +35,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 |---|---|
 | [.github/agents/*.md](.github/agents/) | Role prompts (analyst, architect, implementor, reviewer, qa, lead). Review and version them like code |
 | [.github/workflows/agent-*.yml](.github/workflows/) | One workflow per role, plus `agent-merge.yml` (merge gate: admits approved PRs to the queue), `agent-integrator.yml` (merge queue), `agent-watchdog.yml` and `agent-chat.yml` (human `@claude`) |
-| [scripts/agents/](scripts/agents/) | Shell helpers the workflows run: [`transition.sh`](scripts/agents/transition.sh) (swaps `agent:*` state labels), [`count-comments.sh`](scripts/agents/count-comments.sh) (verifies handoffs, loop budgets), [`progress.sh`](scripts/agents/progress.sh) (issue progress log), [`pr-still-current.sh`](scripts/agents/pr-still-current.sh) (skips stale runs), [`queue.sh`](scripts/agents/queue.sh) / [`integrate.sh`](scripts/agents/integrate.sh) / [`sweep-conflicts.sh`](scripts/agents/sweep-conflicts.sh) / [`app-token.sh`](scripts/agents/app-token.sh) (merge queue; the last one renews the App token during long runs), [`same-own-changes.sh`](scripts/agents/same-own-changes.sh) / [`own-diff.sh`](scripts/agents/own-diff.sh) (did a PR's own edits change since its approval?), [`split.sh`](scripts/agents/split.sh) / [`subissues.sh`](scripts/agents/subissues.sh) (sub-issues), [`publish-pages.sh`](scripts/agents/publish-pages.sh) (gh-pages with retries), [`qa-passed.sh`](scripts/agents/qa-passed.sh) (did QA already pass these own changes?), [`url.sh`](scripts/agents/url.sh) (preview and production links). PR-triggered workflows run them from the default branch |
+| [scripts/agents/](scripts/agents/) | Shell helpers the workflows run: [`transition.sh`](scripts/agents/transition.sh) (swaps `agent:*` state labels), [`count-comments.sh`](scripts/agents/count-comments.sh) (verifies handoffs, loop budgets), [`progress.sh`](scripts/agents/progress.sh) (issue progress log), [`pr-still-current.sh`](scripts/agents/pr-still-current.sh) (skips stale runs), [`queue.sh`](scripts/agents/queue.sh) / [`integrate.sh`](scripts/agents/integrate.sh) / [`sweep-conflicts.sh`](scripts/agents/sweep-conflicts.sh) / [`app-token.sh`](scripts/agents/app-token.sh) (merge queue; the last one renews the App token during long runs), [`same-own-changes.sh`](scripts/agents/same-own-changes.sh) / [`own-diff.sh`](scripts/agents/own-diff.sh) (did a PR's own edits change since its approval?), [`split.sh`](scripts/agents/split.sh) / [`subissues.sh`](scripts/agents/subissues.sh) (sub-issues), [`publish-pages.sh`](scripts/agents/publish-pages.sh) (gh-pages with retries), [`qa-passed.sh`](scripts/agents/qa-passed.sh) (did QA already pass these own changes?), [`url.sh`](scripts/agents/url.sh) (preview and production links), [`pr-paths.sh`](scripts/agents/pr-paths.sh) (which required checks and QA apply to the paths a PR changes). PR-triggered workflows run them from the default branch |
 | [scripts/setup-labels.sh](scripts/setup-labels.sh) | Creates the labels |
 | [scripts/install.sh](scripts/install.sh) | Copies the toolkit into another repository's working copy (without the project's own CI, deploy and preview workflows), and never overwrites changed files without `--force` |
 | [scripts/doctor.sh](scripts/doctor.sh) | Checks a repository's wiring before the first issue: toolkit files, App variables and secrets, labels, required checks, and the QA, merge and link settings. Changes nothing |
@@ -48,7 +48,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
 1. **Copy the toolkit** into the target repo: `scripts/install.sh <path-to-target-checkout>` (re-run with `--force` to update it later). It also creates `CLAUDE.md` from the template: fill it in. The project needs a CI workflow with real tests: in autonomous mode, **tests are the safety net**. Not a Node project, or no preview deploys? See **Other stacks** below.
 2. **Create a GitHub App** (Settings → Developer settings → GitHub Apps → New). It's free on any plan.
    - Name, e.g. `acme-agents`. Disable the webhook.
-   - Repository permissions: **Contents: R/W, Issues: R/W, Pull requests: R/W, Checks: Read, Commit statuses: Read, Actions: Read**, Metadata: Read.
+   - Repository permissions: **Contents: R/W, Issues: R/W, Pull requests: R/W, Checks: Read, Commit statuses: Read, Actions: Read**, Metadata: Read. With `AGENT_PREVIEW_URL=deployment`, also **Deployments: Read**.
    - Deliberately **do not** grant *Workflows* permission. That way agents can't change CI.
    - Create it, note the **App ID**, generate a **private key**, and install the app on the repo.
 3. **Get a Claude token:** run `claude setup-token` locally (needs Pro, Max, Team or Enterprise).
@@ -78,12 +78,21 @@ The defaults fit a Node project with GitHub Pages previews (like this pilot). Ev
 | `AGENT_SETUP_COMMAND` | | Runs before the Implementor and before QA's e2e setup, e.g. `pip install -r requirements.txt` or installing Go tools. Allow the Implementor's build commands with `AGENT_BUILD_TOOLS` |
 | `AGENT_E2E_SETUP` | `npm ci` | QA's setup for the e2e suite (`none`: nothing) |
 | `AGENT_E2E_COMMAND` | `npx playwright test` | QA's e2e suite, run with `E2E_BASE_URL` set to the site under test. `none`: no suite, QA only tests in the browser |
-| `AGENT_PREVIEW_URL` | `https://{owner}.github.io/{repo}/pr-{pr}/` | Where each PR's preview lives (also linked from the issue). `none`: no preview deploys; QA starts the app on its runner instead |
+| `AGENT_PREVIEW_URL` | `https://{owner}.github.io/{repo}/pr-{pr}/` | Where each PR's preview lives (also linked from the issue); it serves `version.txt` with the commit it was built from. `deployment`: the preview is the URL of the PR head's successful **GitHub deployment**, which Vercel, Netlify, Render and most hosts report (give the App *Deployments: Read*). `none`: no preview deploys; QA starts the app on its runner instead |
+| `AGENT_PREVIEW_ENVIRONMENT` | | With `AGENT_PREVIEW_URL=deployment`: only deployments to this environment (e.g. `Preview`) |
 | `AGENT_QA_START_COMMAND` | | With `AGENT_PREVIEW_URL=none`: starts the app in the background, e.g. `npm run build && npx serve out -l 3000` |
 | `AGENT_QA_LOCAL_URL` | `http://localhost:3000/` | With `AGENT_PREVIEW_URL=none`: where the started app answers |
 | `AGENT_PRODUCTION_URL` | `https://{owner}.github.io/{repo}/` | The deployed default branch, linked when a PR merges. `none`: no link |
 | `AGENT_MERGE_METHOD` | `squash` | How the merge queue merges: `squash`, `merge` or `rebase` (the repository must allow it) |
 | `AGENT_QA_SCREENSHOTS` | `pages` (public repos), `artifact` (private) | `pages`: QA screenshots go to the `gh-pages` branch and show inline in the PR. `artifact`: they stay in the run's artifacts and the PR links to them; for private repositories, where raw `gh-pages` image links don't render, and repos without `gh-pages` |
+
+### Monorepos (e.g. a backend and a frontend)
+
+- **Commands:** list each package in the "Packages" table of [`CLAUDE.md`](templates/CLAUDE.md) with the command that checks it and what depends on it. The Implementor runs the checks of every package it changes and of their dependents. Agents run commands from the root, one at a time (no `cd x && …`), so write them with directory flags (`npm --prefix web test`, `make -C backend test`, `go -C api test ./...`) or give the root a task runner. Allow them in `AGENT_BUILD_TOOLS`. A `CLAUDE.md` inside a package holds its own conventions.
+- **Path-filtered CI:** if CI workflows only run for some paths, scope them in `AGENT_REQUIRED_CHECKS` the same way: `Backend CI@backend/|shared/, Frontend CI@web/|shared/, Lint`. A scoped check is only waited for when the PR changes a file under one of its prefixes, so a backend-only PR doesn't wait forever for a frontend workflow that never starts. Unscoped names (`Lint`) apply to every PR. ([`pr-paths.sh`](scripts/agents/pr-paths.sh))
+- **QA only where it helps:** `AGENT_QA_PATHS=web/|packages/ui/` sends only PRs that change those paths through browser QA; a backend-only PR merges after review and CI. QA reports criteria it can't see in a UI as covered by the e2e results.
+- **Services and toolchains:** `AGENT_SETUP_COMMAND` prepares the runner for the Implementor and QA, e.g. `docker compose up -d db && pip install -r backend/requirements.txt` (Docker, Python, Go and Java are preinstalled on GitHub's Ubuntu runners). A full-stack preview is either a deploy that reports to GitHub (`AGENT_PREVIEW_URL=deployment`) or the whole stack started on QA's runner (`AGENT_PREVIEW_URL=none`, `AGENT_QA_START_COMMAND="docker compose up -d"`, `AGENT_QA_LOCAL_URL` the frontend's URL).
+- **Risky areas** (migrations, infrastructure): add them to `AGENT_PROTECTED_PATHS` so a human merges PRs that touch them, and list them under "Risky areas" in `CLAUDE.md` for the Architect's risk call.
 
 ## Autonomy levels
 
@@ -99,7 +108,8 @@ The defaults fit a Node project with GitHub Pages previews (like this pilot). Ev
 | `AGENT_AUTO_MERGE` | – | `true` | **Kill switch** for the merge gate and the merge queue |
 | `AGENT_PAUSED` | | | `true` pauses every agent job (see Human controls) |
 | `AGENT_AUTO_MERGE_HIGH_RISK` | – | – | `true` lets the agents merge `risk:high` changes too (not recommended) |
-| `AGENT_REQUIRED_CHECKS` | | `CI` | Comma-separated workflow names that must pass before merge |
+| `AGENT_REQUIRED_CHECKS` | | `CI` | Comma-separated workflow names that must pass before merge. `Name@prefix\|prefix` scopes one to PRs that change those paths (see Monorepos) |
+| `AGENT_QA_PATHS` | | | Only PRs that change files under these prefixes (`web/\|packages/ui/`) go through QA. Unset: every PR |
 | `AGENT_SPLIT` | | | `false` stops the Architect from splitting big issues into sub-issues |
 | `AGENT_MAX_SUBISSUES` | `5` | `5` | Maximum sub-issues per split |
 | `AGENT_MAX_REVIEW_ROUNDS` | `3` | `3` | Review rounds before the Lead steps in |

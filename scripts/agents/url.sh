@@ -19,7 +19,8 @@ case "$kind" in
   *) echo "url.sh: unknown kind '$kind'" >&2; exit 2 ;;
 esac
 [ -n "$template" ] || template="$default"
-[ "$template" = none ] && exit 0
+# none: no such site; deployment: the preview URL is only known from the deployment (QA finds it).
+case "$template" in none|deployment) exit 0 ;; esac
 template="${template//\{owner\}/${repo%%/*}}"
 template="${template//\{repo\}/${repo#*/}}"
 echo "${template//\{pr\}/$pr}"

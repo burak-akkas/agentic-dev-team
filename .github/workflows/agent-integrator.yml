@@ -29,6 +29,8 @@ on:
 env:
   AGENT_ESCALATION_ASSIGNEE: ${{ vars.AGENT_ESCALATION_ASSIGNEE }}
   AGENT_BOT_ID: ${{ vars.AGENT_BOT_ID }}   # the App's bot user id: unlike its login, it survives renames
+  AGENT_PREVIEW_URL: ${{ vars.AGENT_PREVIEW_URL }}         # link templates (scripts/agents/url.sh)
+  AGENT_PRODUCTION_URL: ${{ vars.AGENT_PRODUCTION_URL }}
 
 jobs:
   integrate:
@@ -52,6 +54,7 @@ jobs:
       AGENT_REQUIRED_CHECKS: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
       # QA once, at the front of the queue (default), or before the queue (AGENT_QA_STAGE == 'review').
       AGENT_QA_IN_QUEUE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE != 'review' && 'true' || '' }}
+      AGENT_QA_PATHS: ${{ vars.AGENT_QA_PATHS }}
       AGENT_QA_ON_BASE_UPDATE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE == 'review' && vars.AGENT_QA_ON_BASE_UPDATE == 'true' && 'true' || '' }}
       AGENT_INTEGRATOR_MAX_ATTEMPTS: ${{ vars.AGENT_INTEGRATOR_MAX_ATTEMPTS || '3' }}
       AGENT_INTEGRATOR_CHECKS_MINUTES: ${{ vars.AGENT_INTEGRATOR_CHECKS_MINUTES || '30' }}
@@ -59,6 +62,7 @@ jobs:
       DRAIN_MINUTES: ${{ vars.AGENT_INTEGRATOR_DRAIN_MINUTES || '100' }}
       AGENT_AUTO_MERGE_HIGH_RISK: ${{ vars.AGENT_AUTO_MERGE_HIGH_RISK }}
       AGENT_PROTECTED_PATHS: ${{ vars.AGENT_PROTECTED_PATHS || '.github/,scripts/,templates/' }}
+      AGENT_MERGE_METHOD: ${{ vars.AGENT_MERGE_METHOD || 'squash' }}
     steps:
       - uses: actions/create-github-app-token@v2
         id: app

@@ -22,6 +22,7 @@ label "agent:blocked"         "e4e669" "Sub-issue waiting for the sub-issues it 
 # PR states
 label "agent:review"            "c2e0c6" "Ask the Reviewer agent to review this PR"
 label "agent:changes-requested" "e99695" "Reviewer requested changes, Implementor agent fixes them"
+label "agent:fixing"            "fbca04" "The Implementor agent is working on this PR now"
 label "agent:qa"                "bfd4f2" "QA agent tests the PR preview in a browser"
 label "agent:approved"          "0e8a16" "Approved; the merge gate admits it to the merge queue"
 label "agent:queued"            "fef2c0" "In the merge queue; the Integrator merges queued PRs one at a time"

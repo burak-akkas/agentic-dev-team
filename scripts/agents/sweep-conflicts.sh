@@ -4,9 +4,9 @@
 # Queued PRs are included: the Implementor can resolve the conflict while the queue moves on,
 # instead of when the PR reaches the front.
 # Skips PRs that already wait for the Implementor, the Lead or a human, the PR the Integrator is
-# merging right now, and PRs an Implementor run is already working on: its first step removes
-# agent:changes-requested, and it merges the latest base right before pushing, so flagging the PR
-# again would only queue a second run that finds nothing to do.
+# merging right now, and PRs an Implementor run is already working on (agent:fixing, or a queued run):
+# it merges the latest base right before pushing, so flagging the PR again would only queue a second
+# run that finds nothing to do.
 #
 # Usage: sweep-conflicts.sh <merged-pr> <base-branch>
 # Needs GH_TOKEN, GITHUB_REPOSITORY. Never fails the caller.
@@ -39,7 +39,7 @@ for n in $(gh pr list -R "$repo" --state open --base "$base" --json number,headR
   view=$(gh pr view "$n" -R "$repo" --json labels,title)
   labels=$(jq -r '[.labels[].name] | join(",")' <<<"$view")
   case ",$labels," in
-    *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:integrating,"*) continue ;;
+    *",agent:changes-requested,"*|*",agent:fixing,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:integrating,"*) continue ;;
   esac
   if implementor_busy "$(jq -r .title <<<"$view")"; then
     echo "PR #$n: the Implementor is already working on it"

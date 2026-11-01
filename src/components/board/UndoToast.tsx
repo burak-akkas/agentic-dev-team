@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Toast } from "@/components/ui";
+import { Toast, ToastAction } from "@/components/ui";
 
 export const UNDO_TOAST_MS = 6000;
 
@@ -22,13 +22,7 @@ export function UndoToast({
   return (
     <Toast>
       <span>{message}</span>
-      <button
-        type="button"
-        onClick={onUndo}
-        className="rounded px-2 py-1 font-semibold underline outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        Undo
-      </button>
+      <ToastAction onClick={onUndo}>Undo</ToastAction>
     </Toast>
   );
 }

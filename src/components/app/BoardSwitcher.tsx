@@ -1,7 +1,8 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
-import { MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
+import { useCallback, useId, useState, type FormEvent } from "react";
+import { boardLink, MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
+import { CopyLinkToast } from "@/components/app/CopyLinkToast";
 import { boardLists, collapseAllLists, expandAllLists, isListCollapsed } from "@/lib/board";
 import { useBoard, useBoards } from "@/hooks/useBoard";
 
@@ -80,6 +81,18 @@ export function BoardSwitcher() {
   const [dialog, setDialog] = useState<Dialogs>(null);
   const current = boards.find((b) => b.id === currentId) ?? boards[0];
   const close = () => setDialog(null);
+  const [copy, setCopy] = useState<"copied" | { url: string } | null>(null);
+  const dismissCopy = useCallback(() => setCopy(null), []);
+
+  async function copyLink() {
+    const url = boardLink(currentId, window.location.href);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopy("copied");
+    } catch {
+      setCopy({ url });
+    }
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -101,6 +114,7 @@ export function BoardSwitcher() {
         items={[
           { label: "New board", onSelect: () => setDialog("create") },
           { label: "Rename board", onSelect: () => setDialog("rename") },
+          { label: "Copy board link", onSelect: copyLink },
           { label: "Delete board", disabled: boards.length <= 1, onSelect: () => setDialog("delete") },
           {
             label: "Collapse all lists",
@@ -114,6 +128,7 @@ export function BoardSwitcher() {
           },
         ]}
       />
+      {copy && <CopyLinkToast result={copy} onDismiss={dismissCopy} />}
       {dialog === "create" && (
         <BoardNameDialog title="New board" submitLabel="Create" initialName="" onSubmit={createBoard} onClose={close} />
       )}

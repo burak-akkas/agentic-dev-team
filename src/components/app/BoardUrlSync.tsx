@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { resolveBoardId } from "@/lib/boards";
+import { boardQuery, resolveBoardId } from "@/lib/boards";
 import { useBoards } from "@/hooks/useBoard";
 
 const noopSubscribe = () => () => {};
 
 const boardParam = () => new URLSearchParams(window.location.search).get("board");
-const boardUrl = (id: string) => `?board=${encodeURIComponent(id)}`;
+const boardUrl = boardQuery;
 
 // Keeps ?board=<id> and the current board in sync. The URL is only read in effects after hydration,
 // so the static render and the first client render match. Relative URLs work under any sub-path.

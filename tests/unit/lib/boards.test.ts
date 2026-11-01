@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { addCard } from "@/lib/board";
 import {
+  boardLink,
+  boardQuery,
   createBoardEntry,
   currentEntry,
   deleteBoardEntry,
@@ -12,6 +14,18 @@ import {
   updateCurrentBoard,
   validateBoardName,
 } from "@/lib/boards";
+
+describe("boardQuery and boardLink", () => {
+  it("encodes the id in a relative query", () => {
+    expect(boardQuery("abc")).toBe("?board=abc");
+    expect(boardQuery("a b&c")).toBe("?board=a%20b%26c");
+  });
+
+  it("builds an absolute link that keeps the sub-path and replaces the query", () => {
+    expect(boardLink("a b", "https://x.test/pr-1/?board=z")).toBe("https://x.test/pr-1/?board=a%20b");
+    expect(boardLink("a", "http://localhost:3000/")).toBe("http://localhost:3000/?board=a");
+  });
+});
 
 describe("initialBoardList", () => {
   it("has one empty 'My board' that is current", () => {

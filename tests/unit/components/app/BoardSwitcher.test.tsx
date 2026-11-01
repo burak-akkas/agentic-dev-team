@@ -1,6 +1,6 @@
-import { createEvent, fireEvent, render, screen, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitForElementToBeRemoved, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Board } from "@/components/board/Board";
 import { BoardSwitcher } from "@/components/app/BoardSwitcher";
 import { resetBoardStore } from "@/hooks/useBoard";
@@ -207,6 +207,61 @@ describe("<BoardSwitcher />", () => {
       expect(screen.getByRole("button", { name: "Collapse Done" })).toBeInTheDocument();
       await user.selectOptions(select(), "My board");
       expect(screen.getByRole("button", { name: "Expand Done" })).toBeInTheDocument();
+    });
+  });
+
+  describe("copy board link", () => {
+    function stubClipboard(clipboard: { writeText: (text: string) => Promise<void> } | undefined) {
+      Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });
+    }
+    const currentLink = () =>
+      new URL(`?board=${encodeURIComponent((select() as HTMLSelectElement).value)}`, window.location.href).href;
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("copies the absolute link by keyboard, confirms, and the confirmation goes away on its own", async () => {
+      const { user } = setup();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard({ writeText });
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      screen.getByRole("menuitem", { name: "Copy board link" }).focus();
+      await user.keyboard("{Enter}");
+      expect(writeText).toHaveBeenCalledWith(currentLink());
+      expect(await screen.findByRole("status")).toHaveTextContent("Link copied");
+      await waitForElementToBeRemoved(() => screen.queryByRole("status"), { timeout: 4500 });
+    }, 10000);
+
+    it("copies the link of the newly selected board", async () => {
+      const { user } = setup();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard({ writeText });
+      await choose(user, "Copy board link");
+      const first = writeText.mock.calls[0][0] as string;
+      await create(user, "Work");
+      await choose(user, "Copy board link");
+      const second = writeText.mock.calls[1][0] as string;
+      expect(second).toBe(currentLink());
+      expect(second).not.toBe(first);
+    });
+
+    it("shows the link when the clipboard rejects", async () => {
+      const { user } = setup();
+      stubClipboard({ writeText: vi.fn().mockRejectedValue(new Error("denied")) });
+      await choose(user, "Copy board link");
+      const status = await screen.findByRole("status");
+      expect(status).toHaveTextContent(currentLink());
+      expect(status).not.toHaveTextContent("Link copied");
+      await user.click(within(status).getByRole("button", { name: "Dismiss" }));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+
+    it("shows the link when the clipboard API is missing", async () => {
+      const { user } = setup();
+      stubClipboard(undefined);
+      await choose(user, "Copy board link");
+      expect(await screen.findByRole("status")).toHaveTextContent(currentLink());
     });
   });
 

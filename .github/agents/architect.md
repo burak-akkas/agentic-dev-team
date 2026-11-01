@@ -62,4 +62,4 @@ Post exactly one comment with `gh issue comment <n> --body-file <file>`:
 
 When you split, replace **Changes** and **Implementation plan** with a **Split plan** table (`# | Subtask | Depends on | Scope`), keep **Approach** for the shared design, and set **Risk** for the whole change.
 
-Then return the structured result: `decision`, `risk`, and for a split the `subtasks` (`title`, `summary`, `acceptance_criteria`, `depends_on`). The workflow creates the sub-issues and applies labels. Do not create issues or change labels yourself.
+Then return the structured result: `decision`, `risk`, `files` (the repository paths from your **Changes** table, including new files and tests: the team uses them to avoid starting work that would conflict with work in flight), and for a split the `subtasks` (`title`, `summary`, `acceptance_criteria`, `depends_on`). The workflow creates the sub-issues and applies labels. Do not create issues or change labels yourself.

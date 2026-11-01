@@ -6,7 +6,9 @@ name: "Agent · Integrator"
 #   2. If the base moved on, update-branch merges it in (the PR's own changes stay as approved, so no
 #      re-review; with AGENT_QA_ON_BASE_UPDATE the queue waits while QA tests the combined code)
 #   3. Waits for the required checks (AGENT_REQUIRED_CHECKS) on exactly that commit
-#   4. Squash-merges exactly that commit, if the base hasn't moved meanwhile (else back to 2)
+#   4. With QA on (AGENT_QA) and AGENT_QA_STAGE unset or `queue`: QA tests exactly that commit while the
+#      queue waits, once per PR (a PR whose own changes QA already passed isn't tested again)
+#   5. Squash-merges exactly that commit, if the base hasn't moved meanwhile (else back to 2)
 # Conflicts and red checks go to the Implementor, timeouts and failed merges to the back of the queue,
 # and after AGENT_INTEGRATOR_MAX_ATTEMPTS failed attempts (default 3) the Lead decides.
 #
@@ -47,7 +49,9 @@ jobs:
     env:
       BIN: .agent-trusted/scripts/agents
       AGENT_REQUIRED_CHECKS: ${{ vars.AGENT_REQUIRED_CHECKS || 'CI' }}
-      AGENT_QA_ON_BASE_UPDATE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_ON_BASE_UPDATE == 'true' && 'true' || '' }}
+      # QA once, at the front of the queue (default), or before the queue (AGENT_QA_STAGE == 'review').
+      AGENT_QA_IN_QUEUE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE != 'review' && 'true' || '' }}
+      AGENT_QA_ON_BASE_UPDATE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE == 'review' && vars.AGENT_QA_ON_BASE_UPDATE == 'true' && 'true' || '' }}
       AGENT_INTEGRATOR_MAX_ATTEMPTS: ${{ vars.AGENT_INTEGRATOR_MAX_ATTEMPTS || '3' }}
       AGENT_INTEGRATOR_CHECKS_MINUTES: ${{ vars.AGENT_INTEGRATOR_CHECKS_MINUTES || '30' }}
       AGENT_INTEGRATOR_QA_MINUTES: ${{ vars.AGENT_INTEGRATOR_QA_MINUTES || '60' }}

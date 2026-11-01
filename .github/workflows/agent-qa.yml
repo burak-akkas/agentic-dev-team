@@ -1,12 +1,15 @@
 name: "Agent · QA"
 
-# Runs when a PR gets `agent:qa` (the Reviewer approved and AGENT_QA == 'true').
+# Runs when a PR gets `agent:qa`: by default the Integrator holds the PR at the front of the merge queue
+# (up to date, required checks green) and the queue waits for QA's verdict. With AGENT_QA_STAGE == 'review',
+# right after the Reviewer approved. The Lead can also send a PR to QA.
 #   1. Waits for the required checks (AGENT_REQUIRED_CHECKS): red goes straight back to the Implementor, no QA run
 #      Then waits until the PR preview serves this exact commit (<preview>/version.txt == head SHA)
 #   2. Runs the project's Playwright e2e suite against the preview
 #   3. The QA agent tests the acceptance criteria in a real browser (Playwright MCP), compares the changed
 #      screens with the baseline site (the base branch, before this PR) and takes screenshots
-#   4. Screenshots go to the PR as a gallery. pass -> merge gate and queue, fail -> Implementor fixes, unsure -> Lead
+#   4. Screenshots go to the PR as a gallery. pass -> merge gate, which hands a held PR back to the Integrator
+#      (or queues it), fail -> Implementor fixes (and the queue moves on), unsure -> Lead
 # Preview URL template: AGENT_PREVIEW_URL (default https://{owner}.github.io/{repo}/pr-{pr}/).
 # Baseline URL template: AGENT_BASELINE_URL (default https://{owner}.github.io/{repo}/, the production deploy
 # of the base branch; `none` turns the visual comparison off). It should serve version.txt too.

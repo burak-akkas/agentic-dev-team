@@ -212,7 +212,10 @@ hold_for_qa() {   # <sha> <why>
     fi
     labels=",$(jq -r '[.labels[].name] | join(",")' <<<"$v"),"
     case "$labels" in
-      *",agent:integrating,"*) return 0 ;;   # QA passed, the merge gate handed it back
+      *",agent:integrating,"*)               # QA passed and the merge gate handed it back, unless the
+        # label is left over (e.g. a failed label change): only a recorded pass counts.
+        if "$here/qa-passed.sh" "$pr" "$sha" >/dev/null; then return 0; fi
+        log "agent:integrating, but no QA pass for ${sha:0:7} yet" ;;
       *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:review,"*)
         log "QA did not pass (labels: $labels)"; finish left ;;
     esac                                     # agent:qa, agent:approved or between labels: still going

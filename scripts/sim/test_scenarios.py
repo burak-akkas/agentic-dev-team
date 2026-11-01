@@ -405,6 +405,23 @@ def qa_in_queue_respects_lead_and_human_approvals():
 
 
 @test
+def a_left_over_integrating_label_is_no_qa_pass():
+    # Found by the matrix (API errors): a failed label read in transition.sh left agent:integrating next
+    # to agent:qa, and the hold took it for QA's pass and merged untested code.
+    st = make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1), "reviewer"), queued()]}})
+    st["hooks"] = [{"match": "pr view 101", "pr": 101, "if_label": "agent:qa", "labels": ["agent:integrating", "agent:qa"]}]
+    st = run(st, AGENT_QA_IN_QUEUE="true", AGENT_INTEGRATOR_QA_MINUTES=5)
+    assert not st.get("merged") and "no QA pass" in st["_stderr"], st["_stderr"][-1500:]
+
+
+@test
+def transition_fails_instead_of_keeping_the_old_state():
+    st = make_state({101: {"head": sha(0xa1), "labels": ["agent:integrating"]}}, fail_cmds=["issues/101/labels"])
+    st = run(st, script="transition.sh", args=["101", "agent:qa"])
+    assert st["_rc"] != 0 and labels(st, 101) == ["agent:integrating"]
+
+
+@test
 def qa_passed_sh_reads_only_the_bot_and_the_latest_verdict():
     s = sha(0xa1)
     stranger = {"body": "<!-- agent:qa -->\n**Verdict:** pass\n<!-- agent:approved-sha %s -->" % s, "user": {"id": 1}}

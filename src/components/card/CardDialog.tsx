@@ -97,7 +97,20 @@ export function CardDialog({
   const [confirming, setConfirming] = useState<"discard" | "delete" | null>(null);
   const [templateResult, setTemplateResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [copyResult, setCopyResult] = useState<CopyResult | null>(null);
+  const [copyKind, setCopyKind] = useState<"card" | "comment">("card");
   const dismissCopy = useCallback(() => setCopyResult(null), []);
+
+  async function copyComment(text: string) {
+    let result: CopyResult;
+    try {
+      await navigator.clipboard.writeText(text);
+      result = "copied";
+    } catch {
+      result = { text };
+    }
+    setCopyKind("comment");
+    setCopyResult(result);
+  }
 
   function addLabel() {
     try {
@@ -350,6 +363,7 @@ export function CardDialog({
           onAdd={(text) => onUpdateBoard((b) => addComment(b, card.id, text))}
           onEdit={(id, text) => onUpdateBoard((b) => editComment(b, card.id, id, text))}
           onDelete={(id) => onUpdateBoard((b) => deleteComment(b, card.id, id))}
+          onCopy={copyComment}
         />
 
         <p className="text-xs text-muted">
@@ -374,7 +388,11 @@ export function CardDialog({
             </Button>
           )}
           {onCopyText && (
-            <Button variant="ghost" size="sm" title="Copies the saved card as plain text (unsaved edits are not copied)" onClick={async () => setCopyResult(await onCopyText())}>
+            <Button variant="ghost" size="sm" title="Copies the saved card as plain text (unsaved edits are not copied)" onClick={async () => {
+              const result = await onCopyText();
+              setCopyKind("card");
+              setCopyResult(result);
+            }}>
               Copy as text
             </Button>
           )}
@@ -425,7 +443,7 @@ export function CardDialog({
           </p>
         )}
       </form>
-      {copyResult && <CopyLinkToast result={copyResult} kind="card" onDismiss={dismissCopy} />}
+      {copyResult && <CopyLinkToast result={copyResult} kind={copyKind} onDismiss={dismissCopy} />}
       {confirming === "discard" && (
         <ConfirmDialog
           title="Discard changes"

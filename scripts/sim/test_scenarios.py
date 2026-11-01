@@ -435,6 +435,18 @@ def qa_passed_sh_reads_only_the_bot_and_the_latest_verdict():
 
 
 @test
+def a_reviewer_run_without_a_review_is_retried_once_then_goes_to_the_lead():
+    # Seen live (#168): the Reviewer returned "approve" without posting its review.
+    apply = steps("agent-reviewer.yml", "review")["Apply state transition"]["run"]
+    ctx = {"github.event.pull_request.head.sha": sha(0xa1), "steps.guard.outputs.total": 0, "steps.guard.outputs.round": 1}
+    st0 = make_state({101: {"head": sha(0xa1), "labels": []}})
+    st = run(st0, shell=subst(apply, ctx), PR=101, OUT='{"verdict": "approve"}', QA="", QA_IN_QUEUE="true")
+    assert st["_rc"] == 0 and labels(st, 101) == ["agent:review"] and "Retrying once" in bodies(st, 101)[-1], st["_stderr"]
+    st = run(dict(st, events=[]), shell=subst(apply, ctx), PR=101, OUT='{"verdict": "approve"}', QA="", QA_IN_QUEUE="true")
+    assert labels(st, 101) == ["agent:needs-decision"] and "Handing to the Lead" in bodies(st, 101)[-1]
+
+
+@test
 def reviewer_approval_goes_to_the_queue_or_to_qa_by_stage():
     apply = steps("agent-reviewer.yml", "review")["Apply state transition"]["run"]
     ctx = {"github.event.pull_request.head.sha": sha(0xa1), "steps.guard.outputs.total": 0, "steps.guard.outputs.round": 1}

@@ -224,6 +224,18 @@ jobs:
             echo "::warning::Reviewer returned '$verdict' but posted no summary comment"
             verdict=missing-comment
           fi
+          # A run that returned no usable verdict (or forgot its comment) usually just slipped: retry
+          # once per commit before the Lead spends a decision on it.
+          if [ "$verdict" != approve ] && [ "$verdict" != request-changes ] && [ "$verdict" != needs-human ]; then
+            sha="${{ github.event.pull_request.head.sha }}"
+            if [ -z "$("$BIN/pr-still-current.sh" "$PR" "$sha")" ] \
+               && ! gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --jq '.[].body' | grep -qF "<!-- agent:reviewer-retry $sha -->"; then
+              gh pr comment "$PR" --body "<!-- agent:reviewer-retry $sha -->
+          🔁 The Reviewer run ended without a review ($verdict, [run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Retrying once."
+              "$BIN/transition.sh" "$PR" agent:review
+              exit 0
+            fi
+          fi
           # The PR may have changed while the agent worked (new commits, a conflict flagged by the merge
           # gate, a Lead decision). Never apply a verdict on top of that.
           stale=$("$BIN/pr-still-current.sh" "$PR" "${{ github.event.pull_request.head.sha }}")

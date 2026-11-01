@@ -321,6 +321,46 @@ def drain_budget_hands_the_rest_to_a_fresh_run():
     assert not st.get("merged") and "handed #101" in st["_summary"] and ["labeled", "101", "agent:queued"] in st["events"]
 
 
+@test
+def risk_raised_after_approval_stops_the_merge():
+    st = make_state({101: {"head": sha(0xa1), "issue": 11, "comments": [approval(sha(0xa1)), queued()]}})
+    st["items"]["11"]["labels"].append("risk:high")
+    st = run(st)
+    assert not st.get("merged") and labels(st, 101) == ["agent:needs-human"] and "high risk" in bodies(st, 101)[-1]
+    st = make_state({101: {"head": sha(0xa1), "issue": 11, "comments": [approval(sha(0xa1)), queued()]}})
+    st["items"]["11"]["labels"].append("risk:high")
+    assert run(st, AGENT_AUTO_MERGE_HIGH_RISK="true").get("merged") == [101]   # allowed explicitly
+
+
+@test
+def app_token_is_reused_while_young_and_renewed_before_it_expires():
+    import base64, json as js, subprocess as sp
+    d = tempfile.mkdtemp()
+    key, pub, cache, curl_log = (os.path.join(d, x) for x in ("key.pem", "pub.pem", "cache", "curl.log"))
+    sp.run(["openssl", "genrsa", "-out", key, "2048"], check=True, capture_output=True)
+    sp.run(["openssl", "rsa", "-in", key, "-pubout", "-out", pub], check=True, capture_output=True)
+    env = dict(AGENT_APP_ID="123", AGENT_APP_PRIVATE_KEY=open(key).read(), AGENT_TOKEN_CACHE=cache, FAKE_CURL_LOG=curl_log)
+    tok = lambda: run(make_state({}), script="app-token.sh", FAKE_DATE_FILE="", **env)["_stdout"]
+    open(cache, "w").write("%d ghs_start\n" % (__import__("time").time() - 60))
+    assert tok() == "ghs_start" and not os.path.exists(curl_log)          # young: reused, no API call
+    open(cache, "w").write("%d ghs_start\n" % (__import__("time").time() - 3000))
+    assert tok() == "ghs_fresh2"                                           # 50 minutes old: renewed
+    assert tok() == "ghs_fresh2"                                           # and the new one is cached
+    reqs = [js.loads(l) for l in open(curl_log)]
+    assert [r["url"].split("/")[-1] for r in reqs] == ["installation", "access_tokens"]
+    assert js.loads(reqs[1]["body"]) == {"repositories": ["r"]}            # only this repository
+    jwt = reqs[0]["auth"].split("Bearer ")[1]
+    h, p_, sig = jwt.split(".")
+    pad = lambda x: x + "=" * (-len(x) % 4)
+    claims = js.loads(base64.urlsafe_b64decode(pad(p_)))
+    assert claims["iss"] == "123" and claims["exp"] - claims["iat"] <= 600
+    open(os.path.join(d, "sig"), "wb").write(base64.urlsafe_b64decode(pad(sig)))
+    ok = sp.run(["openssl", "dgst", "-sha256", "-verify", pub, "-signature", os.path.join(d, "sig")],
+                input=("%s.%s" % (h, p_)).encode(), capture_output=True)
+    assert ok.returncode == 0, ok.stdout + ok.stderr                      # signed with the App's key
+    assert run(make_state({}), script="app-token.sh", GH_TOKEN="ghs_env")["_stdout"] == "ghs_env"   # no key: unchanged
+
+
 # --- same own changes, and the guard -----------------------------------------------------------
 def own_changes_state():
     appr, res1, res2 = sha(0xa1), sha(0xa2), sha(0xa3)

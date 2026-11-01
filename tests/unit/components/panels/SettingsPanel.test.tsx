@@ -31,6 +31,26 @@ function state() {
   };
 }
 
+describe("<SettingsPanel /> version line", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("shows the version and short commit", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "1.2.3");
+    vi.stubEnv("NEXT_PUBLIC_COMMIT_SHA", "a1b2c3d4e5f6");
+    renderPanel();
+    expect(screen.getByText("Version 1.2.3 · a1b2c3d")).toBeInTheDocument();
+  });
+
+  it("shows only the version when the commit is unknown", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_VERSION", "1.2.3");
+    vi.stubEnv("NEXT_PUBLIC_COMMIT_SHA", "");
+    renderPanel();
+    expect(screen.getByText("Version 1.2.3")).toBeInTheDocument();
+  });
+});
+
 describe("<SettingsPanel />", () => {
   it("is a dialog titled Settings that closes with the Close button", async () => {
     const { onClose } = renderPanel();

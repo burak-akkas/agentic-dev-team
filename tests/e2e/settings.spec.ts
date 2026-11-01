@@ -1,5 +1,13 @@
 import { expect, test } from "@playwright/test";
 
+test("Settings shows the app version line", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(dialog.getByText(/^Version \S+/)).toBeVisible();
+  await expect(dialog.getByText(/undefined/)).toHaveCount(0);
+});
+
 test("Settings sets the Done list and a WIP limit, and they persist", async ({ page }) => {
   await page.goto("./");
   await expect(page.getByRole("heading", { level: 1, name: "Kanban" })).toBeVisible();

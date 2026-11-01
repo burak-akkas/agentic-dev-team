@@ -21,8 +21,10 @@
 #   requeued back of the queue (timeout, failed merge, unexpected error)
 #   left     no longer in the queue (closed, draft, new commits, label removed, QA did not pass)
 #   lead     handed to the Lead after too many failed attempts
-# Needs GH_TOKEN, GITHUB_REPOSITORY and AGENT_BOT_ID. Optional: AGENT_REQUIRED_CHECKS (default CI),
-# AGENT_QA_ON_BASE_UPDATE (true: QA after each update), AGENT_INTEGRATOR_MAX_ATTEMPTS (3),
+# Needs GH_TOKEN, GITHUB_REPOSITORY and AGENT_BOT_ID. With AGENT_APP_ID and AGENT_APP_PRIVATE_KEY it
+# renews GH_TOKEN before it expires (app-token.sh). Optional: AGENT_REQUIRED_CHECKS (default CI),
+# AGENT_QA_ON_BASE_UPDATE (true: QA after each update), AGENT_AUTO_MERGE_HIGH_RISK, AGENT_PROTECTED_PATHS
+# (default .github/,scripts/,templates/), AGENT_INTEGRATOR_MAX_ATTEMPTS (3),
 # AGENT_INTEGRATOR_CHECKS_MINUTES (30), AGENT_INTEGRATOR_QA_MINUTES (60).
 set -Eeuo pipefail
 
@@ -39,6 +41,11 @@ run_url="${GITHUB_SERVER_URL:-https://github.com}/$repo/actions/runs/${GITHUB_RU
 base=""
 
 log()      { echo "#$pr: $*" >&2; }
+# The App token expires after an hour, and one PR can take longer (slow CI, a QA hold).
+refresh_token() {
+  local t
+  if t=$("$here/app-token.sh" 2>/dev/null) && [ -n "$t" ]; then export GH_TOKEN="$t"; fi
+}
 finish()   { log "result: $1"; echo "result=$1"; exit 0; }
 say()      { gh pr comment "$pr" -R "$repo" --body "$1" >/dev/null; }
 progress() { "$here/progress.sh" --pr "$pr" "$1"; }
@@ -167,6 +174,7 @@ wait_checks() {   # <sha>
   CHECKS=timeout
   FAILED=
   while [ "$(date +%s)" -lt "$deadline" ]; do
+    refresh_token
     if ! still_ours "$sha" agent:integrating; then CHECKS=moved; return 0; fi
     json=$(gh pr checks "$pr" -R "$repo" --json workflow,name,bucket,link 2>/dev/null || true)
     checks=$(jq --arg req "$required" "$filter" <<<"${json:-[]}")
@@ -192,6 +200,7 @@ hold_for_qa() {   # <sha>
   deadline=$(( $(date +%s) + qa_minutes * 60 ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
     sleep 30
+    refresh_token
     v=$(pr_json state,headRefOid,labels)
     if [ "$(jq -r .state <<<"$v")" != OPEN ] || [ "$(jq -r .headRefOid <<<"$v")" != "$sha" ]; then
       log "changed while QA was testing"; finish left
@@ -208,6 +217,7 @@ hold_for_qa() {   # <sha>
 }
 
 # --- Is it still in the queue? ---
+refresh_token
 v=$(pr_json state,isDraft,headRefOid,baseRefName,labels,closingIssuesReferences)
 state=$(jq -r .state <<<"$v")
 head=$(jq -r .headRefOid <<<"$v")
@@ -237,6 +247,24 @@ if [ "$head" != "$approved" ]; then
     progress "🚦 **Merge queue**: head of #$pr moved after approval, back to review"
     finish left
   fi
+fi
+
+# --- Still allowed to merge without a human? The merge gate checked this at approval, but the
+# issue's risk can be raised since (a human adds risk:high). The protected paths are re-checked too.
+if [ -n "$issue" ] && [ "${AGENT_AUTO_MERGE_HIGH_RISK:-}" != true ] \
+   && gh api "repos/$repo/issues/$issue/labels" --jq '.[].name' | grep -qx 'risk:high'; then
+  "$here/transition.sh" "$pr" agent:needs-human >/dev/null
+  say "✋ **Merge queue:** #$issue is now **high risk**, so a human merges #$pr. It leaves the queue."
+  progress "🚦 **Merge queue**: #$pr is high risk now, a human merges it"
+  finish left
+fi
+protected="${AGENT_PROTECTED_PATHS:-.github/,scripts/,templates/}"
+touched=$(gh pr diff "$pr" -R "$repo" --name-only | grep -E "^(${protected//,/|})" || true)
+if [ -n "$touched" ]; then
+  "$here/transition.sh" "$pr" agent:needs-human >/dev/null
+  say "✋ **Merge queue:** #$pr changes the agent team's own tooling, so a human merges it:
+$(printf '%s\n' "$touched" | sed 's/^/- `/; s/$/`/')"
+  finish left
 fi
 
 # --- 2.-4. Update, test, merge. Repeats only if the base moves outside the queue. ---
@@ -289,6 +317,7 @@ for _ in 1 2 3; do
   # Merge only if nothing landed on the base since the checks started: then the tested code is
   # exactly what lands. Inside the queue nothing else merges; this catches merges by humans.
   if [ "$(behind "$head")" -gt 0 ]; then log "$base moved while the checks ran, updating again"; continue; fi
+  refresh_token
   # gh can report an error after the merge itself succeeded (e.g. deleting the branch failed), so
   # the PR's state decides, not the exit code.
   err=$(gh pr merge "$pr" -R "$repo" --squash --delete-branch --match-head-commit "$head" 2>&1) || true

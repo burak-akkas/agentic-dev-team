@@ -89,6 +89,38 @@ describe("<Board /> checklist", () => {
     expect(within(dialog).getByRole("button", { name: "Uncheck all" })).toBeDisabled();
   });
 
+  it("Delete completed is disabled until an item is ticked, then removes only the ticked items", async () => {
+    seed(["a", "b", "c"]);
+    const user = userEvent.setup();
+    render(<Board />);
+    const dialog = await openTask(user);
+    const button = within(dialog).getByRole("button", { name: "Delete completed" });
+    expect(button).toBeDisabled();
+
+    await user.click(within(dialog).getByRole("checkbox", { name: "a" }));
+    await user.click(within(dialog).getByRole("checkbox", { name: "c" }));
+    expect(button).toBeEnabled();
+
+    await user.click(button);
+    const boxes = within(dialog).getAllByRole("checkbox");
+    expect(boxes).toHaveLength(1);
+    expect(within(dialog).getByRole("checkbox", { name: "b" })).not.toBeChecked();
+    expect(button).toBeDisabled();
+  });
+
+  it("Delete completed removes the whole list when every item is ticked, and is disabled with no checklist", async () => {
+    seed(["a"]);
+    const user = userEvent.setup();
+    render(<Board />);
+    const dialog = await openTask(user);
+    await user.click(within(dialog).getByRole("checkbox", { name: "a" }));
+    within(dialog).getByRole("button", { name: "Delete completed" }).focus();
+    await user.keyboard("{Enter}");
+    expect(within(dialog).queryAllByRole("checkbox")).toHaveLength(0);
+    expect(within(dialog).queryByRole("list", { name: "Checklist items" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Delete completed" })).toBeDisabled();
+  });
+
   it("shows an accessible 'N/M done' progress label that stays in sync", async () => {
     seed();
     const user = userEvent.setup();

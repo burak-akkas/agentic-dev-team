@@ -13,6 +13,7 @@ import {
   moveChecklistItem,
   restoreCard,
   toggleChecklistItem,
+  uncheckAllChecklistItems,
   updateCard,
   type Board,
 } from "@/lib/board";
@@ -29,6 +30,34 @@ const texts = (board: Board) => findCard(board, "c")?.card.checklist?.map((i) =>
 const ids = (board: Board) => findCard(board, "c")?.card.checklist?.map((i) => i.id);
 
 describe("checklist", () => {
+  it("unchecks every item, keeping text, order and ids, and leaves other cards alone", () => {
+    let board = withItems(["a", "b", "c"]);
+    board = addCard(board, "Other", { id: "o" });
+    board = addChecklistItem(board, "o", "x", { id: "ox" });
+    board = toggleChecklistItem(board, "c", "i0");
+    board = toggleChecklistItem(board, "c", "i2");
+    board = toggleChecklistItem(board, "o", "ox");
+    const next = uncheckAllChecklistItems(board, "c");
+    expect(findCard(next, "c")?.card.checklist).toEqual([
+      { id: "i0", text: "a", done: false },
+      { id: "i1", text: "b", done: false },
+      { id: "i2", text: "c", done: false },
+    ]);
+    expect(findCard(next, "o")?.card.checklist?.[0].done).toBe(true);
+    expect(checklistProgress(findCard(next, "c")!.card)).toEqual({ done: 0, total: 3 });
+  });
+
+  it("uncheck all returns the same board when nothing is ticked or the list is empty", () => {
+    const board = withItems(["a"]);
+    expect(uncheckAllChecklistItems(board, "c")).toBe(board);
+    const empty = withItems([]);
+    expect(uncheckAllChecklistItems(empty, "c")).toBe(empty);
+  });
+
+  it("uncheck all throws for an unknown card", () => {
+    expect(() => uncheckAllChecklistItems(withItems([]), "nope")).toThrow();
+  });
+
   it("adds trimmed, unchecked items at the end with an injectable id", () => {
     const board = withItems(["one", "  two  "]);
     expect(findCard(board, "c")?.card.checklist).toEqual([

@@ -76,7 +76,9 @@ export function ColumnHeader({
     return (
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <h2 id={`column-${id}`} className="flex min-w-0 items-center gap-2 px-1 text-sm font-semibold">
-          <span className="break-words">{title}</span>
+          <span className="break-words" title={title}>
+            {title}
+          </span>
           <span className={`rounded-full px-2 text-xs font-medium ${badgeTone}`}>
             {limit === undefined ? total : `${total} / ${limit}`}
           </span>
@@ -91,7 +93,7 @@ export function ColumnHeader({
     <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <h2 id={`column-${id}`} className="flex items-center gap-2 px-1 text-sm font-semibold">
-          {title}
+<span title={title}>{title}</span>
           <span className={`rounded-full px-2 text-xs font-medium ${badgeTone}`}>
             {limit === undefined ? total : `${total} / ${limit}`}
           </span>

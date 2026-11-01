@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { addCard, emptyBoard, moveCard, setWipLimit } from "@/lib/board";
+import { addCard, addList, emptyBoard, moveCard, setWipLimit } from "@/lib/board";
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
 import { Board } from "@/components/board/Board";
@@ -79,6 +79,31 @@ describe("WIP limits in <Board />", () => {
     await user.type(screen.getByLabelText("Search cards"), "Alpha");
     expect(screen.getByRole("heading", { name: "Doing3 / 3" })).toBeInTheDocument();
     expect(screen.getByText("At limit")).toBeInTheDocument();
+  });
+});
+
+describe("list name tooltip", () => {
+  const LONG = "Quarterly roadmap review items";
+
+  beforeEach(() => resetBoardStore());
+
+  it("puts the full name, without the count, in a title on the expanded header", () => {
+    saveBoard(addCard(addList(emptyBoard(), LONG, { id: "r" }), "Task", { id: "t" }));
+    render(<Board />);
+
+    const heading = screen.getByRole("heading", { name: new RegExp(`^${LONG}`) });
+    const name = within(heading).getByText(LONG);
+    expect(name).toHaveAttribute("title", LONG);
+  });
+
+  it("puts the full name in a title on the collapsed header", async () => {
+    const user = userEvent.setup();
+    saveBoard(addList(emptyBoard(), LONG, { id: "r" }));
+    render(<Board />);
+
+    await user.click(screen.getByRole("button", { name: `Collapse ${LONG}` }));
+    const heading = screen.getByRole("heading", { name: new RegExp(`^${LONG}`) });
+    expect(within(heading).getByText(LONG)).toHaveAttribute("title", LONG);
   });
 });
 

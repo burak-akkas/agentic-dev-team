@@ -15,11 +15,13 @@ export function CardComments({
   onAdd,
   onEdit,
   onDelete,
+  onCopy,
 }: {
   comments: readonly CardComment[];
   onAdd: (text: string) => void;
   onEdit: (id: string, text: string) => void;
   onDelete: (id: string) => void;
+  onCopy?: (text: string) => void;
 }) {
   const baseId = useId();
   const [draft, setDraft] = useState("");
@@ -166,6 +168,11 @@ export function CardComments({
                   )}
                   {editingId !== comment.id && confirmingId !== comment.id && (
                     <span className="ml-auto flex items-center gap-1">
+                      {onCopy && (
+                        <Button variant="ghost" size="xs" aria-label={`Copy comment ${position}`} onClick={() => onCopy(comment.text)}>
+                          Copy
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="xs"

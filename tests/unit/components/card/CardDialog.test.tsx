@@ -347,3 +347,39 @@ describe("<CardDialog />", () => {
     expect(screen.queryByRole("button", { name: "Archive" })).not.toBeInTheDocument();
   });
 });
+
+describe("<CardDialog /> copy comment", () => {
+  const withComment: Card = {
+    ...card,
+    comments: [{ id: "c1", text: "Hello\nworld", createdAt: "2030-01-01T10:00:00.000Z" }],
+  };
+
+  function renderWithComment() {
+    const onUpdateBoard = vi.fn();
+    const onClose = vi.fn();
+    render(<CardDialog card={withComment} column="todo" onSave={vi.fn()} onDelete={vi.fn()} onClose={onClose} onUpdateBoard={onUpdateBoard} />);
+    return { onUpdateBoard, onClose, user: userEvent.setup() };
+  }
+
+  it("writes the comment to the clipboard and confirms", async () => {
+    const { onUpdateBoard, onClose, user } = renderWithComment();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await user.click(screen.getByRole("button", { name: "Copy comment 1" }));
+    expect(writeText).toHaveBeenCalledWith("Hello\nworld");
+    expect(await screen.findByRole("status")).toHaveTextContent("Copied");
+    expect(onUpdateBoard).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("shows the comment to copy by hand when the clipboard fails, and can dismiss it", async () => {
+    const { user } = renderWithComment();
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    await user.click(screen.getByRole("button", { name: "Copy comment 1" }));
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("Copy the comment by hand");
+    expect(status).toHaveTextContent("Hello");
+    await user.click(within(status).getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});

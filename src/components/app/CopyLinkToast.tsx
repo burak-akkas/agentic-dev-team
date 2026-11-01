@@ -16,11 +16,11 @@ export function CopyLinkToast({
   onDismiss,
 }: {
   result: CopyResult;
-  kind?: "link" | "markdown" | "card";
+  kind?: "link" | "markdown" | "card" | "comment";
   onDismiss: () => void;
 }) {
   const copied = result === "copied";
-  const markdown = kind === "markdown" || kind === "card";
+  const markdown = kind === "markdown" || kind === "card" || kind === "comment";
 
   useEffect(() => {
     if (!copied) {
@@ -33,7 +33,7 @@ export function CopyLinkToast({
   if (copied) {
     return (
       <Toast>
-        <span>{kind === "card" ? "Copied" : markdown ? "Copied as Markdown" : "Link copied"}</span>
+        <span>{kind === "card" || kind === "comment" ? "Copied" : markdown ? "Copied as Markdown" : "Link copied"}</span>
       </Toast>
     );
   }
@@ -43,7 +43,9 @@ export function CopyLinkToast({
       <span>
         {kind === "card"
           ? "Could not copy. Copy the text by hand:"
-          : markdown
+          : kind === "comment"
+            ? "Could not copy. Copy the comment by hand:"
+            : markdown
             ? "Could not copy. Copy the Markdown by hand:"
             : "Could not copy. Copy the link by hand:"}
       </span>

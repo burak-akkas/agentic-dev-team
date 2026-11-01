@@ -375,3 +375,33 @@ describe("<CardComments /> order toggle", () => {
     expect(texts()).toEqual(["Third comment", "Second comment", "First comment"]);
   });
 });
+
+describe("<CardComments /> copy", () => {
+  const comments = [
+    { id: "c1", text: "Line one\nLine two", createdAt: "2030-01-01T10:00:00.000Z", editedAt: "2030-01-02T10:00:00.000Z" },
+    { id: "c2", text: "Second", createdAt: "2030-01-01T11:00:00.000Z" },
+  ];
+  const noop = () => undefined;
+
+  it("copies exactly the comment text", async () => {
+    const onCopy = vi.fn();
+    const user = userEvent.setup();
+    render(<CardComments comments={comments} onAdd={noop} onEdit={noop} onDelete={noop} onCopy={onCopy} />);
+    await user.click(screen.getByRole("button", { name: "Copy comment 1" }));
+    expect(onCopy).toHaveBeenCalledWith("Line one\nLine two");
+  });
+
+  it("hides Copy while editing or confirming delete", async () => {
+    const user = userEvent.setup();
+    render(<CardComments comments={comments} onAdd={noop} onEdit={noop} onDelete={noop} onCopy={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Edit comment 1" }));
+    expect(screen.queryByRole("button", { name: "Copy comment 1" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete comment 2" }));
+    expect(screen.queryByRole("button", { name: "Copy comment 2" })).not.toBeInTheDocument();
+  });
+
+  it("has no Copy button without onCopy", () => {
+    render(<CardComments comments={comments} onAdd={noop} onEdit={noop} onDelete={noop} />);
+    expect(screen.queryByRole("button", { name: /Copy comment/ })).not.toBeInTheDocument();
+  });
+});

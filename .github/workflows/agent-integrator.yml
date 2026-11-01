@@ -52,6 +52,8 @@ jobs:
       AGENT_INTEGRATOR_CHECKS_MINUTES: ${{ vars.AGENT_INTEGRATOR_CHECKS_MINUTES || '30' }}
       AGENT_INTEGRATOR_QA_MINUTES: ${{ vars.AGENT_INTEGRATOR_QA_MINUTES || '60' }}
       DRAIN_MINUTES: ${{ vars.AGENT_INTEGRATOR_DRAIN_MINUTES || '100' }}
+      AGENT_AUTO_MERGE_HIGH_RISK: ${{ vars.AGENT_AUTO_MERGE_HIGH_RISK }}
+      AGENT_PROTECTED_PATHS: ${{ vars.AGENT_PROTECTED_PATHS || '.github/,scripts/,templates/' }}
     steps:
       - uses: actions/create-github-app-token@v2
         id: app
@@ -69,9 +71,14 @@ jobs:
 
       - name: Merge the queue, one PR at a time
         env:
-          # The App token, so labels and merges trigger the other workflows (Reviewer, deploy).
+          # The App token, so labels and merges trigger the other workflows (Reviewer, deploy). It
+          # expires after an hour; app-token.sh renews it from the App's key during long runs.
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          AGENT_APP_ID: ${{ vars.AGENT_APP_ID }}
+          AGENT_APP_PRIVATE_KEY: ${{ secrets.AGENT_APP_PRIVATE_KEY }}
+          AGENT_TOKEN_CACHE: ${{ runner.temp }}/agent-app-token
         run: |
+          if [ -n "${AGENT_TOKEN_CACHE:-}" ]; then (umask 077; printf '%s %s\n' "$(date +%s)" "$GH_TOKEN" > "$AGENT_TOKEN_CACHE"); fi
           start=$(date +%s)
           seen=" "
           echo "### 🚦 Merge queue" >> "$GITHUB_STEP_SUMMARY"
@@ -92,6 +99,7 @@ jobs:
               break
             fi
             seen="$seen$next "
+            if token=$("$BIN/app-token.sh"); then export GH_TOKEN="$token"; fi
             echo "Queue: $(echo "$queue" | awk '{print "#" $1 " (" $2 ")"}' | xargs)"
             result=$("$BIN/integrate.sh" "$next" | tail -1) || result="result=error"
             echo "- #$next: ${result#result=}" >> "$GITHUB_STEP_SUMMARY"

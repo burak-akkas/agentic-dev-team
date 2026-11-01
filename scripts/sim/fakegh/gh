@@ -128,6 +128,7 @@ def pr_view(n, keys):
             else: out[k] = "CONFLICTING" if it.get("conflict") else "MERGEABLE"
         elif k == "closingIssuesReferences": out[k] = [{"number": it["issue"]}] if it.get("issue") else []
         elif k == "number": out[k] = int(n)
+        elif k == "title": out[k] = "T%s" % n   # the same title the issue listing and run titles use
         elif k == "headRefName": out[k] = it.get("branch", "agent/issue-%s" % n)
         else: out[k] = None
     return out

@@ -18,10 +18,14 @@ repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be set}"
 here="$(dirname "$0")"
 
 sleep 20   # give GitHub time to recompute mergeability after the merge
-# Titles of PRs with an Implementor run queued or in progress (run titles are the PR title).
-busy=$(for s in queued in_progress waiting pending requested; do
-  gh run list -R "$repo" --workflow agent-implementor.yml --status "$s" --limit 50 --json displayTitle --jq '.[].displayTitle' 2>/dev/null
-done)
+# Whether an Implementor run is queued or in progress for a PR (run titles are the PR title). Asked
+# right before flagging each PR, not once up front: checking the PRs takes a while, and another run
+# (e.g. a Reviewer or QA run that found the conflict) can start the Implementor meanwhile.
+implementor_busy() {   # <pr title>
+  for s in queued in_progress waiting pending requested; do
+    gh run list -R "$repo" --workflow agent-implementor.yml --status "$s" --limit 50 --json displayTitle --jq '.[].displayTitle' 2>/dev/null
+  done | grep -qxF -- "$1"
+}
 for n in $(gh pr list -R "$repo" --state open --base "$base" --json number,headRefName \
              --jq '.[] | select(.headRefName | startswith("agent/")) | .number'); do
   state=UNKNOWN
@@ -37,7 +41,7 @@ for n in $(gh pr list -R "$repo" --state open --base "$base" --json number,headR
   case ",$labels," in
     *",agent:changes-requested,"*|*",agent:needs-decision,"*|*",agent:needs-human,"*|*",agent:integrating,"*) continue ;;
   esac
-  if printf '%s\n' "$busy" | grep -qxF -- "$(jq -r .title <<<"$view")"; then
+  if implementor_busy "$(jq -r .title <<<"$view")"; then
     echo "PR #$n: the Implementor is already working on it"
     continue
   fi

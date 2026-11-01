@@ -85,7 +85,7 @@ export function CardComments({
   return (
     <section aria-labelledby={`${baseId}-heading`} className="flex flex-col gap-2">
       <h3 id={`${baseId}-heading`} className={labelStyles}>
-        Comments
+        {comments.length > 0 ? `Comments (${comments.length})` : "Comments"}
       </h3>
 
       {comments.length > 0 && (

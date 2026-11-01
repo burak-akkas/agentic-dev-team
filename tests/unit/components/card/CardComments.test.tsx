@@ -185,6 +185,37 @@ describe("<CardComments />", () => {
     expect(screen.getByLabelText("New comment")).toHaveFocus();
   });
 
+  it("shows plain Comments at zero and the count otherwise", () => {
+    const props = { onAdd: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
+    const make = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ id: `x${i}`, text: `T${i}`, createdAt: new Date().toISOString() }));
+    const { rerender } = render(<CardComments comments={[]} {...props} />);
+    expect(screen.getByRole("heading", { name: "Comments" })).toHaveTextContent(/^Comments$/);
+    expect(screen.queryByRole("list", { name: "Comments" })).not.toBeInTheDocument();
+    rerender(<CardComments comments={make(1)} {...props} />);
+    expect(screen.getByRole("heading", { name: "Comments (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Comments" })).toBeInTheDocument();
+    rerender(<CardComments comments={make(3)} {...props} />);
+    expect(screen.getByRole("heading", { name: "Comments (3)" })).toBeInTheDocument();
+  });
+
+  it("updates the count after adding and deleting comments", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    expect(screen.getByRole("heading", { name: "Comments (2)" })).toBeInTheDocument();
+    await user.type(screen.getByLabelText("New comment"), "Third");
+    await user.click(screen.getByRole("button", { name: "Add comment" }));
+    expect(screen.getByRole("heading", { name: "Comments (3)" })).toBeInTheDocument();
+    for (let remaining = 2; remaining >= 1; remaining -= 1) {
+      await user.click(screen.getByRole("button", { name: "Delete comment 1" }));
+      await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+      expect(screen.getByRole("heading", { name: `Comments (${remaining})` })).toBeInTheDocument();
+    }
+    await user.click(screen.getByRole("button", { name: "Delete comment 1" }));
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(screen.getByRole("heading", { name: "Comments" })).toHaveTextContent(/^Comments$/);
+  });
+
   it("renders HTML-like text literally", () => {
     render(<CardComments comments={[{ id: "x", text: "<b>bold</b>", createdAt: new Date().toISOString() }]} onAdd={vi.fn()} onEdit={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByText("<b>bold</b>")).toBeInTheDocument();

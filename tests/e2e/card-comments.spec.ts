@@ -20,6 +20,32 @@ test("posts a comment with Ctrl+Enter", async ({ page }) => {
   await expect(dialog).toBeVisible();
 });
 
+test("shows the comment count in the heading and keeps it after reopening", async ({ page }) => {
+  await page.getByLabel("New card title").fill("Counted card");
+  await page.getByRole("button", { name: "Add card" }).click();
+  await page.getByRole("button", { name: "Counted card", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Counted card" });
+  await expect(dialog.getByRole("heading", { name: "Comments", exact: true })).toBeVisible();
+
+  for (const text of ["One", "Two"]) {
+    await dialog.getByLabel("New comment").fill(text);
+    await dialog.getByRole("button", { name: "Add comment" }).click();
+  }
+  await expect(dialog.getByRole("heading", { name: "Comments (2)", exact: true })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Delete comment 1" }).click();
+  await dialog.getByRole("button", { name: "Confirm delete" }).click();
+  await expect(dialog.getByRole("heading", { name: "Comments (1)", exact: true })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Counted card", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "Comments (1)", exact: true })).toBeVisible();
+
+  await page.getByRole("dialog").getByRole("button", { name: "Delete comment 1" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Confirm delete" }).click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "Comments", exact: true })).toBeVisible();
+});
+
 test("adds, edits and deletes comments, with a count badge that persists and survives archiving", async ({ page }) => {
   await page.getByLabel("New card title").fill("Plan trip");
   await page.getByRole("button", { name: "Add card" }).click();

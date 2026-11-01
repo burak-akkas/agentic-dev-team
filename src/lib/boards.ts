@@ -45,6 +45,36 @@ export function createBoardEntry(list: BoardList, name: string, id: string = new
   return { boards: [...list.boards, { id, name: result.name, board: emptyBoard() }], currentId: id };
 }
 
+// "<name> (copy)", then "(copy 2)", "(copy 3)"... The base name is truncated so the suffix fits and the name is unique.
+export function copyBoardName(baseName: string, boards: { id: string; name: string }[]): string {
+  for (let n = 1; ; n++) {
+    const suffix = n === 1 ? " (copy)" : ` (copy ${n})`;
+    const base = baseName.trim().slice(0, Math.max(1, MAX_BOARD_NAME_LENGTH - suffix.length)).trim();
+    const result = validateBoardName(`${base}${suffix}`, boards);
+    if (result.ok) {
+      return result.name;
+    }
+  }
+}
+
+// Appends a deep copy of board `id` (without archive and activity) and makes it current.
+// Card, list and checklist ids are scoped per board, so they stay as they are.
+export function duplicateBoardEntry(list: BoardList, id: string, newId: string = newBoardId()): BoardList {
+  const source = list.boards.find((b) => b.id === id);
+  if (!source || list.boards.some((b) => b.id === newId)) {
+    return list;
+  }
+  const board: Board = JSON.parse(JSON.stringify(source.board));
+  board.archive = [];
+  for (const cards of Object.values(board.columns)) {
+    for (const card of cards) {
+      delete card.activity;
+    }
+  }
+  const name = copyBoardName(source.name, list.boards);
+  return { boards: [...list.boards, { id: newId, name, board }], currentId: newId };
+}
+
 export function renameBoard(list: BoardList, id: string, name: string): BoardList {
   const result = validateBoardName(name, list.boards, id);
   if (!result.ok || !list.boards.some((b) => b.id === id)) {

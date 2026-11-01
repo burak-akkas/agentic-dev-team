@@ -103,6 +103,30 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  describe("duplicate", () => {
+    it("copies the current board with its cards by keyboard and selects the copy", async () => {
+      const { user } = setup();
+      await user.type(screen.getByLabelText("New card title"), "Mine");
+      await user.click(screen.getByRole("button", { name: "Add card" }));
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toContain("Duplicate board");
+      await user.click(screen.getByRole("menuitem", { name: "Duplicate board" }));
+
+      expect(optionNames()).toEqual(["My board", "My board (copy)"]);
+      expect(selectedName()).toBe("My board (copy)");
+      expect(screen.getByText("Mine")).toBeInTheDocument();
+    });
+
+    it("numbers a second copy", async () => {
+      const { user } = setup();
+      await choose(user, "Duplicate board");
+      await user.selectOptions(select(), "My board");
+      await choose(user, "Duplicate board");
+      expect(optionNames()).toEqual(["My board", "My board (copy)", "My board (copy 2)"]);
+    });
+  });
+
   describe("rename", () => {
     it("is prefilled and renames the current board", async () => {
       const { user } = setup();

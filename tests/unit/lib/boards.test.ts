@@ -3,9 +3,11 @@ import { addCard } from "@/lib/board";
 import {
   boardLink,
   boardQuery,
+  copyBoardName,
   createBoardEntry,
   currentEntry,
   deleteBoardEntry,
+  duplicateBoardEntry,
   initialBoardList,
   MAX_BOARD_NAME_LENGTH,
   renameBoard,
@@ -137,5 +139,70 @@ describe("board list logic", () => {
     expect(changed.boards[1].board.columns.todo).toHaveLength(1);
     expect(changed.boards[0].board).toBe(list.boards[0].board);
     expect(currentEntry(selectBoard(changed, "a")).board.columns.todo).toEqual([]);
+  });
+});
+
+describe("duplicateBoardEntry", () => {
+  function source() {
+    const list = initialBoardList("a");
+    const board = addCard(list.boards[0].board, "Task", { id: "c1" });
+    board.columns.todo[0].notes = "note";
+    board.columns.todo[0].activity = [{ type: "created", at: "2026-01-01T00:00:00.000Z" }] as never;
+    board.archive = [{ id: "old", title: "Old" } as never];
+    board.wipLimits = { todo: 3 };
+    board.collapsedLists = ["done"];
+    board.templates = [];
+    return { ...list, boards: [{ ...list.boards[0], board }] };
+  }
+
+  it("appends a copy named '(copy)' and makes it current", () => {
+    const list = duplicateBoardEntry(source(), "a", "b");
+    expect(list.boards.map((b) => b.name)).toEqual(["My board", "My board (copy)"]);
+    expect(list.currentId).toBe("b");
+  });
+
+  it("keeps lists, cards and settings but drops archive and activity", () => {
+    const list = duplicateBoardEntry(source(), "a", "b");
+    const copy = list.boards[1].board;
+    expect(copy.columns.todo[0]).toMatchObject({ id: "c1", title: "Task", notes: "note" });
+    expect(copy.columns.todo[0].activity).toBeUndefined();
+    expect(copy.archive).toEqual([]);
+    expect(copy.wipLimits).toEqual({ todo: 3 });
+    expect(copy.collapsedLists).toEqual(["done"]);
+  });
+
+  it("does not change the original and shares no references", () => {
+    const original = source();
+    const list = duplicateBoardEntry(original, "a", "b");
+    expect(list.boards[0].board.archive).toHaveLength(1);
+    expect(list.boards[0].board.columns.todo[0].activity).toHaveLength(1);
+    expect(list.boards[1].board.columns.todo[0]).not.toBe(list.boards[0].board.columns.todo[0]);
+    const changed = updateCurrentBoard(list, (b) => addCard(b, "Only copy", { id: "c2" }));
+    expect(changed.boards[0].board.columns.todo).toHaveLength(1);
+    expect(changed.boards[1].board.columns.todo).toHaveLength(2);
+  });
+
+  it("returns the list unchanged for an unknown id or a clashing new id", () => {
+    const list = source();
+    expect(duplicateBoardEntry(list, "zzz", "b")).toBe(list);
+    expect(duplicateBoardEntry(list, "a", "a")).toBe(list);
+  });
+});
+
+describe("copyBoardName", () => {
+  it("numbers the copy when the name is taken, ignoring case", () => {
+    const boards = [
+      { id: "a", name: "Sprint" },
+      { id: "b", name: "sprint (COPY)" },
+    ];
+    expect(copyBoardName("Sprint", boards)).toBe("Sprint (copy 2)");
+  });
+
+  it("truncates a long base name so the result is valid", () => {
+    const long = "x".repeat(MAX_BOARD_NAME_LENGTH);
+    const name = copyBoardName(long, [{ id: "a", name: long }]);
+    expect(name.length).toBeLessThanOrEqual(MAX_BOARD_NAME_LENGTH);
+    expect(name.endsWith(" (copy)")).toBe(true);
+    expect(copyBoardName(long, [{ id: "a", name: long }, { id: "b", name }])).toMatch(/\(copy 2\)$/);
   });
 });

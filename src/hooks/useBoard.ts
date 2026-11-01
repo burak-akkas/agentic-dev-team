@@ -6,6 +6,7 @@ import {
   createBoardEntry,
   currentEntry,
   deleteBoardEntry,
+  duplicateBoardEntry,
   initialBoardList,
   renameBoard as renameBoardEntry,
   selectBoard as selectBoardEntry,
@@ -90,9 +91,13 @@ export function useBoards() {
     }
     return result;
   }, []);
+  const duplicateBoard = useCallback(() => {
+    const current = getSnapshot();
+    commit(duplicateBoardEntry(current, current.currentId));
+  }, []);
   const deleteBoard = useCallback((id: string) => commit(deleteBoardEntry(getSnapshot(), id)), []);
   const selectBoard = useCallback((id: string) => commit(selectBoardEntry(getSnapshot(), id)), []);
-  return { boards, currentId: list.currentId, createBoard, renameBoard, deleteBoard, selectBoard };
+  return { boards, currentId: list.currentId, createBoard, renameBoard, duplicateBoard, deleteBoard, selectBoard };
 }
 
 // Tests only: forget the cached boards so the next read comes from storage.

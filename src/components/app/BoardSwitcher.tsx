@@ -83,7 +83,7 @@ function BoardNameDialog({
 }
 
 export function BoardSwitcher() {
-  const { boards, currentId, createBoard, renameBoard, deleteBoard, selectBoard } = useBoards();
+  const { boards, currentId, createBoard, renameBoard, duplicateBoard, deleteBoard, selectBoard } = useBoards();
   const [board, update] = useBoard();
   const lists = boardLists(board);
   const [dialog, setDialog] = useState<Dialogs>(null);
@@ -124,6 +124,7 @@ export function BoardSwitcher() {
         items={[
           { label: "New board", onSelect: () => setDialog("create") },
           { label: "Rename board", onSelect: () => setDialog("rename") },
+          { label: "Duplicate board", onSelect: duplicateBoard },
           { label: "Copy board link", onSelect: copyLink },
           { label: "Delete board", disabled: boards.length <= 1, onSelect: () => setDialog("delete") },
           {

@@ -5,6 +5,7 @@ import {
   addChecklistItem,
   checklistProgress,
   deleteChecklistItem,
+  deleteCompletedChecklistItems,
   editChecklistItem,
   hasCompletedItemsAboveOpen,
   MAX_CHECKLIST_ITEM_LENGTH,
@@ -94,6 +95,14 @@ export function ChecklistSection({
             onClick={() => onChange((b) => uncheckAllChecklistItems(b, card.id))}
           >
             Uncheck all
+          </Button>
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={!progress || progress.done === 0}
+            onClick={() => onChange((b) => deleteCompletedChecklistItems(b, card.id))}
+          >
+            Delete completed
           </Button>
         </div>
       </div>

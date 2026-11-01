@@ -5,6 +5,7 @@ import {
   archiveDone,
   checklistProgress,
   deleteChecklistItem,
+  deleteCompletedChecklistItems,
   editChecklistItem,
   emptyBoard,
   findCard,
@@ -85,6 +86,30 @@ describe("checklist", () => {
 
   it("uncheck all throws for an unknown card", () => {
     expect(() => uncheckAllChecklistItems(withItems([]), "nope")).toThrow();
+  });
+
+  it("deletes completed items, keeping unchecked ones in order, without mutating", () => {
+    let board = withItems(["a", "b", "c"]);
+    board = toggleChecklistItem(board, "c", "i0");
+    board = toggleChecklistItem(board, "c", "i2");
+    const before = structuredClone(board);
+    const next = deleteCompletedChecklistItems(board, "c");
+    expect(findCard(next, "c")?.card.checklist).toEqual([{ id: "i1", text: "b", done: false }]);
+    expect(board).toEqual(before);
+  });
+
+  it("delete completed removes the checklist field when every item is checked", () => {
+    let board = withItems(["a", "b"]);
+    board = toggleChecklistItem(board, "c", "i0");
+    board = toggleChecklistItem(board, "c", "i1");
+    const card = findCard(deleteCompletedChecklistItems(board, "c"), "c")!.card;
+    expect("checklist" in card).toBe(false);
+  });
+
+  it("delete completed returns the same board when nothing is ticked, and throws for an unknown card", () => {
+    const board = withItems(["a"]);
+    expect(deleteCompletedChecklistItems(board, "c")).toBe(board);
+    expect(() => deleteCompletedChecklistItems(board, "nope")).toThrow();
   });
 
   it("adds trimmed, unchecked items at the end with an injectable id", () => {

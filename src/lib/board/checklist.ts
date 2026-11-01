@@ -122,6 +122,13 @@ export function moveCompletedChecklistItemsToBottom(board: Board, cardId: string
   );
 }
 
+// Removes every ticked item. Returns the same board when no item is ticked.
+export function deleteCompletedChecklistItems(board: Board, cardId: string): Board {
+  return changeChecklist(board, cardId, (items) =>
+    items.some((item) => item.done) ? items.filter((item) => !item.done) : items,
+  );
+}
+
 // Done and total checklist items, or `undefined` when the card has no checklist.
 export function checklistProgress(card: Card): { done: number; total: number } | undefined {
   const items = card.checklist;

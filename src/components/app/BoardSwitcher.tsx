@@ -2,7 +2,8 @@
 
 import { useCallback, useId, useState, type FormEvent } from "react";
 import { boardLink, MAX_BOARD_NAME_LENGTH, type NameResult } from "@/lib/boards";
-import { CopyLinkToast } from "@/components/app/CopyLinkToast";
+import { boardToMarkdown } from "@/lib/boardMarkdown";
+import { CopyLinkToast, type CopyResult } from "@/components/app/CopyLinkToast";
 import {
   archiveDone,
   boardLists,
@@ -89,18 +90,19 @@ export function BoardSwitcher() {
   const [dialog, setDialog] = useState<Dialogs>(null);
   const current = boards.find((b) => b.id === currentId) ?? boards[0];
   const close = () => setDialog(null);
-  const [copy, setCopy] = useState<"copied" | { url: string } | null>(null);
+  const [copy, setCopy] = useState<{ kind: "link" | "markdown"; result: CopyResult } | null>(null);
   const dismissCopy = useCallback(() => setCopy(null), []);
 
-  async function copyLink() {
-    const url = boardLink(currentId, window.location.href);
+  async function copyText(kind: "link" | "markdown", text: string) {
     try {
-      await navigator.clipboard.writeText(url);
-      setCopy("copied");
+      await navigator.clipboard.writeText(text);
+      setCopy({ kind, result: "copied" });
     } catch {
-      setCopy({ url });
+      setCopy({ kind, result: { text } });
     }
   }
+  const copyLink = () => copyText("link", boardLink(currentId, window.location.href));
+  const copyMarkdown = () => copyText("markdown", boardToMarkdown(board, current.name));
   const doneId = insightsListIds(board).done;
   const doneCount = doneId === undefined ? 0 : listCards(board, doneId).length;
 
@@ -126,6 +128,7 @@ export function BoardSwitcher() {
           { label: "Rename board", onSelect: () => setDialog("rename") },
           { label: "Duplicate board", onSelect: duplicateBoard },
           { label: "Copy board link", onSelect: copyLink },
+          { label: "Copy as Markdown", onSelect: copyMarkdown },
           { label: "Delete board", disabled: boards.length <= 1, onSelect: () => setDialog("delete") },
           {
             label: "Collapse all lists",
@@ -140,7 +143,7 @@ export function BoardSwitcher() {
           { label: "Archive done cards", disabled: doneCount === 0, onSelect: () => setDialog("archive") },
         ]}
       />
-      {copy && <CopyLinkToast result={copy} onDismiss={dismissCopy} />}
+      {copy && <CopyLinkToast result={copy.result} kind={copy.kind} onDismiss={dismissCopy} />}
       {dialog === "create" && (
         <BoardNameDialog title="New board" submitLabel="Create" initialName="" onSubmit={createBoard} onClose={close} />
       )}

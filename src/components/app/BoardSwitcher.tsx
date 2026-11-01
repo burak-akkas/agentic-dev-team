@@ -8,7 +8,9 @@ import {
   archiveDone,
   boardLists,
   collapseAllLists,
+  collapseEmptyLists,
   expandAllLists,
+  hasExpandedEmptyList,
   insightsListIds,
   isListCollapsed,
   listCards,
@@ -134,6 +136,11 @@ export function BoardSwitcher() {
             label: "Collapse all lists",
             disabled: lists.length === 0 || lists.every((l) => isListCollapsed(board, l.id)),
             onSelect: () => update(collapseAllLists),
+          },
+          {
+            label: "Collapse empty lists",
+            disabled: !hasExpandedEmptyList(board),
+            onSelect: () => update(collapseEmptyLists),
           },
           {
             label: "Expand all lists",

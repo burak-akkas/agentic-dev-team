@@ -193,6 +193,34 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  describe("collapse empty lists", () => {
+    const item = (name: string) => screen.getByRole("menuitem", { name });
+
+    it("collapses only the empty lists, then disables itself", async () => {
+      const { user } = setup();
+      await user.type(screen.getByLabelText("New card title"), "Task");
+      await user.click(screen.getByRole("button", { name: "Add card" }));
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(item("Collapse empty lists")).not.toHaveAttribute("aria-disabled", "true");
+      await user.click(item("Collapse empty lists"));
+      expect(screen.getByRole("button", { name: "Collapse To do" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Expand Doing" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Expand Done" })).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(item("Collapse empty lists")).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("works by keyboard", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      item("Collapse empty lists").focus();
+      await user.keyboard("{Enter}");
+      expect(screen.getByRole("button", { name: "Expand To do" })).toBeInTheDocument();
+    });
+  });
+
   describe("collapse and expand all lists", () => {
     const item = (name: string) => screen.getByRole("menuitem", { name });
 

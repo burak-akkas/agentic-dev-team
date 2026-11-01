@@ -48,7 +48,7 @@ A problem keeps the run's state directory (`state.json` has the whole repository
 
 | Group | Parameters |
 |---|---|
-| Agents | `review_ok`, `qa_ok` (verdict pass rates), `keep_edits` (a conflict resolution keeps the PR's own edits as they were), `impl_blocked`, `lead_fix` |
+| Agents | `review_ok`, `qa_ok` (verdict pass rates), `keep_edits` (a conflict resolution keeps the PR's own edits as they were), `impl_blocked`, `lead_fix`, `agent_time` (each agent works up to this many real seconds before acting, so runs overlap like real ones and races show up). The scripted Implementor reports no-change, like the real one, when asked to fix a conflict that is already gone; the matrix counts those wasted runs |
 | CI per new commit | `ci_fail`, `ci_hang` (pending forever), `ci_none` (the required check never reports), `ci_slow` (pending for 1–8 polls) |
 | Merging | `conflict` (chance that a merge makes another PR conflict), `merge_fail`, `merge_err` (merged, but `gh` reports an error), `workflow_change` (a human merges workflow changes, so update-branch is refused) |
 | GitHub | `drop` (lost webhook), `dup` (delivered twice), `api_flake` (any `gh` call fails), `unknown` (mergeability `UNKNOWN`), `kill_integrator` (the Integrator job is killed mid-run) |
@@ -59,9 +59,10 @@ A problem keeps the run's state directory (`state.json` has the whole repository
 
 ## Comparing with an older version
 
-A profile with `"legacy_ref": "<commit>"` runs that commit's merge gate, Reviewer and scripts
-instead, with the same simulated team. `profiles.json` compares the merge queue with `5673863`, the
-last commit before it (on `main`; skipped when the commit isn't in the checkout).
+A profile with `"legacy_ref": "<commit>"` runs that commit's agent tooling instead, with the same
+simulated team (for a commit before the merge queue, its merge gate). `profiles.json` compares the
+merge queue with `5673863`, the last commit before it, and the conflict sweep with `cf7c972`, the
+last commit before its fix (both on `main`; skipped when the commit isn't in the checkout).
 
 ## Extending it
 

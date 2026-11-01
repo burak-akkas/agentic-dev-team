@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addCard,
+  addDays,
   addList,
   cardDueStatus,
   deleteList,
@@ -19,6 +20,21 @@ import {
   setInsightsList,
   todayString,
 } from "@/lib/board";
+
+describe("addDays", () => {
+  it("adds days across month, year and leap-day boundaries", () => {
+    expect(addDays("2024-01-31", 1)).toBe("2024-02-01");
+    expect(addDays("2024-12-31", 1)).toBe("2025-01-01");
+    expect(addDays("2024-02-28", 1)).toBe("2024-02-29");
+    expect(addDays("2023-02-28", 1)).toBe("2023-03-01");
+  });
+
+  it("returns the same day for 0 and handles a week across DST", () => {
+    expect(addDays("2025-03-25", 0)).toBe("2025-03-25");
+    expect(addDays("2025-03-25", 7)).toBe("2025-04-01");
+    expect(addDays("2025-10-28", 7)).toBe("2025-11-04");
+  });
+});
 
 describe("due dates", () => {
   const base = addCard(emptyBoard(), "Task", { id: "a" });

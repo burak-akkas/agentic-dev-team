@@ -129,6 +129,43 @@ describe("<CardDialog />", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ dueDate: undefined }));
   });
 
+  it("sets the due date from the Today, Tomorrow and Next week buttons", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2024, 1, 28, 12));
+    try {
+      const { user, onSave } = setup({ dueDate: undefined });
+      const group = screen.getByRole("group", { name: "Quick picks" });
+      expect(screen.queryByRole("button", { name: "Clear due date" })).not.toBeInTheDocument();
+
+      await user.click(within(group).getByRole("button", { name: "Today" }));
+      expect(screen.getByLabelText("Due date")).toHaveValue("2024-02-28");
+      expect(screen.getByRole("button", { name: "Clear due date" })).toBeInTheDocument();
+      await user.click(within(group).getByRole("button", { name: "Tomorrow" }));
+      expect(screen.getByLabelText("Due date")).toHaveValue("2024-02-29");
+      await user.click(within(group).getByRole("button", { name: "Next week" }));
+      expect(screen.getByLabelText("Due date")).toHaveValue("2024-03-06");
+      expect(onSave).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ dueDate: "2024-03-06" }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("replaces an existing due date when a quick button is used", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2024, 11, 31, 12));
+    try {
+      const { user } = setup();
+      expect(screen.getByLabelText("Due date")).toHaveValue("2030-02-03");
+      await user.click(screen.getByRole("button", { name: "Tomorrow" }));
+      expect(screen.getByLabelText("Due date")).toHaveValue("2025-01-01");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("saves all edits at once", async () => {
     const { user, onSave } = setup();
     await user.clear(screen.getByLabelText("Title"));

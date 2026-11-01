@@ -4,6 +4,7 @@ import { useCallback, useId, useState, type FormEvent } from "react";
 import { CopyLinkToast, type CopyResult } from "@/components/app/CopyLinkToast";
 import {
   addComment,
+  addDays,
   addLabelToList,
   boardLists,
   COVER_COLORS,
@@ -17,6 +18,7 @@ import {
   PRIORITIES,
   relativeDueHint,
   removeLabelFromList,
+  todayString,
   type Board,
   type Card,
   type CardEdits,
@@ -33,6 +35,12 @@ import { LabelChip } from "./LabelChip";
 import { Button, ConfirmDialog, Dialog, Input, Select, Textarea } from "@/components/ui";
 
 const labelStyles = "text-xs font-medium text-subtle";
+
+const QUICK_DUE_DATES = [
+  { label: "Today", days: 0 },
+  { label: "Tomorrow", days: 1 },
+  { label: "Next week", days: 7 },
+];
 
 export function CardDialog({
   card,
@@ -233,6 +241,13 @@ export function CardDialog({
                 Clear due date
               </Button>
             )}
+          </div>
+          <div role="group" aria-label="Quick picks" className="flex flex-wrap items-center gap-2">
+            {QUICK_DUE_DATES.map(({ label, days }) => (
+              <Button key={label} variant="ghost" size="sm" onClick={() => setDueDate(addDays(todayString(), days))}>
+                {label}
+              </Button>
+            ))}
           </div>
           {dueDate && isValidDueDate(dueDate) && (
             <p data-testid="due-hint" className="text-xs text-zinc-600 dark:text-zinc-400">

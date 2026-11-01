@@ -58,10 +58,14 @@ export function isCardOverdue(board: Board, card: Card, column: ColumnId, today:
 
 export type DueStatus = "overdue" | "today" | "tomorrow";
 
-// Day after `date` (`YYYY-MM-DD`), as a local calendar day.
-function nextDay(date: string): string {
+// `date` (`YYYY-MM-DD`) shifted by `days` calendar days, as a local calendar day (safe across DST).
+export function addDays(date: string, days: number): string {
   const [year, month, day] = date.split("-").map(Number);
-  return todayString(new Date(year, month - 1, day + 1));
+  return todayString(new Date(year, month - 1, day + days));
+}
+
+function nextDay(date: string): string {
+  return addDays(date, 1);
 }
 
 // Due status of a card in `column`: overdue, due today or due tomorrow, else null (also for the done list).

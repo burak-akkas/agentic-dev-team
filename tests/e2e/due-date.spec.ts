@@ -57,3 +57,31 @@ test("shows due today and due tomorrow chips, but none for later dates or the do
   await editCard(page, "Soon", { dueDate: today, list: "Done" });
   await expect(column(page, "Done").getByText("Due today")).toHaveCount(0);
 });
+
+test("quick due date buttons set the due date in the dialog", async ({ page }) => {
+  await page.getByLabel("New card title").fill("Quick");
+  await page.getByRole("button", { name: "Add card" }).click();
+
+  const [today, tomorrow, nextWeek] = await page.evaluate(() => {
+    const fmt = (offset: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+    };
+    return [fmt(0), fmt(1), fmt(7)];
+  });
+
+  await page.getByRole("button", { name: "Quick", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const due = dialog.getByLabel("Due date", { exact: true });
+  await dialog.getByRole("button", { name: "Today" }).click();
+  await expect(due).toHaveValue(today);
+  await dialog.getByRole("button", { name: "Next week" }).click();
+  await expect(due).toHaveValue(nextWeek);
+  await dialog.getByRole("button", { name: "Tomorrow" }).focus();
+  await expect(dialog.getByRole("button", { name: "Tomorrow" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(due).toHaveValue(tomorrow);
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(column(page, "To do").getByText("Due tomorrow")).toBeVisible();
+});

@@ -8,9 +8,11 @@ import {
   boardLists,
   collapseAllLists,
   expandAllLists,
+  hasDueDates,
   insightsListIds,
   isListCollapsed,
   listCards,
+  sortListsByDueDate,
 } from "@/lib/board";
 import { useBoard, useBoards } from "@/hooks/useBoard";
 
@@ -137,6 +139,7 @@ export function BoardSwitcher() {
             disabled: !board.collapsedLists?.length,
             onSelect: () => update(expandAllLists),
           },
+          { label: "Sort lists by due date", disabled: !hasDueDates(board), onSelect: () => update(sortListsByDueDate) },
           { label: "Archive done cards", disabled: doneCount === 0, onSelect: () => setDialog("archive") },
         ]}
       />

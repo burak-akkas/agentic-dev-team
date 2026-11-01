@@ -234,6 +234,47 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  describe("sort lists by due date", () => {
+    async function addDated(user: ReturnType<typeof userEvent.setup>, title: string, due?: string) {
+      await user.type(screen.getByLabelText("New card title"), title);
+      await user.click(screen.getByRole("button", { name: "Add card" }));
+      if (!due) return;
+      await user.click(screen.getByRole("button", { name: title }));
+      const dialog = screen.getByRole("dialog");
+      await user.type(within(dialog).getByLabelText("Due date"), due);
+      await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    }
+    const todoTitles = () =>
+      within(screen.getByRole("region", { name: /^To do/ }))
+        .getAllByRole("button", { name: /^(Late|Early|None)$/ })
+        .map((b) => b.textContent);
+
+    it("is disabled while no card has a due date", async () => {
+      const { user } = setup();
+      await addDated(user, "None");
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(screen.getByRole("menuitem", { name: "Sort lists by due date" })).toHaveAttribute("aria-disabled", "true");
+    });
+
+    it("sorts by click and by keyboard", async () => {
+      const { user } = setup();
+      await addDated(user, "Late", "2031-01-01");
+      await addDated(user, "None");
+      await addDated(user, "Early", "2030-01-01");
+      expect(todoTitles()).toEqual(["Late", "None", "Early"]);
+
+      await choose(user, "Sort lists by due date");
+      expect(todoTitles()).toEqual(["Early", "Late", "None"]);
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      const item = screen.getByRole("menuitem", { name: "Sort lists by due date" });
+      expect(item).not.toHaveAttribute("aria-disabled", "true");
+      item.focus();
+      await user.keyboard("{Enter}");
+      expect(todoTitles()).toEqual(["Early", "Late", "None"]);
+    });
+  });
+
   describe("copy board link", () => {
     function stubClipboard(clipboard: { writeText: (text: string) => Promise<void> } | undefined) {
       Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true });

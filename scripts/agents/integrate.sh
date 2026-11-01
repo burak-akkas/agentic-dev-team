@@ -371,6 +371,7 @@ for _ in 1 2 3; do
       "$here/progress.sh" "$issue" "✅ **Merged** #$pr$([ -n "$prod" ] && echo ", deploying to [production]($prod)" || true)"
     fi
     "$here/sweep-conflicts.sh" "$pr" "$base" >&2
+    "$here/release-waiting.sh" >&2   # issues that waited for this PR's files can start now
     finish merged
   fi
   log "merge failed: $err"

@@ -93,6 +93,9 @@ done < <(gh api --paginate --slurp "repos/$repo/issues?state=open&per_page=100" 
 
 echo "Stalled items: $stalled"
 
+# Conflict avoidance: issues waiting for overlapping work start once it merged or closed, or waited too long.
+if [ "${AGENT_AVOID_CONFLICTS:-}" != false ] && [ "$dry" != "--dry-run" ]; then "$here/release-waiting.sh"; fi
+
 # The merge queue: queued PRs wait on purpose, but only while an Integrator run is queued or running
 # (each run drains the whole queue). Without one, e.g. after a cancelled run, re-applying agent:queued
 # to the front PR starts one; the PR keeps its place (queue.sh orders by the admission comment).

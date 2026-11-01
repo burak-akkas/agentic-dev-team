@@ -15,6 +15,7 @@ import {
   MAX_NOTES_LENGTH,
   MAX_TITLE_LENGTH,
   PRIORITIES,
+  relativeDueHint,
   removeLabelFromList,
   type Board,
   type Card,
@@ -233,6 +234,11 @@ export function CardDialog({
               </Button>
             )}
           </div>
+          {dueDate && isValidDueDate(dueDate) && (
+            <p data-testid="due-hint" className="text-xs text-zinc-600 dark:text-zinc-400">
+              {relativeDueHint(dueDate)}
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1">

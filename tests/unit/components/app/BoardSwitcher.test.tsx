@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen, waitForElementToBeRemoved, within } from "@testing-library/react";
+import { createEvent, fireEvent, render, screen, waitFor, waitForElementToBeRemoved, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Board } from "@/components/board/Board";
@@ -266,11 +266,13 @@ describe("<BoardSwitcher />", () => {
     async function addDated(user: ReturnType<typeof userEvent.setup>, title: string, due?: string) {
       await user.type(screen.getByLabelText("New card title"), title);
       await user.click(screen.getByRole("button", { name: "Add card" }));
+      const card = await screen.findByRole("button", { name: title });
       if (!due) return;
-      await user.click(screen.getByRole("button", { name: title }));
-      const dialog = screen.getByRole("dialog");
+      await user.click(card);
+      const dialog = await screen.findByRole("dialog");
       await user.type(within(dialog).getByLabelText("Due date"), due);
       await user.click(within(dialog).getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     }
     const todoTitles = () =>
       within(screen.getByRole("region", { name: /^To do/ }))

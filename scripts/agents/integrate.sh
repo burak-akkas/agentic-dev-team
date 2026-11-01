@@ -277,8 +277,19 @@ for _ in 1 2 3; do
   updated=""
   if [ "$n_behind" -gt 0 ]; then
     log "behind $base by $n_behind, updating"
-    if ! gh api -X PUT "repos/$repo/pulls/$pr/update-branch" -f expected_head_sha="$head" >/dev/null 2>&1; then
-      conflict "\`$base\` can't be merged into #$pr automatically (merge conflicts, or \`$base\` changed workflow files)"
+    if ! err=$(gh api -X PUT "repos/$repo/pulls/$pr/update-branch" -f expected_head_sha="$head" 2>&1 >/dev/null); then
+      if [ "$(mergeable)" = CONFLICTING ]; then conflict "#$pr conflicts with \`$base\`"; fi
+      # Refused without a conflict: usually because \`$base\` changed workflow files, which the App
+      # may not push (no Workflows permission, by design). The Implementor can't push them either,
+      # so a human merges the base in. One retry first, in case it was a passing error.
+      sleep 10
+      if ! err=$(gh api -X PUT "repos/$repo/pulls/$pr/update-branch" -f expected_head_sha="$head" 2>&1 >/dev/null); then
+        "$here/transition.sh" "$pr" agent:needs-human >/dev/null
+        say "✋ **Merge queue:** GitHub refused to merge \`$base\` into #$pr although they don't conflict, most likely because \`$base\` changed workflow files, which the agents' App may not push. A human: merge \`$base\` into this branch (\`git merge origin/$base\`, push), then apply \`agent:approved\`.
+> $(printf '%s' "$err" | tail -1)"
+        progress "🚦 **Merge queue**: \`$base\` can't be merged into #$pr by the agents (workflow files?), a human must"
+        finish left
+      fi
     fi
     new="$head"
     for _ in $(seq 1 30); do

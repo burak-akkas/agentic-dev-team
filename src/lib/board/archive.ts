@@ -49,6 +49,11 @@ export function deleteArchived(board: Board, cardId: string): Board {
   return { ...board, archive: board.archive.filter((c) => c.id !== cardId) };
 }
 
+// Permanently deletes every archived card. Returns the same board when the archive is already empty.
+export function emptyArchive(board: Board): Board {
+  return board.archive.length === 0 ? board : { ...board, archive: [] };
+}
+
 // Undoes `archiveList`: puts the given cards back at the start of `listId` (default: the done list, else the
 // last list), in order. Cards no longer in the archive (restored or deleted meanwhile) are skipped.
 // The archive's current copies are put back, so earlier activity is kept.

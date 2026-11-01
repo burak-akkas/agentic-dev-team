@@ -20,6 +20,31 @@ test("posts a comment with Ctrl+Enter", async ({ page }) => {
   await expect(dialog).toBeVisible();
 });
 
+test("toggles newest-first comment order and keeps it after a reload", async ({ page }) => {
+  await page.getByLabel("New card title").fill("Ordered card");
+  await page.getByRole("button", { name: "Add card" }).click();
+  await page.getByRole("button", { name: "Ordered card", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Ordered card" });
+  await expect(dialog.getByRole("button", { name: "Newest first" })).toHaveCount(0);
+
+  for (const text of ["Older one", "Newer one"]) {
+    await dialog.getByLabel("New comment").fill(text);
+    await dialog.getByRole("button", { name: "Add comment" }).click();
+  }
+  const items = dialog.getByRole("list", { name: "Comments" }).getByRole("listitem");
+  await expect(items.nth(0)).toContainText("Older one");
+
+  await dialog.getByRole("button", { name: "Newest first" }).click();
+  await expect(items.nth(0)).toContainText("Newer one");
+  await expect(items.nth(1)).toContainText("Older one");
+
+  await page.reload();
+  await page.getByRole("button", { name: "Ordered card", exact: true }).click();
+  const reopened = page.getByRole("dialog").getByRole("list", { name: "Comments" }).getByRole("listitem");
+  await expect(reopened.nth(0)).toContainText("Newer one");
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Newest first" })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("shows the comment count in the heading and keeps it after reopening", async ({ page }) => {
   await page.getByLabel("New card title").fill("Counted card");
   await page.getByRole("button", { name: "Add card" }).click();

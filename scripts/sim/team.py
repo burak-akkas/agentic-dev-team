@@ -46,7 +46,8 @@ DEFAULTS = dict(
     # switches: pause all agents / switch merging off for a window of steps [from, to)
     pause_window=None, automerge_off_window=None,
     # repository variables
-    qa=True, qa_on_update=False, skip_same=True, drain_minutes=100, checks_minutes=30, qa_minutes=600,
+    # qa_stage: "queue" (QA once, at the front of the merge queue: the default) or "review" (QA before the queue)
+    qa=True, qa_stage="queue", qa_on_update=False, skip_same=True, drain_minutes=100, checks_minutes=30, qa_minutes=600,
 )
 
 WORKFLOWS = {"reviewer": ("agent-reviewer.yml", "Agent · Reviewer"), "qa": ("agent-qa.yml", "Agent · QA"),
@@ -82,6 +83,7 @@ class Team:
         # An older ref with the merge queue runs like the current code; one without it, with its merge gate.
         self.legacy = bool(legacy_dir) and not os.path.exists(os.path.join(legacy_dir, ".github/workflows/agent-integrator.yml"))
         self.bin = os.path.join(self.repo, "scripts/agents")
+        self.qa_in_queue_code = os.path.exists(os.path.join(self.bin, "qa-passed.sh"))
         self.reviewer_steps = simlib.steps("agent-reviewer.yml", "review", self.repo)
         self.merge_steps = simlib.steps("agent-merge.yml", "merge", self.repo)
         self.drain = None if self.legacy else simlib.drain_script(self.repo)
@@ -94,7 +96,8 @@ class Team:
         self.failures = []
         self.step = 0
         self.merged_seen = 0
-        st = simlib.new_state(seed=seed, p_api_flake=self.p["api_flake"], p_unknown=self.p["unknown"], legacy=self.legacy)
+        st = simlib.new_state(seed=seed, p_api_flake=self.p["api_flake"], p_unknown=self.p["unknown"], legacy=self.legacy,
+                               audit_qa=self.p["qa"] and not self.qa_before())
         st["check_plan"] = [self.draw_ci() for _ in range(2000)]
         for i in range(n_prs):
             self.open_pr(st, 101 + i)
@@ -129,11 +132,16 @@ class Team:
     def env(self, job, extra=None):
         e = simlib.env_for(self.f, self.bin, AGENT_WATCHDOG_MINUTES=0, AGENT_WATCHDOG_RETRIES=2,
                            AGENT_AUTO_MERGE="true" if self.automerge() else "",
-                           AGENT_QA_ON_BASE_UPDATE="true" if self.p["qa_on_update"] else "",
+                           AGENT_QA_ON_BASE_UPDATE="true" if self.qa_before() and self.p["qa_on_update"] else "",
+                           AGENT_QA_IN_QUEUE="true" if self.p["qa"] and not self.qa_before() else "",
                            AGENT_INTEGRATOR_CHECKS_MINUTES=self.p["checks_minutes"],
                            AGENT_INTEGRATOR_QA_MINUTES=self.p["qa_minutes"], DRAIN_MINUTES=self.p["drain_minutes"])
         e.update({k: str(v) for k, v in (extra or {}).items()})
         return e
+
+    def qa_before(self):
+        """QA runs before the merge queue: AGENT_QA_STAGE == 'review', or code from before QA moved into the queue."""
+        return self.p["qa"] and (self.p["qa_stage"] == "review" or not self.qa_in_queue_code)
 
     def sh(self, job, script=None, args=(), extra=None, shell=None):
         """Runs a script (scripts/agents/<script> args) or a workflow step (shell) inside a job."""
@@ -171,7 +179,8 @@ class Team:
     # --- the roles ------------------------------------------------------------------------------
     def reviewer(self, job, n, action, head):
         ctx = {"github.event.action": action, "github.event.pull_request.head.sha": head}
-        env = dict(PR=n, QA="true" if self.p["qa"] else "", QA_ON_BASE_UPDATE="true" if self.p["qa_on_update"] else "",
+        env = dict(PR=n, QA="true" if self.qa_before() else "", QA_IN_QUEUE="true" if self.p["qa"] and not self.qa_before() else "",
+                   QA_ON_BASE_UPDATE="true" if self.p["qa_on_update"] else "",
                    SKIP_SAME="true" if self.p["skip_same"] else "", MAX_ROUNDS=3)
         _, out = self.sh(job, shell=simlib.subst(self.reviewer_steps["Loop guard"]["run"], ctx), extra=env)
         if out.get("stop") == "true":

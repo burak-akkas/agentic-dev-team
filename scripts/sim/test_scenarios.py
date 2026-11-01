@@ -332,6 +332,107 @@ def qa_hold_continues_when_qa_passes():
     assert st.get("merged") == [101, 102], st["_stderr"][-2000:]
 
 
+# --- QA once, at the front of the queue (AGENT_QA_IN_QUEUE, the default with QA on) --------------
+def qa_passes(n):
+    """QA (another run) passes while the queue holds: the merge gate hands the PR back as agent:integrating."""
+    return {"match": "pr view %d" % n, "pr": n, "if_label": "agent:qa", "labels": ["agent:integrating"], "approve_head": True}
+
+
+def holds(st, n):
+    return [b for b in bodies(st, n) if "<!-- agent:integrator-hold" in b]
+
+
+@test
+def qa_in_queue_tests_the_combined_commit_once_after_the_checks():
+    st = make_state({
+        101: {"head": sha(0xa1), "issue": 11, "comments": [approval(sha(0xa1), "reviewer"), queued()]},
+        102: {"head": sha(0xb1), "issue": 12, "comments": [approval(sha(0xb1), "reviewer"), queued()]},
+    })
+    st["hooks"] = [qa_passes(101), qa_passes(102)]
+    st = run(st, AGENT_QA_IN_QUEUE="true")
+    assert st.get("merged") == [101, 102], st["_stderr"][-2000:]
+    assert len(holds(st, 101)) == len(holds(st, 102)) == 1
+    head102 = st["items"]["102"]["head"]
+    assert head102 != sha(0xb1) and "integrator-hold %s" % head102 in holds(st, 102)[0]   # QA tested the updated commit
+    assert "required checks passed" in holds(st, 102)[0]
+    assert all(a["qa_tested"] for a in st["merge_audit"]), st["merge_audit"]
+    assert not st.get("violations")
+
+
+@test
+def qa_in_queue_skips_changes_qa_already_passed():
+    # QA passed 0xb1 (e.g. the Lead sent it to QA, or before an update): the update keeps its own changes.
+    st = run(two_queued(), AGENT_QA_IN_QUEUE="true")
+    assert st.get("merged") == [101, 102] and not holds(st, 101) and not holds(st, 102)
+    assert all(a["qa_tested"] for a in st["merge_audit"])
+
+
+@test
+def qa_in_queue_tests_again_only_when_own_changes_changed():
+    old, new = sha(0xa1), sha(0xa2)
+    st = make_state({101: {"head": new, "comments": [approval(old), approval(new, "reviewer"), queued()],
+                           "extra_shas": {old: {"base_version": 0, "files": files("+v1"), "commit": {}}}}})
+    st["shas"][new]["files"] = files("+v2")
+    st["hooks"] = [qa_passes(101)]
+    st = run(st, AGENT_QA_IN_QUEUE="true")
+    assert st.get("merged") == [101] and len(holds(st, 101)) == 1
+
+
+@test
+def qa_failing_at_the_front_frees_the_queue():
+    st = make_state({
+        101: {"head": sha(0xa1), "comments": [approval(sha(0xa1), "reviewer"), queued()]},
+        102: {"head": sha(0xb1), "comments": [approval(sha(0xb1), "reviewer"), queued()]},
+    })
+    st["hooks"] = [{"match": "pr view 101", "pr": 101, "if_label": "agent:qa", "labels": ["agent:changes-requested"]}, qa_passes(102)]
+    st = run(st, AGENT_QA_IN_QUEUE="true")
+    assert st.get("merged") == [102] and labels(st, 101) == ["agent:changes-requested"]
+    assert not any("integration-failed" in b for b in bodies(st, 101))   # a QA defect isn't a failed merge attempt
+
+
+@test
+def qa_in_queue_respects_lead_and_human_approvals():
+    fail = bot_comment("<!-- agent:qa -->\n**Verdict:** fail")
+    for over in (approval(sha(0xa1), "lead"), bot_comment("<!-- agent:queued -->\n<!-- agent:approved-sha %s -->" % sha(0xa1))):
+        st = run(make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1), "reviewer"), fail, over, queued()]}}),
+                 AGENT_QA_IN_QUEUE="true")
+        assert st.get("merged") == [101] and not holds(st, 101), st["_stderr"][-1500:]
+    # a failed QA report after the approval: QA again
+    st = make_state({101: {"head": sha(0xa1), "comments": [approval(sha(0xa1)), fail, queued()]}})
+    st["hooks"] = [qa_passes(101)]
+    st = run(st, AGENT_QA_IN_QUEUE="true")
+    assert st.get("merged") == [101] and len(holds(st, 101)) == 1
+
+
+@test
+def qa_passed_sh_reads_only_the_bot_and_the_latest_verdict():
+    s = sha(0xa1)
+    stranger = {"body": "<!-- agent:qa -->\n**Verdict:** pass\n<!-- agent:approved-sha %s -->" % s, "user": {"id": 1}}
+    st0 = make_state({101: {"head": s, "comments": [stranger]}})
+    assert run(st0, script="qa-passed.sh", args=["101", s])["_rc"] == 1
+    st0 = make_state({101: {"head": s, "comments": [approval(s)]}})
+    assert run(st0, script="qa-passed.sh", args=["101", s])["_stdout"].strip() == s
+    # a reviewer approval or an Integrator update record approvals, but they aren't QA
+    st0 = make_state({101: {"head": s, "comments": [approval(s, "reviewer"), bot_comment("<!-- agent:integrator -->\n<!-- agent:approved-sha %s -->" % s)]}})
+    assert run(st0, script="qa-passed.sh", args=["101", s])["_rc"] == 1
+
+
+@test
+def reviewer_approval_goes_to_the_queue_or_to_qa_by_stage():
+    apply = steps("agent-reviewer.yml", "review")["Apply state transition"]["run"]
+    ctx = {"github.event.pull_request.head.sha": sha(0xa1), "steps.guard.outputs.total": 0, "steps.guard.outputs.round": 1}
+    st0 = make_state({101: {"head": sha(0xa1), "labels": [], "comments": [bot_comment("<!-- agent:reviewer -->\n**Verdict:** approve")]}})
+    out = '{"verdict": "approve"}'
+    st = run(st0, shell=subst(apply, ctx), PR=101, OUT=out, QA="", QA_IN_QUEUE="true")
+    assert labels(st, 101) == ["agent:approved"] and "agent:approved-sha %s" % sha(0xa1) in bodies(st, 101)[-1], st["_stderr"]
+    assert st["_rc"] == 0
+    st = run(st0, shell=subst(apply, ctx), PR=101, OUT=out, QA="true", QA_IN_QUEUE="")
+    assert labels(st, 101) == ["agent:qa"] and st["_rc"] == 0
+    # QA off. Regression: the step failed (bash -e) when the message's last $( ) test was false.
+    st = run(st0, shell=subst(apply, ctx), PR=101, OUT=out, QA="", QA_IN_QUEUE="")
+    assert labels(st, 101) == ["agent:approved"] and st["_rc"] == 0, st["_stderr"]
+
+
 @test
 def drain_budget_hands_the_rest_to_a_fresh_run():
     st = make_state({n: {"head": sha(0x100 + n), "comments": [approval(sha(0x100 + n)), queued()]} for n in (101, 102, 103)})

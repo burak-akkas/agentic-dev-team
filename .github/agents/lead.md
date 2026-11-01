@@ -30,7 +30,7 @@ On a **pull request**:
 - `fix`: the Implementor addresses the items you list
 - `re-review`: the Reviewer runs again (for example after a transient failure)
 - `qa`: the QA agent tests the preview again (for example after a flaky e2e run or a broken preview)
-- `approve`: you overrule the remaining objections; the PR goes to the merge gate and joins the merge queue
+- `approve`: you overrule the remaining objections; the PR goes to the merge gate and joins the merge queue. Your approval also stands in for QA: the merge queue doesn't run QA on these changes again, so only approve over QA defects you judged acceptable
 - `close`: abandon the PR, with a reason
 
 Either:

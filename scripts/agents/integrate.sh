@@ -7,8 +7,11 @@
 #      the PR's own changes are unchanged. With AGENT_QA_ON_BASE_UPDATE, the queue waits while QA
 #      tests the combined code.
 #   3. Waits for the required checks on that exact commit.
-#   4. If the base moved meanwhile (a human merged something), goes back to 2. Otherwise squash-merges
-#      exactly that commit, so what lands on the base is what CI tested.
+#   4. With AGENT_QA_IN_QUEUE (the default when QA is on): unless QA already passed these own changes
+#      (qa-passed.sh), the queue waits while QA tests exactly that commit. Nothing else merges
+#      meanwhile, so QA runs once per PR, on the code that lands.
+#   5. If the base moved meanwhile (a human merged something), goes back to 2. Otherwise squash-merges
+#      exactly that commit, so what lands on the base is what CI (and QA) tested.
 # Conflicts and red checks go to the Implementor, timeouts and failed merges to the back of the queue.
 # Red checks, timeouts and failed merges count as failed attempts: after AGENT_INTEGRATOR_MAX_ATTEMPTS
 # (default 3) since the last Lead decision, the Lead decides. Conflicts don't count: they come from
@@ -23,7 +26,8 @@
 #   lead     handed to the Lead after too many failed attempts
 # Needs GH_TOKEN, GITHUB_REPOSITORY and AGENT_BOT_ID. With AGENT_APP_ID and AGENT_APP_PRIVATE_KEY it
 # renews GH_TOKEN before it expires (app-token.sh). Optional: AGENT_REQUIRED_CHECKS (default CI),
-# AGENT_QA_ON_BASE_UPDATE (true: QA after each update), AGENT_AUTO_MERGE_HIGH_RISK, AGENT_PROTECTED_PATHS
+# AGENT_QA_IN_QUEUE (true: QA once, at the front of the queue), AGENT_QA_ON_BASE_UPDATE (true: QA
+# after each update), AGENT_AUTO_MERGE_HIGH_RISK, AGENT_PROTECTED_PATHS
 # (default .github/,scripts/,templates/), AGENT_INTEGRATOR_MAX_ATTEMPTS (3),
 # AGENT_INTEGRATOR_CHECKS_MINUTES (30), AGENT_INTEGRATOR_QA_MINUTES (60).
 set -Eeuo pipefail
@@ -34,6 +38,7 @@ bot="${AGENT_BOT_ID:?AGENT_BOT_ID must be set}"
 here="$(dirname "$0")"
 required="${AGENT_REQUIRED_CHECKS:-CI}"
 qa_on_update="${AGENT_QA_ON_BASE_UPDATE:-}"
+qa_in_queue="${AGENT_QA_IN_QUEUE:-}"
 max_attempts="${AGENT_INTEGRATOR_MAX_ATTEMPTS:-3}"
 checks_minutes="${AGENT_INTEGRATOR_CHECKS_MINUTES:-30}"
 qa_minutes="${AGENT_INTEGRATOR_QA_MINUTES:-60}"
@@ -188,15 +193,15 @@ wait_checks() {   # <sha>
   if [ "$seen" = 0 ]; then CHECKS=missing; fi
 }
 
-# AGENT_QA_ON_BASE_UPDATE: QA tests the updated branch while the queue waits. QA's pass goes through
-# the merge gate, which sees the hold marker and hands the PR back here as agent:integrating.
-# Returns when that happened, finishes otherwise.
-hold_for_qa() {   # <sha>
+# QA tests <sha> while the queue waits (AGENT_QA_IN_QUEUE, or AGENT_QA_ON_BASE_UPDATE after an update).
+# QA's pass goes through the merge gate, which sees the hold marker and hands the PR back here as
+# agent:integrating. Returns when that happened, finishes otherwise.
+hold_for_qa() {   # <sha> <why>
   local sha="$1" deadline v labels
   say "<!-- agent:integrator-hold $sha -->
-🧪 **Merge queue:** QA tests the combined code (\`AGENT_QA_ON_BASE_UPDATE\`). The queue waits for its verdict."
+🧪 **Merge queue:** $2 QA tests \`${sha:0:7}\` now, and the queue waits for its verdict."
   "$here/transition.sh" "$pr" agent:qa >/dev/null
-  progress "🚦 **Merge queue**: QA tests #$pr on the updated branch, the queue waits"
+  progress "🚦 **Merge queue**: QA tests #$pr at the front of the queue, the queue waits"
   deadline=$(( $(date +%s) + qa_minutes * 60 ))
   while [ "$(date +%s)" -lt "$deadline" ]; do
     sleep 30
@@ -304,11 +309,11 @@ for _ in 1 2 3; do
       say "🔁 **Merge queue:** #$pr got new commits while it was being updated. Sending it through review again."
       finish left
     fi
-    approve_commit "$new" "🔄 **Merge queue:** merged \`$base\` ($n_behind new commit(s)) into #$pr. Its own changes are unchanged, so it isn't reviewed again. $([ "$qa_on_update" = true ] && echo "QA and CI test" || echo "CI tests") the combined code before it merges."
+    approve_commit "$new" "🔄 **Merge queue:** merged \`$base\` ($n_behind new commit(s)) into #$pr. Its own changes are unchanged, so it isn't reviewed again. $([ "$qa_on_update" = true ] && echo "QA and CI test" || echo "CI tests") the combined code before it merges.$([ "$qa_in_queue" = true ] && echo " QA tests it then, unless it already passed these changes.")"
     head="$new"
     updated=" (the combined code with the latest \`$base\`)"
     progress "🚦 **Merge queue**: brought #$pr up to date with \`$base\`, testing the combined code"
-    if [ "$qa_on_update" = true ]; then hold_for_qa "$head"; fi
+    if [ "$qa_on_update" = true ]; then hold_for_qa "$head" "This is the combined code with the latest \`$base\` (\`AGENT_QA_ON_BASE_UPDATE\`)."; fi
   fi
 
   wait_checks "$head"
@@ -328,6 +333,13 @@ for _ in 1 2 3; do
   # Merge only if nothing landed on the base since the checks started: then the tested code is
   # exactly what lands. Inside the queue nothing else merges; this catches merges by humans.
   if [ "$(behind "$head")" -gt 0 ]; then log "$base moved while the checks ran, updating again"; continue; fi
+  # QA once, here: the checks passed, so this commit can merge, and nothing else merges while QA tests
+  # it. A PR whose own changes QA already passed (e.g. a human merged into the base during QA, and the
+  # loop updated it again) isn't tested again: CI covers the new combination.
+  if [ "$qa_in_queue" = true ] && ! "$here/qa-passed.sh" "$pr" "$head" >/dev/null; then
+    hold_for_qa "$head" "The required checks passed on #$pr$updated, so it can merge."
+    if [ "$(behind "$head")" -gt 0 ]; then log "$base moved while QA tested, updating again"; continue; fi
+  fi
   refresh_token
   # gh can report an error after the merge itself succeeded (e.g. deleting the branch failed), so
   # the PR's state decides, not the exit code.

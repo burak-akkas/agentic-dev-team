@@ -4,8 +4,12 @@ name: "Agent · Reviewer"
 #   - agent PRs (branch `agent/*`) are opened, updated or marked ready
 #   - a human applies `agent:review` to any same-repo PR
 # Loop guard: after AGENT_MAX_REVIEW_ROUNDS reviewer summaries since the last Lead decision (default 3) the PR goes to the Lead (`agent:needs-decision`).
+# Where an approval goes: with QA on (AGENT_QA) and AGENT_QA_STAGE unset or `queue`, straight to the
+# merge gate, and QA tests the PR once at the front of the merge queue, on the code that lands. With
+# AGENT_QA_STAGE == 'review', to QA first (the older flow: QA before the queue).
 # GitHub's clean update-branch merge on top of an approved commit skips review and QA (CI still runs,
-# and the Integrator waits for it). AGENT_QA_ON_BASE_UPDATE == 'true' sends it to QA instead.
+# and the Integrator waits for it). With AGENT_QA_STAGE == 'review', AGENT_QA_ON_BASE_UPDATE == 'true'
+# sends it to QA instead.
 # A push that keeps the PR's own added/removed lines exactly as approved (a conflict resolution that
 # kept both sides, see same-own-changes.sh) is treated the same with AGENT_SKIP_REVIEW_ON_SAME_CHANGES == 'true'.
 # Otherwise a re-review of an approved PR gets the interdiff of its own edits since the approval.
@@ -68,7 +72,8 @@ jobs:
         id: guard
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          QA: ${{ vars.AGENT_QA }}
+          # QA before the queue (AGENT_QA_STAGE == 'review') only; QA in the queue is the Integrator's.
+          QA: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE == 'review' && 'true' || '' }}
           QA_ON_BASE_UPDATE: ${{ vars.AGENT_QA_ON_BASE_UPDATE }}
           SKIP_SAME: ${{ vars.AGENT_SKIP_REVIEW_ON_SAME_CHANGES }}
         run: |
@@ -100,7 +105,7 @@ jobs:
               skipped="re-review skipped, sent to QA"
             else
               "$BIN/approve.sh" "$PR" "${{ github.event.pull_request.head.sha }}" reviewer
-              skipped="re-review$([ "$QA" = "true" ] && echo " and QA") skipped, CI decides"
+              skipped="re-review skipped, CI decides"; if [ "$QA" = "true" ]; then skipped="re-review and QA skipped, CI decides"; fi
             fi
             "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer**: only the base branch was merged in since the approved commit, $skipped"
             echo "stop=true" >> "$GITHUB_OUTPUT"
@@ -128,7 +133,7 @@ jobs:
                   skipped="re-review skipped, sent to QA"
                 else
                   "$BIN/approve.sh" "$PR" "${{ github.event.pull_request.head.sha }}" reviewer
-                  skipped="re-review$([ "$QA" = "true" ] && echo " and QA") skipped, CI decides"
+                  skipped="re-review skipped, CI decides"; if [ "$QA" = "true" ]; then skipped="re-review and QA skipped, CI decides"; fi
                 fi
                 "$BIN/progress.sh" --pr "$PR" "🧐 **Reviewer**: own edits unchanged since the approval, $skipped"
                 echo "stop=true" >> "$GITHUB_OUTPUT"
@@ -201,7 +206,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           OUT: ${{ steps.agent.outputs.structured_output }}
-          QA: ${{ vars.AGENT_QA }}
+          QA: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE == 'review' && 'true' || '' }}
+          QA_IN_QUEUE: ${{ vars.AGENT_QA == 'true' && vars.AGENT_QA_STAGE != 'review' && 'true' || '' }}
         run: |
           verdict=$(echo "${OUT:-null}" | jq -r '.verdict // "error"')
           after=$("$BIN/count-comments.sh" "$PR" reviewer)
@@ -229,7 +235,9 @@ jobs:
                              gh pr comment "$PR" --body "⚠️ Reviewer agent failed ([run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)). Handing to the Lead." ;;
           esac
           case "$verdict" in
-            approve)         msg="approved$([ "$QA" = "true" ] && echo ", sent to QA")" ;;
+            approve)         msg="approved"
+                             if [ "$QA" = "true" ]; then msg="$msg, sent to QA"; fi
+                             if [ "$QA_IN_QUEUE" = "true" ]; then msg="$msg, QA tests it at the front of the merge queue"; fi ;;
             request-changes) msg="requested changes" ;;
             *)               msg="unsure or failed, handed to the Lead" ;;
           esac

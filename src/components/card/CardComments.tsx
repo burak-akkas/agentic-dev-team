@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { MAX_COMMENT_LENGTH, type CardComment } from "@/lib/board";
 import { formatRelativeTime } from "@/lib/time";
 import { Button, Textarea } from "@/components/ui";
+import { useCommentOrder } from "@/hooks/useCommentOrder";
 
 const labelStyles = "text-xs font-medium text-subtle";
 
@@ -30,6 +31,11 @@ export function CardComments({
   const confirmRef = useRef<HTMLButtonElement>(null);
   // `now` is taken once per render; there is no ticking timer.
   const now = new Date();
+  const [order, setOrder] = useCommentOrder();
+  const newestFirst = order === "newest" && comments.length >= 2;
+  // `position` is the chronological number, so labels stay stable in either order.
+  const numbered = comments.map((comment, index) => ({ comment, position: index + 1 }));
+  const shown = newestFirst ? numbered.reverse() : numbered;
 
   useEffect(() => {
     if (editingId) {
@@ -84,14 +90,25 @@ export function CardComments({
 
   return (
     <section aria-labelledby={`${baseId}-heading`} className="flex flex-col gap-2">
-      <h3 id={`${baseId}-heading`} className={labelStyles}>
-        {comments.length > 0 ? `Comments (${comments.length})` : "Comments"}
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 id={`${baseId}-heading`} className={labelStyles}>
+          {comments.length > 0 ? `Comments (${comments.length})` : "Comments"}
+        </h3>
+        {comments.length >= 2 && (
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-pressed={newestFirst}
+            onClick={() => setOrder(newestFirst ? "oldest" : "newest")}
+          >
+            Newest first
+          </Button>
+        )}
+      </div>
 
       {comments.length > 0 && (
         <ul aria-label="Comments" className="flex flex-col gap-2">
-          {comments.map((comment, index) => {
-            const position = index + 1;
+          {shown.map(({ comment, position }) => {
             const exact = exactTime(comment.createdAt);
             const tipId = `${baseId}-tip-${comment.id}`;
             return (

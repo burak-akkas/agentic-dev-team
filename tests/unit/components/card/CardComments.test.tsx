@@ -14,6 +14,8 @@ import {
 } from "@/lib/board";
 import { saveBoard } from "../../../support/testStorage";
 import { resetBoardStore } from "@/hooks/useBoard";
+import { resetCommentOrderStore } from "@/hooks/useCommentOrder";
+import { COMMENT_ORDER_KEY } from "@/lib/commentOrder";
 import { Board } from "@/components/board/Board";
 import { CardComments } from "@/components/card/CardComments";
 
@@ -59,6 +61,7 @@ describe("<CardComments />", () => {
     const tooltip = within(items[0]).getByRole("tooltip");
     expect(tooltip).toHaveTextContent(time.getAttribute("title")!);
     expect(time).toHaveAccessibleDescription(time.getAttribute("title")!);
+    await user.tab(); // the order toggle comes first
     await user.tab();
     expect(time).toHaveFocus();
   });
@@ -302,5 +305,73 @@ describe("comments in the board", () => {
     await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Edit comment 1" })).not.toBeInTheDocument();
+  });
+});
+
+describe("<CardComments /> order toggle", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetCommentOrderStore();
+  });
+
+  const texts = () =>
+    within(screen.getByRole("list", { name: "Comments" }))
+      .getAllByRole("listitem")
+      .map((li) => li.querySelector("p")?.textContent);
+
+  it("is oldest first by default and hidden with fewer than 2 comments", () => {
+    const { unmount } = render(<CardComments comments={[]} onAdd={() => {}} onEdit={() => {}} onDelete={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Newest first" })).not.toBeInTheDocument();
+    unmount();
+    render(<Harness />);
+    expect(texts()).toEqual(["First comment", "Second comment"]);
+    expect(screen.getByRole("button", { name: "Newest first" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("reverses the list, keeps chronological labels and persists the choice", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Newest first" }));
+    expect(texts()).toEqual(["Second comment", "First comment"]);
+    expect(screen.getByRole("button", { name: "Newest first" })).toHaveAttribute("aria-pressed", "true");
+    const items = within(screen.getByRole("list", { name: "Comments" })).getAllByRole("listitem");
+    expect(within(items[0]).getByRole("button", { name: "Edit comment 2" })).toBeInTheDocument();
+    expect(localStorage.getItem(COMMENT_ORDER_KEY)).toBe("newest");
+
+    unmount();
+    resetCommentOrderStore();
+    render(<Harness />);
+    expect(texts()).toEqual(["Second comment", "First comment"]);
+  });
+
+  it("edits and deletes the right comment in newest-first order", async () => {
+    const user = userEvent.setup();
+    let latest: BoardData | undefined;
+    render(<Harness onBoard={(b) => (latest = b)} />);
+    await user.click(screen.getByRole("button", { name: "Newest first" }));
+
+    await user.click(screen.getByRole("button", { name: "Edit comment 2" }));
+    await user.clear(screen.getByRole("textbox", { name: "Edit comment 2" }));
+    await user.type(screen.getByRole("textbox", { name: "Edit comment 2" }), "Changed");
+    await user.click(screen.getByRole("button", { name: "Save comment" }));
+    expect(texts()).toEqual(["Changed", "First comment"]);
+
+    await user.click(screen.getByRole("button", { name: "Edit comment 1" }));
+    await user.click(screen.getByRole("button", { name: "Cancel edit" }));
+    expect(texts()).toEqual(["Changed", "First comment"]);
+
+    await user.click(screen.getByRole("button", { name: "Delete comment 2" }));
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+    expect(texts()).toEqual(["First comment"]);
+    expect(findCard(latest!, "a")!.card.comments!.map((c) => c.id)).toEqual(["c1"]);
+  });
+
+  it("shows a newly added comment first in newest-first order", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("button", { name: "Newest first" }));
+    await user.type(screen.getByLabelText("New comment"), "Third comment");
+    await user.click(screen.getByRole("button", { name: "Add comment" }));
+    expect(texts()).toEqual(["Third comment", "Second comment", "First comment"]);
   });
 });

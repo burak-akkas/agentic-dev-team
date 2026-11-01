@@ -151,7 +151,8 @@
   "QA on base update (hold)": {
     "prs": 5,
     "params": {
-      "qa_on_update": true
+      "qa_on_update": true,
+      "qa_stage": "review"
     },
     "quick": true
   },
@@ -219,7 +220,8 @@
     "prs": 5,
     "params": {
       "agent_time": 1.5,
-      "qa_on_update": true
+      "qa_on_update": true,
+      "qa_stage": "review"
     }
   },
   "slow agents, everything bad": {
@@ -302,6 +304,64 @@
     "legacy_ref": "cf7c972"
   },
   "with the sweep fix: slow agents, conflicts": {
+    "prs": 6,
+    "params": {
+      "agent_time": 2.0,
+      "conflict": 0.7,
+      "human_base": 0,
+      "human_push": 0
+    }
+  },
+  "QA before the queue (stage review)": {
+    "prs": 5,
+    "params": {
+      "qa_stage": "review"
+    },
+    "quick": true
+  },
+  "QA off": {
+    "prs": 4,
+    "params": {
+      "qa": false
+    },
+    "quick": true
+  },
+  "QA in the queue: agents struggle": {
+    "prs": 5,
+    "params": {
+      "review_ok": 0.5,
+      "qa_ok": 0.4,
+      "impl_blocked": 0.1
+    }
+  },
+  "before QA in the queue: 4 PRs, conflicts": {
+    "prs": 4,
+    "params": {
+      "conflict": 0.5,
+      "human_base": 0,
+      "human_push": 0
+    },
+    "legacy_ref": "9bef895"
+  },
+  "with QA in the queue: 4 PRs, conflicts": {
+    "prs": 4,
+    "params": {
+      "conflict": 0.5,
+      "human_base": 0,
+      "human_push": 0
+    }
+  },
+  "before QA in the queue: slow agents, heavy conflicts": {
+    "prs": 6,
+    "params": {
+      "agent_time": 2.0,
+      "conflict": 0.7,
+      "human_base": 0,
+      "human_push": 0
+    },
+    "legacy_ref": "9bef895"
+  },
+  "with QA in the queue: slow agents, heavy conflicts": {
     "prs": 6,
     "params": {
       "agent_time": 2.0,

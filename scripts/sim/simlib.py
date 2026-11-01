@@ -124,6 +124,8 @@ def run(st, script=None, args=(), shell=None, bin_dir=None, **envx):
     drain loop (neither), against state st. Returns the final state with _stdout/_stderr/_rc/_summary/_outputs."""
     d = tempfile.mkdtemp(prefix="agent-sim-")
     f = os.path.join(d, "state.json")
+    if envx.get("AGENT_QA_IN_QUEUE") == "true":
+        st = dict(st, audit_qa=True)   # every merge must be QA-tested (see the fake gh's merge audit)
     json.dump(st, open(f, "w"))
     summary, outputs = os.path.join(d, "summary.md"), os.path.join(d, "outputs")
     open(summary, "w").close(); open(outputs, "w").close()

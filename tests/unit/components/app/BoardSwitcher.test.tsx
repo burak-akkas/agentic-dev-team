@@ -210,6 +210,53 @@ describe("<BoardSwitcher />", () => {
     });
   });
 
+  describe("archive done cards", () => {
+    async function addDone(user: ReturnType<typeof userEvent.setup>, title: string) {
+      await user.type(screen.getByLabelText("New card title"), title);
+      await user.click(screen.getByRole("button", { name: "Add card" }));
+      await user.click(screen.getByRole("button", { name: title }));
+      const dialog = screen.getByRole("dialog");
+      await user.selectOptions(within(dialog).getByLabelText("Status"), "Done");
+      await user.click(within(dialog).getByRole("button", { name: "Save" }));
+    }
+
+    it("is disabled while the done list is empty", async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      const item = screen.getByRole("menuitem", { name: "Archive done cards" });
+      expect(item).toHaveAttribute("aria-disabled", "true");
+      await user.click(item);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("changes nothing when cancelled", async () => {
+      const { user } = setup();
+      await addDone(user, "Alpha");
+      await choose(user, "Archive done cards");
+      expect(screen.getByRole("dialog")).toHaveTextContent(/archive all 1 card in the done list/i);
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(within(screen.getByRole("region", { name: /^Done/ })).getByText("Alpha")).toBeInTheDocument();
+    });
+
+    it("archives only the done list after confirming", async () => {
+      const { user } = setup();
+      await user.type(screen.getByLabelText("New card title"), "Keep");
+      await user.click(screen.getByRole("button", { name: "Add card" }));
+      await addDone(user, "Alpha");
+      await addDone(user, "Beta");
+      await choose(user, "Archive done cards");
+      await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Archive" }));
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
+      expect(screen.queryByText("Beta")).not.toBeInTheDocument();
+      expect(within(screen.getByRole("region", { name: /^To do/ })).getByText("Keep")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: "Board actions" }));
+      expect(screen.getByRole("menuitem", { name: "Archive done cards" })).toHaveAttribute("aria-disabled", "true");
+    });
+  });
+
   it("shows a single Board actions button instead of separate board buttons", () => {
     setup();
     const trigger = screen.getByRole("button", { name: "Board actions" });

@@ -169,12 +169,13 @@ export function CardDialog({
             value={notes}
             maxLength={MAX_NOTES_LENGTH}
             rows={5}
+            aria-describedby={`${headingId}-description-count`}
             onChange={(event) => setNotes(event.target.value)}
             className="w-full"
           />
-          <span className="self-end text-xs text-muted" aria-hidden="true">
-            {notes.length}/{MAX_NOTES_LENGTH}
-          </span>
+          <p id={`${headingId}-description-count`} className="self-end text-xs text-muted">
+            {notes.length} {notes.length === 1 ? "character" : "characters"}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

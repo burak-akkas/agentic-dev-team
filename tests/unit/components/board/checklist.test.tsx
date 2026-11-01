@@ -109,6 +109,34 @@ describe("<Board /> checklist", () => {
     expect(within(dialog).getAllByRole("checkbox").map((c) => c.closest("label")?.textContent)).toEqual(["c", "b", "a"]);
   });
 
+  it("shows an accessible 'N/M done' progress label that stays in sync", async () => {
+    seed();
+    const user = userEvent.setup();
+    render(<Board />);
+    const dialog = await openTask(user);
+    expect(within(dialog).queryByText(/done$/)).not.toBeInTheDocument();
+
+    const input = within(dialog).getByLabelText("New checklist item");
+    await user.type(input, "a{Enter}");
+    await user.type(input, "b{Enter}");
+    expect(within(dialog).getByText("0/2 done")).toBeVisible();
+
+    await user.click(within(dialog).getByRole("checkbox", { name: "a" }));
+    expect(within(dialog).getByText("1/2 done")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("checkbox", { name: "b" }));
+    expect(within(dialog).getByText("2/2 done")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("checkbox", { name: "a" }));
+    expect(within(dialog).getByText("1/2 done")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Uncheck all" }));
+    expect(within(dialog).getByText("0/2 done")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: 'Delete checklist item "a"' }));
+    expect(within(dialog).getByText("0/1 done")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: 'Delete checklist item "b"' }));
+    expect(within(dialog).queryByText(/done$/)).not.toBeInTheDocument();
+  });
+
   it("shows an error for empty items and keeps the dialog open", async () => {
     seed();
     const user = userEvent.setup();

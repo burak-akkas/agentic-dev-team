@@ -101,6 +101,26 @@ describe("<CardDialog />", () => {
     expect(screen.getByLabelText("Description")).toHaveAttribute("maxlength", String(MAX_NOTES_LENGTH));
   });
 
+  it("shows a visible character count that follows the description", async () => {
+    const { user } = setup({ notes: undefined });
+    const description = screen.getByLabelText("Description");
+    const count = screen.getByText("0 characters");
+    expect(count).toBeVisible();
+    expect(count).not.toHaveAttribute("aria-hidden");
+    expect(description).toHaveAccessibleDescription("0 characters");
+    await user.type(description, "a");
+    expect(screen.getByText("1 character")).toBeInTheDocument();
+    await user.type(description, "bc");
+    expect(screen.getByText("3 characters")).toBeInTheDocument();
+    await user.clear(description);
+    expect(screen.getByText("0 characters")).toBeInTheDocument();
+  });
+
+  it("counts existing notes on open", () => {
+    setup();
+    expect(screen.getByText("10 characters")).toBeInTheDocument();
+  });
+
   it("clears the due date", async () => {
     const { user, onSave } = setup();
     await user.click(screen.getByRole("button", { name: "Clear due date" }));

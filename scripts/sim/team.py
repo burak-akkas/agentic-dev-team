@@ -221,6 +221,7 @@ class Team:
             red = "checks failed" in why.lower() or "<!-- agent:integration-failed -->" in why
             if not blocked and "<!-- agent:merge -->" in why and not red and not it.get("conflict") and not behind:
                 nothing_to_do = True
+                st.setdefault("nochange", []).append({"pr": n, "why": why[:160], "clock": st["clock"]})
             if not blocked and st["shas"][it["head"]]["base_version"] < st.get("workflow_version", -1):
                 blocked = self.rng.random() < 0.5   # pushing a merge that brings in workflow changes may be refused
             if not blocked and not nothing_to_do:
@@ -347,6 +348,9 @@ class Team:
         self.stats["jobs"] += 1
         self.step += 1
         self.world()
+
+        # GitHub lists a run as queued or in progress before its first step runs: publish it first.
+        self.publish_runs()
 
         def body():
             try:

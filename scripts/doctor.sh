@@ -113,6 +113,12 @@ elif [ "$(var AGENT_QA)" = true ]; then
       warn "the production site ${prod}version.txt doesn't answer: QA's visual baseline needs it (or set AGENT_BASELINE_URL=none)"
     fi
   fi
+  baseline=$(var AGENT_BASELINE_URL)
+  if [ -n "$(var AGENT_BASELINE_START_COMMAND)" ]; then
+    ok "QA starts its baseline on the runner (AGENT_BASELINE_START_COMMAND); it needs its own port and database"
+  elif { [ "$preview" = none ] || [ "$preview" = deployment ]; } && [ "$baseline" != none ] && [ -n "$baseline$(var AGENT_PRODUCTION_URL)" ]; then
+    warn "QA's visual baseline is ${baseline:-$(var AGENT_PRODUCTION_URL)}. If the app stores data on a server, QA can't set up test data there: use AGENT_BASELINE_START_COMMAND (or AGENT_BASELINE_URL=none)"
+  fi
   if [ "$(var AGENT_E2E_COMMAND)" = none ]; then warn "no e2e suite (AGENT_E2E_COMMAND=none): QA only tests by hand in the browser"; fi
   shots=$(var AGENT_QA_SCREENSHOTS)
   if [ "$private" = true ] && [ "$shots" = pages ]; then
@@ -125,6 +131,25 @@ elif [ "$(var AGENT_QA)" = true ]; then
   if [ "$(var AGENT_NODE_VERSION)" = none ]; then ok "AGENT_NODE_VERSION=none: QA's browser tools use the runner's preinstalled Node"; fi
 else
   ok "QA is off (AGENT_QA): PRs merge after review and CI"
+fi
+
+# Every required check scoped to paths: a PR that changes nothing under them (a root file, say) has no checks.
+if [ "${#checks[@]}" -gt 0 ] && ! printf '%s\n' "${checks[@]}" | grep -qv '@'; then
+  warn "every required check in AGENT_REQUIRED_CHECKS is scoped to paths: a PR outside them merges without any check. Add one that always runs"
+fi
+
+prod_check=$(var AGENT_PRODUCTION_CHECK_URL)
+if [ -n "$prod_check" ]; then
+  if curl -fsSL -o /dev/null --max-time 20 "$prod_check" 2>/dev/null; then ok "production check: $prod_check answers; it must contain the deployed commit's sha"
+  else warn "AGENT_PRODUCTION_CHECK_URL ($prod_check) doesn't answer: every merge will open an issue until it does"; fi
+fi
+
+# A risk policy decides what needs a human, so a PR must not be able to relax it on its own.
+if gh api "repos/$repo/contents/CLAUDE.md?ref=$branch" -H "Accept: application/vnd.github.raw" 2>/dev/null | grep -q '^## Risk policy'; then
+  case ",$(var AGENT_PROTECTED_PATHS)," in
+    *,CLAUDE.md,*) ok "CLAUDE.md has a risk policy, and AGENT_PROTECTED_PATHS protects it" ;;
+    *) warn "CLAUDE.md has a risk policy, but an agent PR could change it and merge by itself: add CLAUDE.md to AGENT_PROTECTED_PATHS (keep the defaults: .github/,scripts/,templates/,CLAUDE.md)" ;;
+  esac
 fi
 
 if [ "$can_vars" = true ] && [ "$(var AGENT_AUTO_MERGE)" != true ]; then warn "AGENT_AUTO_MERGE isn't true: approved PRs wait for a human to merge them"; fi

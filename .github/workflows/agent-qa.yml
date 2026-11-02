@@ -24,6 +24,9 @@ name: "Agent · QA"
 # private repositories, where raw gh-pages image links don't render).
 # Baseline URL template: AGENT_BASELINE_URL (default https://{owner}.github.io/{repo}/, the production deploy
 # of the base branch; `none` turns the visual comparison off). It should serve version.txt too.
+# AGENT_BASELINE_START_COMMAND: start the baseline on the runner instead, from a checkout of the base branch
+# outside the workspace, answering at AGENT_BASELINE_LOCAL_URL (default http://localhost:3001/). For apps that
+# store data on a server, where QA must not write test data to production. It needs its own port and database.
 # PR events use pull_request_target: unlike pull_request, it also fires for PRs with merge
 # conflicts (GitHub creates no merge commit for those), and it always runs this workflow
 # file from the default branch. Jobs only act on same-repo PRs and check out the PR head explicitly.
@@ -74,6 +77,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
           token: ${{ steps.app.outputs.token }}
+          # QA runs the PR's code (npm ci, the e2e suite, the started app): leave no token in .git/config
+          # for it. Later steps use GH_TOKEN, and the agent action sets up its own git auth.
+          persist-credentials: false
 
       # Role prompts and scripts always come from the default branch.
       - uses: actions/checkout@v6
@@ -84,6 +90,7 @@ jobs:
             .github/agents
             scripts/agents
           token: ${{ steps.app.outputs.token }}
+          persist-credentials: false
 
       - name: Round guard
         id: guard
@@ -187,33 +194,6 @@ jobs:
           done
           echo "::warning::Preview at $URL never served $HEAD_SHA (last seen: ${live:-nothing})"
 
-      # The "before" side of QA's visual comparison. It's informational: QA runs either way, and is told
-      # when the baseline lags the base branch (e.g. a production deploy still running).
-      - name: Find the baseline
-        id: baseline
-        if: steps.preview.outputs.ready == 'true' || steps.local.outputs.ready == 'true'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          BASE: ${{ github.event.pull_request.base.ref }}
-        run: |
-          if [ "$BASELINE_TEMPLATE" = "none" ]; then
-            echo "info=none (visual comparison turned off)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          url=$(echo "$BASELINE_TEMPLATE" | sed -e "s|{owner}|${GITHUB_REPOSITORY_OWNER}|g" -e "s|{repo}|${GITHUB_REPOSITORY#*/}|g")
-          live=$(curl -fsSL "${url}version.txt?t=$(date +%s)" 2>/dev/null | tr -d '[:space:]' || true)
-          base_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BASE" --jq .commit.sha 2>/dev/null || true)
-          if ! curl -fsSL -o /dev/null "$url" 2>/dev/null; then
-            info="none (the baseline at $url is unreachable)"
-          elif [ -z "$live" ]; then
-            info="$url (serves an unknown commit: no version.txt)"
-          elif [ "$live" = "$base_sha" ]; then
-            info="$url (serves ${live:0:7}, the head of \`$BASE\`)"
-          else
-            info="$url (serves ${live:0:7}, but \`$BASE\` is at ${base_sha:0:7}, so it lags the base branch)"
-          fi
-          echo "info=$info" | tee -a "$GITHUB_OUTPUT"
-
       # The project's toolchain (same variables as the Implementor). The npm cache only when the
       # project uses npm (a package-lock.json at the root).
       - uses: actions/setup-node@v4
@@ -227,6 +207,48 @@ jobs:
         env:
           SETUP: ${{ vars.AGENT_SETUP_COMMAND }}
         run: bash -eo pipefail -c "$SETUP"
+
+      # Before anything starts: `npm ci` deletes node_modules, also under an app that is already running.
+      - name: E2E setup
+        if: (steps.preview.outputs.ready == 'true' || (env.LOCAL == 'true' && steps.guard.outputs.stop != 'true' && steps.ci.outputs.result != 'fail'))
+        env:
+          E2E_SETUP: ${{ vars.AGENT_E2E_SETUP || 'npm ci' }}
+          E2E_COMMAND: ${{ vars.AGENT_E2E_COMMAND || 'npx playwright test' }}
+        run: |
+          if [ "$E2E_COMMAND" != none ] && [ "$E2E_SETUP" != none ]; then bash -eo pipefail -c "$E2E_SETUP"; fi
+
+      # The baseline on the runner (AGENT_BASELINE_START_COMMAND): the base branch, for QA's visual comparison.
+      # It moves out of the workspace first, so that the PR's own build and tests never pick up its files.
+      - uses: actions/checkout@v6
+        if: (steps.preview.outputs.ready == 'true' || (env.LOCAL == 'true' && steps.guard.outputs.stop != 'true' && steps.ci.outputs.result != 'fail')) && vars.AGENT_BASELINE_START_COMMAND != ''
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: .agent-baseline
+          fetch-depth: 1
+          token: ${{ steps.app.outputs.token }}
+          persist-credentials: false
+
+      - name: Start the baseline locally
+        id: baseline_local
+        if: (steps.preview.outputs.ready == 'true' || (env.LOCAL == 'true' && steps.guard.outputs.stop != 'true' && steps.ci.outputs.result != 'fail')) && vars.AGENT_BASELINE_START_COMMAND != ''
+        env:
+          START: ${{ vars.AGENT_BASELINE_START_COMMAND }}
+          URL: ${{ vars.AGENT_BASELINE_LOCAL_URL || 'http://localhost:3001/' }}
+        run: |
+          dir="$RUNNER_TEMP/agent-baseline"
+          mv .agent-baseline "$dir"
+          commit=$(git -C "$dir" rev-parse --short HEAD)
+          log="$PWD/.agent-out/baseline.log"
+          (cd "$dir" && nohup bash -c "$START" > "$log" 2>&1 &)
+          for _ in $(seq 1 120); do
+            if curl -fsS -o /dev/null "$URL" 2>/dev/null; then
+              echo "info=$URL (the base branch at $commit, running on this machine with its own data)" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::warning::The baseline never answered at $URL"; tail -30 "$log"
+          echo "info=none (the baseline never answered at $URL on this machine)" >> "$GITHUB_OUTPUT"
 
       # No preview deploy (AGENT_PREVIEW_URL=none): start the app on the runner and wait until it answers.
       - name: Start the app locally
@@ -247,20 +269,50 @@ jobs:
           done
           echo "::warning::The app never answered at $URL"; tail -30 .agent-out/app.log
 
+      # The "before" side of QA's visual comparison. It's informational: QA runs either way, and is told
+      # when the baseline lags the base branch (e.g. a production deploy still running).
+      - name: Find the baseline
+        id: baseline
+        if: steps.preview.outputs.ready == 'true' || steps.local.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          LOCAL_BASELINE: ${{ steps.baseline_local.outputs.info }}
+        run: |
+          if [ -n "$LOCAL_BASELINE" ]; then
+            echo "info=$LOCAL_BASELINE" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$BASELINE_TEMPLATE" = "none" ]; then
+            echo "info=none (visual comparison turned off)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          url=$(echo "$BASELINE_TEMPLATE" | sed -e "s|{owner}|${GITHUB_REPOSITORY_OWNER}|g" -e "s|{repo}|${GITHUB_REPOSITORY#*/}|g")
+          live=$(curl -fsSL "${url}version.txt?t=$(date +%s)" 2>/dev/null | tr -d '[:space:]' || true)
+          base_sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BASE" --jq .commit.sha 2>/dev/null || true)
+          if ! curl -fsSL -o /dev/null "$url" 2>/dev/null; then
+            info="none (the baseline at $url is unreachable)"
+          elif [ -z "$live" ]; then
+            info="$url (serves an unknown commit: no version.txt)"
+          elif [ "$live" = "$base_sha" ]; then
+            info="$url (serves ${live:0:7}, the head of \`$BASE\`)"
+          else
+            info="$url (serves ${live:0:7}, but \`$BASE\` is at ${base_sha:0:7}, so it lags the base branch)"
+          fi
+          echo "info=$info" | tee -a "$GITHUB_OUTPUT"
+
       - name: Run e2e suite
         id: e2e
         if: steps.preview.outputs.ready == 'true' || steps.local.outputs.ready == 'true'
         env:
           E2E_BASE_URL: ${{ steps.preview.outputs.url || steps.guard.outputs.url }}
           CI: "true"
-          E2E_SETUP: ${{ vars.AGENT_E2E_SETUP || 'npm ci' }}
           E2E_COMMAND: ${{ vars.AGENT_E2E_COMMAND || 'npx playwright test' }}
         run: |
           if [ "$E2E_COMMAND" = none ]; then
             echo "No e2e suite (AGENT_E2E_COMMAND=none)" > .agent-out/e2e-results.txt
             echo "exit=none" >> "$GITHUB_OUTPUT"
           else
-            if [ "$E2E_SETUP" != none ]; then bash -eo pipefail -c "$E2E_SETUP"; fi
             set +e
             bash -o pipefail -c "$E2E_COMMAND" > .agent-out/e2e-results.txt 2>&1
             echo "exit=$?" >> "$GITHUB_OUTPUT"

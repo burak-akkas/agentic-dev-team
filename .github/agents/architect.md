@@ -15,7 +15,7 @@ You turn an analyzed issue into a concrete, minimal technical design that the Im
 2. Study the code involved: existing patterns, extension points, tests and similar past changes.
 3. Check open agent PRs for overlapping work: `gh pr list --state open`, then `gh pr view <n>` on related ones. If another PR touches the same files, design to minimise conflicts and mention it under **Risks** (the later PR will have to merge the earlier one).
 4. Pick the **simplest design that meets the acceptance criteria** and fits existing patterns. Avoid new dependencies or abstractions unless they are clearly needed.
-5. Judge the risk:
+5. Judge the risk. If `CLAUDE.md` has a **Risk policy** section, it replaces the list below; anything it doesn't cover, or that you are unsure about, is still **high**.
    - **high**: data migrations, auth/security, public API or schema changes, payments, deleting data, wide refactors, or anything you are unsure about.
    - **medium**: touches several modules, or behaviour that is not well tested.
    - **low**: localized and well covered by tests.

@@ -44,11 +44,20 @@
 ## Architecture rules
 - <boundaries, e.g. "UI never calls the DB directly", "no new dependencies without an ADR">
 
+## Risk policy (optional: replaces the Architect's default list, which makes all auth, schema and API work high risk)
+<!-- High-risk PRs need a human to merge. Without this section, an app with a backend needs one on almost every PR. -->
+<!-- If you add this section, add CLAUDE.md to AGENT_PROTECTED_PATHS, so a PR can't relax its own risk policy. -->
+- **high**: <e.g. destructive or data-rewriting migrations, changes to login, sessions or permissions, deleting user data>
+- **medium**: <e.g. additive migrations, new endpoints that follow the existing permission checks>
+- **low**: <e.g. changes covered by tests that touch neither the schema nor the API>
+
 ## Testing notes for agents (optional)
 <!-- Helps the Reviewer and QA find side effects. Keep it short. -->
 - Where data lives: <e.g. database tables, local storage keys, files, external services>
 - What counts as "other" data that an action must never touch: <e.g. other users, other tenants, other projects>
 - Risky areas: <e.g. migrations, billing, anything that deletes>
+- Test accounts (apps with login): <seeded users and where their test passwords are, e.g. `a@example.test` and `b@example.test` from the seed script; or "register new ones">
+- Shared servers QA must not write to: <e.g. production at https://…; AGENT_BASELINE_START_COMMAND gives QA its own baseline instead>
 
 ## Never
 - Modify `.github/`, secrets, CI config or deployment files.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Copies the agent team's toolkit into another repository's working copy:
 #   .github/agents/            the role prompts
+#   .github/ISSUE_TEMPLATE/    the form that starts the pipeline
 #   .github/workflows/agent-*  one workflow per role, the merge queue, the watchdog (not agent-sim.yml,
 #                              which tests the toolkit itself), and pages-janitor.yml (QA screenshots)
 #   scripts/agents/            the helper scripts the workflows call
@@ -22,7 +23,7 @@ target="$(cd "$target" && pwd)"
 [ "$src" != "$target" ] || { echo "install.sh: the target is this repository" >&2; exit 1; }
 
 files=$(cd "$src" && {
-  find .github/agents scripts/agents -type f
+  find .github/agents .github/ISSUE_TEMPLATE scripts/agents -type f
   for w in .github/workflows/agent-*.yml; do [ "$w" = .github/workflows/agent-sim.yml ] || echo "$w"; done
   echo .github/workflows/pages-janitor.yml
   echo scripts/setup-labels.sh

@@ -7,9 +7,9 @@ checks the outcome. Run: python3 scripts/sim/test_scenarios.py [name-filter]
 import sys
 sys.dont_write_bytecode = True   # keep __pycache__ out of the repository
 
-import os, sys, tempfile, traceback
+import json, os, sys, tempfile, time, traceback
 
-from simlib import (approval, bodies, bot_comment, files, labels, make_state, queued, run, sha, steps, subst)
+from simlib import (approval, bodies, bot_comment, files, labels, make_state, queued, run, sha, steps, subst, workflow)
 
 TESTS = []
 
@@ -774,6 +774,136 @@ def a_pr_the_implementor_is_fixing_is_left_alone_and_restarted_if_its_run_died()
     assert labels(st, 103) == ["agent:changes-requested"] and "Restarting the Implementor" in bodies(st, 103)[-1], st["_stdout"]
     st0["active_runs"] = [{"workflow": "agent-implementor.yml", "status": "in_progress", "name": "Agent · Implementor", "displayTitle": "T103"}]
     assert labels(run(st0, script="watchdog.sh", AGENT_WATCHDOG_MINUTES=10), 103) == ["agent:fixing"]   # still working
+
+
+# --- QA of an app that runs on the runner or a host of its own ------------------------------------
+def qa_step_names():
+    return [s.get("name") for s in workflow("agent-qa.yml")["jobs"]["qa"]["steps"]]
+
+
+@test
+def qa_sets_up_before_it_starts_anything_and_finds_the_baseline_afterwards():
+    names = qa_step_names()
+    assert names.index("E2E setup") < names.index("Start the baseline locally") < names.index("Start the app locally") \
+        < names.index("Find the baseline") < names.index("Run e2e suite")
+    assert "E2E_SETUP" not in steps("agent-qa.yml", "qa")["Run e2e suite"]["run"]   # npm ci would pull node_modules from under the app
+
+
+@test
+def qa_leaves_no_token_behind_for_the_code_it_runs():
+    checkouts = [s for s in workflow("agent-qa.yml")["jobs"]["qa"]["steps"] if s.get("uses", "").startswith("actions/checkout")]
+    assert len(checkouts) == 3 and all(c["with"]["persist-credentials"] is False for c in checkouts)
+
+
+def e2e_setup(**env):
+    return run(make_state({}), shell=steps("agent-qa.yml", "qa")["E2E setup"]["run"],
+               **dict({"E2E_SETUP": "touch ran", "E2E_COMMAND": "npx playwright test"}, **env))
+
+
+@test
+def qa_e2e_setup_is_skipped_only_when_there_is_nothing_to_set_up():
+    assert os.path.exists(os.path.join(e2e_setup()["_dir"], "ws", "ran"))
+    assert not os.path.exists(os.path.join(e2e_setup(E2E_SETUP="none")["_dir"], "ws", "ran"))
+    assert not os.path.exists(os.path.join(e2e_setup(E2E_COMMAND="none")["_dir"], "ws", "ran"))
+
+
+def deployments(**env):
+    st = make_state({}, deployments=[
+        {"id": 1, "sha": sha(0xa1), "environment": "Preview – api", "state": "success", "url": "https://api.example"},
+        {"id": 2, "sha": sha(0xa1), "environment": "Preview – web", "state": "success", "url": "https://web.example"},
+        {"id": 3, "sha": sha(0xa2), "environment": "Preview – web", "state": "in_progress", "url": "https://web2.example"},
+    ])
+    return run(st, shell=steps("agent-qa.yml", "qa")["Wait for the preview of this commit"]["run"],
+               **dict({"URL": "deployment", "HEAD_SHA": sha(0xa1), "ENVIRONMENT": "Preview – web"}, **env))["_outputs"]
+
+
+@test
+def qa_finds_the_deployment_of_this_commit_in_the_right_environment():
+    assert deployments() == {"url": "https://web.example/", "ready": "true"}
+    assert deployments(ENVIRONMENT="Preview – api")["url"] == "https://api.example/"
+    assert "ready" not in deployments(HEAD_SHA=sha(0xa2))                 # still deploying
+    assert "ready" not in deployments(ENVIRONMENT="Preview – docs")       # a backend-only PR that skipped the web build
+
+
+def start_baseline(**env):
+    runner_temp = tempfile.mkdtemp(prefix="agent-sim-temp-")
+    shell = ("mkdir .agent-baseline && git -C .agent-baseline init -q && "
+             "git -C .agent-baseline -c user.name=x -c user.email=x@example.test commit -q --allow-empty -m base\n"
+             + steps("agent-qa.yml", "qa")["Start the baseline locally"]["run"])
+    st = run(make_state({}), shell=shell, RUNNER_TEMP=runner_temp, URL="http://localhost:3001/", **env)
+    return st, runner_temp
+
+
+@test
+def qa_starts_the_baseline_outside_the_workspace():
+    st, runner_temp = start_baseline(START="pwd > started", FAKE_CURL_SITES=json.dumps({"http://localhost:3001/": "ok"}))
+    assert "running on this machine" in st["_outputs"]["info"] and st["_outputs"]["info"].startswith("http://localhost:3001/")
+    assert not os.path.exists(os.path.join(st["_dir"], "ws", ".agent-baseline"))   # the PR's build never sees its files
+    marker = os.path.join(runner_temp, "agent-baseline", "started")
+    for _ in range(50):
+        if os.path.exists(marker) and open(marker).read():
+            break
+        time.sleep(0.1)
+    assert open(marker).read().strip().endswith("/agent-baseline")
+
+
+@test
+def qa_goes_on_without_a_comparison_when_the_baseline_never_answers():
+    st, _ = start_baseline(START="true")
+    assert st["_rc"] == 0 and st["_outputs"]["info"].startswith("none (")
+
+
+@test
+def qa_prefers_the_baseline_on_the_runner_over_production():
+    find = steps("agent-qa.yml", "qa")["Find the baseline"]["run"]
+    st = run(make_state({}), shell=find, LOCAL_BASELINE="http://localhost:3001/ (local)", BASELINE_TEMPLATE="https://prod.example/", BASE="sandbox")
+    assert st["_outputs"]["info"] == "http://localhost:3001/ (local)"
+    st = run(make_state({}), shell=find, LOCAL_BASELINE="", BASELINE_TEMPLATE="https://prod.example/", BASE="sandbox",
+             FAKE_CURL_SITES=json.dumps({"https://prod.example/": "b" + "0" * 39}))
+    assert st["_outputs"]["info"].startswith("https://prod.example/ (serves")
+
+
+# --- production check -----------------------------------------------------------------------------
+HEAD = "b" + "0" * 39    # the fake base branch's head at version 0
+PROD = "https://prod.example/health"
+
+
+def production_check(st, serves=None, merged=HEAD):
+    sites = {PROD: "up " + serves} if serves else {}
+    return run(st, script="production-check.sh", args=[merged, "sandbox"], AGENT_PRODUCTION_CHECK_URL=PROD,
+               AGENT_PRODUCTION_CHECK_MINUTES="1", AGENT_ESCALATION_ASSIGNEE="human", FAKE_CURL_SITES=json.dumps(sites))
+
+
+def issues(st):
+    return {n: it for n, it in st["items"].items() if it.get("kind") == "issue"}
+
+
+@test
+def production_serving_the_merged_commit_opens_nothing():
+    st = production_check(make_state({}), serves=HEAD)
+    assert st["_rc"] == 0 and not issues(st)
+
+
+@test
+def production_failure_opens_one_issue_for_a_human_and_recovery_closes_it():
+    st = production_check(make_state({}))
+    assert st["_rc"] == 1
+    (n, it), = issues(st).items()
+    assert it["labels"] == ["agent:needs-human"] and "agent:production-check" in it["body"]
+    for key in ("_stdout", "_stderr", "_rc", "_summary", "_dir", "_outputs"):
+        st.pop(key)
+    st = production_check(st)                       # still failing: the same issue
+    assert st["_rc"] == 1 and list(issues(st)) == [n] and any("Still failing" in b for b in bodies(st, n))
+    for key in ("_stdout", "_stderr", "_rc", "_summary", "_dir", "_outputs"):
+        st.pop(key)
+    st = production_check(st, serves=HEAD)          # recovered
+    assert st["_rc"] == 0 and st["items"][n]["state"] == "CLOSED"
+
+
+@test
+def production_check_of_an_older_merge_stays_quiet_when_a_newer_one_landed():
+    st = production_check(make_state({}, base_version=1))
+    assert st["_rc"] == 0 and not issues(st)
 
 
 def main():

@@ -60,6 +60,7 @@ Next steps (details in the toolkit's README):
        secrets    AGENT_APP_PRIVATE_KEY, CLAUDE_CODE_OAUTH_TOKEN
   3. Not a Node project? Set AGENT_NODE_VERSION=none and AGENT_SETUP_COMMAND, and for QA AGENT_E2E_SETUP and
      AGENT_E2E_COMMAND (or none). No preview deploys? AGENT_PREVIEW_URL=none plus AGENT_QA_START_COMMAND.
+     A backend with a database or login? See "Apps with a server and login" in the toolkit's README.
   4. scripts/setup-labels.sh <owner/repo>
   5. scripts/doctor.sh <owner/repo>: checks the wiring before the first issue.
 EOF

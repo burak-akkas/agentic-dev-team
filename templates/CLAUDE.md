@@ -17,7 +17,8 @@
 - Test (single): `<...>`
 
 > Each command above must also be allowed in the repo variable `AGENT_BUILD_TOOLS`,
-> e.g. `Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)`.
+> e.g. `Bash(npm ci:*),Bash(npm install:*),Bash(npm test:*),Bash(npm run lint:*)`. Without `npm install`,
+> agents can't add a dependency. Include the migration and code generation commands you use, too.
 > Agents run every command on its own, from the repository root: no `cd x && …`. Write commands for
 > sub-directories with a directory flag (`npm --prefix web test`, `make -C backend test`,
 > `go -C api test ./...`, `uv --directory backend run pytest`), or give the root one task runner.

@@ -61,7 +61,7 @@ It runs on **GitHub Actions** (works on GitHub Free) with [`anthropics/claude-co
    | Secret | `AGENT_APP_PRIVATE_KEY` | contents of the `.pem` file |
    | Variable | `AGENT_APP_ID` | App ID |
    | Variable | `AGENT_BOT_ID` | The bot's user id: `gh api '/users/<app-slug>%5Bbot%5D' --jq .id`. Workflows recognise the agents' comments by this id, which (unlike the login) survives renaming the App. The login itself is read from the App token at run time |
-   | Variable | `AGENT_BUILD_TOOLS` | commands the Implementor may run, e.g. `Bash(npm ci:*),Bash(npm test:*),Bash(npm run lint:*)` |
+   | Variable | `AGENT_BUILD_TOOLS` | commands the Implementor may run, e.g. `Bash(npm ci:*),Bash(npm install:*),Bash(npm test:*),Bash(npm run lint:*)`. Without `npm install`, it can't add a dependency |
    | Variable | `AGENT_ESCALATION_ASSIGNEE` | GitHub username assigned when the Lead escalates |
 
 5. **Choose an autonomy level** (variables, below).

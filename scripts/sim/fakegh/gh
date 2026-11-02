@@ -198,6 +198,7 @@ if cmd == "api":
                 continue
             out.append({"number": int(n), "pull_request": {} if it.get("kind", "pr") == "pr" else None,
                         "draft": it.get("draft", False), "updated_at": "2020-01-01T00:00:00Z", "title": "T%s" % n,
+                        "body": it.get("body", ""),
                         "labels": [{"name": l} for l in it.get("labels", [])]})
         emit(out, slurp)
     if parts[0] == "issues" and parts[1] == "comments":
@@ -266,6 +267,13 @@ if cmd == "api":
         st["events"].append(["synchronize", n, new, "update"])
         st["updates"] = st.get("updates", 0) + 1
         emit({"message": "Updating pull request branch."})
+    if parts[0] == "deployments" and len(parts) == 1:   # state["deployments"]: [{id, sha, environment, state, url}]
+        want = urllib.parse.parse_qs(next(a for a in args[1:] if a.startswith("repos/")).partition("?")[2]).get("sha", [None])[0]
+        emit([{"environment": d["environment"], "statuses_url": "repos/o/r/deployments/%s/statuses" % d["id"]}
+              for d in st.get("deployments", []) if d["sha"] == want])
+    if parts[0] == "deployments" and len(parts) == 3:
+        d = next(d for d in st["deployments"] if str(d["id"]) == parts[1])
+        emit([{"state": d["state"], "environment_url": d.get("url")}])
     if parts[0] == "branches":
         emit({"commit": {"sha": "b%039d" % st["base_version"]}})
     fail("fake gh: unsupported api call: " + path)
@@ -346,6 +354,12 @@ if cmd == "run" and args[1] == "list":
 
 if cmd == "issue" and args[1] == "comment":
     add_comment(args[2], opt("--body") if "--body" in args else open(opt("--body-file")).read())
+    done()
+if cmd == "issue" and args[1] == "create":
+    n = max([int(k) for k in st["items"]] + [0]) + 1
+    st["items"][str(n)] = {"kind": "issue", "title": opt("--title"), "body": open(opt("--body-file")).read(), "labels": [],
+                           "comments": [], "state": "OPEN", "head": None}
+    sys.stdout.write("https://github.com/o/r/issues/%d\n" % n)
     done()
 if cmd == "issue" and args[1] == "close":
     item(args[2])["state"] = "CLOSED"

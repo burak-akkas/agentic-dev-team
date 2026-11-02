@@ -795,6 +795,14 @@ def qa_leaves_no_token_behind_for_the_code_it_runs():
     assert len(checkouts) == 3 and all(c["with"]["persist-credentials"] is False for c in checkouts)
 
 
+@test
+def qa_screenshots_are_their_own_artifact_so_no_hidden_folder_hides_them():
+    uploads = [s for s in workflow("agent-qa.yml")["jobs"]["qa"]["steps"] if s.get("uses", "").startswith("actions/upload-artifact")]
+    shots = next(s for s in uploads if s.get("id") == "artifact")   # the one "Link screenshots" links to
+    assert shots["with"]["name"].endswith("-screenshots")
+    assert all(p.startswith(".agent-out/screenshots/*.") for p in shots["with"]["path"].split())
+
+
 def e2e_setup(**env):
     return run(make_state({}), shell=steps("agent-qa.yml", "qa")["E2E setup"]["run"],
                **dict({"E2E_SETUP": "touch ran", "E2E_COMMAND": "npx playwright test"}, **env))
